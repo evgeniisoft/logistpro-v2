@@ -1,6 +1,6 @@
-const { query } = require('../_lib/db');
-const { requireAuth } = require('../_lib/auth');
-const { logChange } = require('../_lib/journal');
+const { query } = require('../../_lib/db');
+const { requireAuth } = require('../../_lib/auth');
+const { logChange } = require('../../_lib/journal');
 
 async function handler(req, res) {
     if (req.method !== 'POST') {
