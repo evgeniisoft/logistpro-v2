@@ -38,4 +38,4 @@ function requireAuth(handler) {
     };
 }
 
-module.exports = { generateToken, verifyToken, requireAuth };
+module.exports = { generateToken, verifyToken, getTokenFromRequest, requireAuth };
