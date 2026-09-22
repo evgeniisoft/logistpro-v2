@@ -1070,3 +1070,129 @@ body {
     background: #FEF2F2;
     border-color: var(--alert-danger);
 }
+/* ============ DRAG & DROP ДЛЯ АДРЕСОВ ============ */
+
+.address-table tbody tr {
+    transition: background 0.15s, opacity 0.15s;
+}
+
+.address-table tbody tr.dragging {
+    opacity: 0.4;
+    background: var(--bg-muted);
+}
+
+.address-table tbody tr.drag-over {
+    background: #DBEAFE;
+    border-top: 2px solid var(--color-accent);
+}
+
+.address-table .drag-handle {
+    cursor: grab;
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 24px;
+    user-select: none;
+}
+
+.address-table .drag-handle:active {
+    cursor: grabbing;
+}
+
+.address-table .drag-handle svg {
+    opacity: 0.5;
+    transition: opacity 0.15s;
+}
+
+.address-table tbody tr:hover .drag-handle svg {
+    opacity: 1;
+}
+
+.address-table .col-seq-with-handle {
+    width: 70px;
+    text-align: center;
+    font-weight: 600;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.address-table .col-seq-with-handle .seq-number {
+    min-width: 24px;
+    text-align: center;
+}
+
+/* ============ INLINE РЕДАКТИРОВАНИЕ ============ */
+
+.address-table .row-editing {
+    background: #EFF6FF !important;
+    border: 2px solid var(--color-accent);
+}
+
+.address-table tbody td input,
+.address-table tbody td textarea {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--border-light);
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: inherit;
+    outline: none;
+    background: #fff;
+}
+
+.address-table tbody td input:focus,
+.address-table tbody td textarea:focus {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.address-table tbody td textarea {
+    min-height: 32px;
+    resize: vertical;
+    font-size: 11px;
+}
+
+/* Кнопки действий в строке */
+.address-table .col-actions {
+    white-space: nowrap;
+}
+
+.address-table .col-actions .btn-action {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    padding: 0;
+    margin-left: 2px;
+}
+
+.address-table .col-actions .btn-action:hover:not(:disabled) {
+    background: var(--bg-muted);
+    color: var(--text-primary);
+}
+
+.address-table .col-actions .btn-action:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.address-table .col-actions .btn-action.danger:hover:not(:disabled) {
+    background: #FEE2E2;
+    color: var(--alert-danger);
+}
+
+.address-table .col-actions .btn-action.success:hover:not(:disabled) {
+    background: #D1FAE5;
+    color: #059669;
+}
