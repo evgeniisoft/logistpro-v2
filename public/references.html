@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Справочники · ЛогистПро</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/styles.css">
+    <script src="/assets/app.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body x-data="referencesPage()" x-init="$nextTick(() => init())">
+
+    <!-- ХЕДЕР -->
+    <header class="app-header">
+        <div class="app-header-left">
+            <a href="/" class="app-logo">
+                <span class="app-logo-mark">LP</span>
+                <span>ЛогистПро</span>
+            </a>
+            <nav class="app-nav">
+                <a href="/" class="app-nav-link">Рейсы</a>
+                <a href="/incoming.html" class="app-nav-link">Входящие</a>
+                <a href="/reports.html" class="app-nav-link">Отчёты</a>
+                <a href="/references.html" class="app-nav-link active">Справочники</a>
+                <a href="/journal.html" class="app-nav-link">Журнал</a>
+            </nav>
+        </div>
+        <div class="app-header-right">
+            <div class="user-badge">
+                <div class="user-avatar" x-text="userInitials"></div>
+                <div>
+                    <div x-text="user?.full_name || ''" style="font-weight:500;"></div>
+                    <div x-text="roleLabel" style="font-size:11px;opacity:0.7;"></div>
+                </div>
+            </div>
+            <button class="btn btn-ghost btn-sm" @click="logout()" style="color:rgba(255,255,255,0.85);" title="Выйти">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- ОСНОВНОЙ КОНТЕНТ -->
+    <main class="app-main">
+        <div class="container">
+
+            <!-- ЗАГОЛОВОК -->
+            <div style="margin-bottom:24px;">
+                <h1 style="font-size:24px;font-weight:600;margin:0 0 4px 0;">Справочники</h1>
+                <p style="font-size:13px;color:var(--text-secondary);margin:0;">
+                    Управление машинами, водителями и маршрутами
+                </p>
+            </div>
+
+            <!-- ТАБЫ -->
+            <div style="display:flex;gap:4px;border-bottom:1px solid var(--border-light);margin-bottom:24px;">
+                <button 
+                    class="tab-btn"
+                    :class="tab === 'vehicles' ? 'tab-btn-active' : ''"
+                    @click="switchTab('vehicles')"
+                >
+                    Машины
+                    <span class="tab-count" x-text="vehicles.length"></span>
+                </button>
+                <button 
+                    class="tab-btn"
+                    :class="tab === 'drivers' ? 'tab-btn-active' : ''"
+                    @click="switchTab('drivers')"
+                >
+                    Водители
+                    <span class="tab-count" x-text="drivers.length"></span>
+                </button>
+                <button 
+                    class="tab-btn"
+                    :class="tab === 'routes' ? 'tab-btn-active' : ''"
+                    @click="switchTab('routes')"
+                >
+                    Маршруты
+                    <span class="tab-count" x-text="routes.length"></span>
+                </button>
+            </div>
+
+            <!-- ОШИБКА -->
+            <div x-show="error" x-cloak class="alert alert-error" x-text="error"></div>
+
+            <!-- ТАБ: МАШИНЫ -->
+            <div x-show="tab === 'vehicles'" x-cloak>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-secondary);cursor:pointer;">
+                        <input type="checkbox" x-model="showArchived" @change="loadAll()" style="cursor:pointer;">
+                        Показать архивные
+                    </label>
+                    <button class="btn btn-primary btn-sm" @click="openModal('vehicle', null)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Добавить машину
+                    </button>
+                </div>
+
+                <div x-show="loading.vehicles" class="skeleton" style="height:200px;"></div>
+
+                <div x-show="!loading.vehicles && vehicles.length === 0" class="empty-state">
+                    <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"></path>
+                        <path d="M15 18H9"></path>
+                        <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"></path>
+                        <circle cx="17" cy="18" r="2"></circle>
+                        <circle cx="7" cy="18" r="2"></circle>
+                    </svg>
+                    <h3 class="empty-title">Нет машин</h3>
+                    <p class="empty-description">Добавьте первую машину, чтобы использовать её в рейсах</p>
+                </div>
+
+                <div x-show="!loading.vehicles && vehicles.length > 0" style="background:#fff;border:1px solid var(--border-light);border-radius:12px;overflow:hidden;">
+                    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                        <thead>
+                            <tr style="border-bottom:1px solid var(--border-light);background:#FAFBFC;">
+                                <th style="padding:12px 20px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Госномер</th>
+                                <th style="padding:12px 20px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Модель</th>
+                                <th style="padding:12px 20px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Тип</th>
+                                <th style="padding:12px 20px;text-align:right;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Объём, м³</th>
+                                <th style="padding:12px 20px;text-align:right;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Расход, л/100км</th>
+                                <th style="padding:12px 20px;text-align:right;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Аморт., ₽/км</th>
+                                <th style="padding:12px 20px;text-align:right;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;width:120px;">Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="v in vehicles" :key="v.id">
+                                <tr :style="v.is_archived ? 'opacity:0.5;' : ''" style="border-bottom:1px solid var(--border-light);">
+                                    <td style="padding:14px 20px;font-weight:600;" x-text="v.plate"></td>
+                                    <td style="padding:14px 20px;" x-text="v.model || '—'"></td>
+                                    <td style="padding:14px 20px;">
+                                        <span style="display:inline-block;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:500;"
+                                            :style="v.type === 'own' ? 'background:#DBEAFE;color:#1E40AF;' : 'background:#FEF3C7;color:#92400E;'"
+                                            x-text="v.type === 'own' ? 'Своя' : 'Наёмная'"></span>
+                                    </td>
+                                    <td style="padding:14px 20px;text-align:right;" x-text="v.volume || '—'"></td>
+                                    <td style="padding:14px 20px;text-align:right;" x-text="v.fuel_rate || '—'"></td>
+                                    <td style="padding:14px 20px;text-align:right;" x-text="v.amort_rate || '—'"></td>
+                                    <td style="padding:14px 20px;text-align:right;">
+                                        <button class="btn-action" @click="openModal('vehicle', v)" title="Редактировать">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                            </svg>
+                                        </button>
+                                        <button class="btn-action" @click="deleteItem('vehicles', v)" :title="v.is_archived ? 'Восстановить' : 'Архивировать'" style="color:var(--alert-danger);">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <polyline points="3 6 5 6 21 6"></polyline>
+                                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                            </svg>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ТАБ: ВОДИТЕЛИ -->
+            <div x-show="tab === 'drivers'" x-cloak>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-secondary);cursor:pointer;">
+                        <input type="checkbox" x-model="showArchived" @change="loadAll()" style="cursor:pointer;">
+                        Показать архивных
+                    </label>
+                    <button class="btn btn-primary btn-sm" @click="openModal('driver', null)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Добавить водителя
+                    </button>
+                </div>
+
+                <div x-show="loading.drivers" class="skeleton" style="height:200px;"></div>
+
+                <div x-show="!loading.drivers && drivers.length === 0" class="empty-state">
+                    <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                    <h3 class="empty-title">Нет водителей</h3>
+                    <p class="empty-description">Добавьте первого водителя для назначения на рейсы</p>
+                </div>
+
+                <div x-show="!loading.drivers && drivers.length > 0" style="background:#fff;border:1px solid var(--border-light);border-radius:12px;overflow:hidden;">
+                    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                        <thead>
+                            <tr style="border-bottom:1px solid var(--border-light);background:#FAFBFC;">
+                                <th style="padding:12px 20px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">ФИО</th>
+                                <th style="padding:12px 20px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Телефон</th>
+                                <th style="padding:12px 20px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Водительское</th>
+                                <th style="padding:12px 20px;text-align:right;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Ставка, ₽</th>
+                                <th style="padding:12px 20px;text-align:right;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;width:120px;">Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="d in drivers" :key="d.id">
+                                <tr :style="d.is_archived ? 'opacity:0.5;' : ''" style="border-bottom:1px solid var(--border-light);">
+                                    <td style="padding:14px 20px;font-weight:600;" x-text="d.full_name"></td>
+                                    <td style="padding:14px 20px;" x-text="d.phone || '—'"></td>
+                                    <td style="padding:14px 20px;" x-text="d.license || '—'"></td>
+                                    <td style="padding:14px 20px;text-align:right;" x-text="window.HELPERS.formatMoney(d.default_rate)"></td>
+                                    <td style="padding:14px 20px;text-align:right;">
+                                        <button class="btn-action" @click="openModal('driver', d)" title="Редактировать">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                            </svg>
+                                        </button>
+                                        <button class="btn-action" @click="deleteItem('drivers', d)" :title="d.is_archived ? 'Восстановить' : 'Архивировать'" style="color:var(--alert-danger);">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <polyline points="3 6 5 6 21 6"></polyline>
+                                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                            </svg>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ТАБ: МАРШРУТЫ -->
+            <div x-show="tab === 'routes'" x-cloak>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-secondary);cursor:pointer;">
+                        <input type="checkbox" x-model="showArchived" @change="loadAll()" style="cursor:pointer;">
+                        Показать архивные
+                    </label>
+                    <button class="btn btn-primary btn-sm" @click="openModal('route', null)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Добавить маршрут
+                    </button>
+                </div>
+
+                <div x-show="loading.routes" class="skeleton" style="height:200px;"></div>
+
+                <div x-show="!loading.routes && routes.length === 0" class="empty-state">
+                    <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                        <circle cx="12" cy="10" r="3"></circle>
+                    </svg>
+                    <h3 class="empty-title">Нет маршрутов</h3>
+                    <p class="empty-description">Добавьте первый маршрут для междугородних рейсов</p>
+                </div>
+
+                <div x-show="!loading.routes && routes.length > 0" style="background:#fff;border:1px solid var(--border-light);border-radius:12px;overflow:hidden;">
+                    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                        <thead>
+                            <tr style="border-bottom:1px solid var(--border-light);background:#FAFBFC;">
+                                <th style="padding:12px 20px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Название</th>
+                                <th style="padding:12px 20px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Откуда</th>
+                                <th style="padding:12px 20px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Куда</th>
+                                <th style="padding:12px 20px;text-align:right;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Расстояние, км</th>
+                                <th style="padding:12px 20px;text-align:right;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Платные, ₽</th>
+                                <th style="padding:12px 20px;text-align:right;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;width:120px;">Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="r in routes" :key="r.id">
+                                <tr :style="r.is_archived ? 'opacity:0.5;' : ''" style="border-bottom:1px solid var(--border-light);">
+                                    <td style="padding:14px 20px;font-weight:600;" x-text="r.name"></td>
+                                    <td style="padding:14px 20px;" x-text="r.from_point || '—'"></td>
+                                    <td style="padding:14px 20px;" x-text="r.to_point || '—'"></td>
+                                    <td style="padding:14px 20px;text-align:right;" x-text="r.distance_km || '—'"></td>
+                                    <td style="padding:14px 20px;text-align:right;" x-text="window.HELPERS.formatMoney(r.toll_cost)"></td>
+                                    <td style="padding:14px 20px;text-align:right;">
+                                        <button class="btn-action" @click="openModal('route', r)" title="Редактировать">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                            </svg>
+                                        </button>
+                                        <button class="btn-action" @click="deleteItem('routes', r)" :title="r.is_archived ? 'Восстановить' : 'Архивировать'" style="color:var(--alert-danger);">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <polyline points="3 6 5 6 21 6"></polyline>
+                                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                            </svg>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- МОДАЛКА -->
+    <div x-show="modal.open" x-cloak class="modal-backdrop" @click.self="closeModal()">
+        <div class="modal-window" @click.stop>
+            <div class="modal-header">
+                <h2 class="modal-title" x-text="modalTitle"></h2>
+                <button class="modal-close" @click="closeModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <div x-show="modal.error" class="alert alert-error" x-text="modal.error"></div>
+
+                <!-- ФОРМА: МАШИНА -->
+                <template x-if="modal.type === 'vehicle'">
+                    <div>
+                        <div class="form-group">
+                            <label class="form-label">Госномер *</label>
+                            <input type="text" class="form-input" x-model="modal.form.plate" placeholder="А123ВС" :disabled="modal.saving">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Модель</label>
+                            <input type="text" class="form-input" x-model="modal.form.model" placeholder="Volvo FL" :disabled="modal.saving">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Тип</label>
+                            <select class="form-input" x-model="modal.form.type" :disabled="modal.saving">
+                                <option value="own">Своя</option>
+                                <option value="hired">Наёмная</option>
+                            </select>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Объём кузова, м³</label>
+                                <input type="number" class="form-input" x-model.number="modal.form.volume" step="0.1" min="0" :disabled="modal.saving">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Расход, л/100км</label>
+                                <input type="number" class="form-input" x-model.number="modal.form.fuel_rate" step="0.1" min="0" :disabled="modal.saving">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Ставка амортизации, ₽/км</label>
+                            <input type="number" class="form-input" x-model.number="modal.form.amort_rate" step="0.01" min="0" :disabled="modal.saving">
+                        </div>
+                    </div>
+                </template>
+
+                <!-- ФОРМА: ВОДИТЕЛЬ -->
+                <template x-if="modal.type === 'driver'">
+                    <div>
+                        <div class="form-group">
+                            <label class="form-label">ФИО *</label>
+                            <input type="text" class="form-input" x-model="modal.form.full_name" placeholder="Иванов Иван Иванович" :disabled="modal.saving">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Телефон</label>
+                            <input type="text" class="form-input" x-model="modal.form.phone" placeholder="+79001234567" :disabled="modal.saving">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Водительское удостоверение</label>
+                            <input type="text" class="form-input" x-model="modal.form.license" placeholder="77АА123456" :disabled="modal.saving">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Ставка за рейс, ₽</label>
+                            <input type="number" class="form-input" x-model.number="modal.form.default_rate" min="0" :disabled="modal.saving">
+                        </div>
+                    </div>
+                </template>
+
+                <!-- ФОРМА: МАРШРУТ -->
+                <template x-if="modal.type === 'route'">
+                    <div>
+                        <div class="form-group">
+                            <label class="form-label">Название *</label>
+                            <input type="text" class="form-input" x-model="modal.form.name" placeholder="Москва-СПб" :disabled="modal.saving">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Откуда</label>
+                                <input type="text" class="form-input" x-model="modal.form.from_point" placeholder="Москва" :disabled="modal.saving">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Куда</label>
+                                <input type="text" class="form-input" x-model="modal.form.to_point" placeholder="Санкт-Петербург" :disabled="modal.saving">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Расстояние, км</label>
+                                <input type="number" class="form-input" x-model.number="modal.form.distance_km" step="0.1" min="0" :disabled="modal.saving">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Платные дороги, ₽</label>
+                                <input type="number" class="form-input" x-model.number="modal.form.toll_cost" step="0.01" min="0" :disabled="modal.saving">
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @click="closeModal()" :disabled="modal.saving">Отмена</button>
+                <button class="btn btn-primary" @click="saveModal()" :disabled="modal.saving">
+                    <span x-show="!modal.saving">Сохранить</span>
+                    <span x-show="modal.saving" x-cloak>Сохранение...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function referencesPage() {
+            return {
+                user: null,
+                tab: 'vehicles',
+                vehicles: [],
+                drivers: [],
+                routes: [],
+                showArchived: false,
+                loading: { vehicles: true, drivers: true, routes: true },
+                error: '',
+                modal: {
+                    open: false,
+                    type: '',
+                    mode: 'create',
+                    id: null,
+                    form: {},
+                    saving: false,
+                    error: ''
+                },
+
+                get userInitials() {
+                    if (!this.user?.full_name) return '?';
+                    return this.user.full_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+                },
+
+                get roleLabel() {
+                    const roles = { 'admin': 'Администратор', 'senior_logist': 'Ст. логист', 'logist': 'Логист', 'manager': 'Руководитель', 'viewer': 'Наблюдатель' };
+                    return roles[this.user?.role] || this.user?.role || '';
+                },
+
+                get modalTitle() {
+                    const names = { vehicle: 'машину', driver: 'водителя', route: 'маршрут' };
+                    return (this.modal.mode === 'create' ? 'Добавить ' : 'Редактировать ') + names[this.modal.type];
+                },
+
+                async init() {
+                    if (!window.AUTH.requireLogin()) return;
+                    this.user = window.API.getUser();
+                    await this.loadAll();
+                },
+
+                async loadAll() {
+                    await Promise.all([
+                        this.loadVehicles(),
+                        this.loadDrivers(),
+                        this.loadRoutes()
+                    ]);
+                },
+
+                async loadVehicles() {
+                    this.loading.vehicles = true;
+                    try {
+                        const q = this.showArchived ? '?include_archived=true' : '';
+                        const data = await window.API.api('/api/vehicles' + q);
+                        this.vehicles = data.vehicles || [];
+                    } catch (e) {
+                        this.error = e.message;
+                    } finally {
+                        this.loading.vehicles = false;
+                    }
+                },
+
+                async loadDrivers() {
+                    this.loading.drivers = true;
+                    try {
+                        const q = this.showArchived ? '?include_archived=true' : '';
+                        const data = await window.API.api('/api/drivers' + q);
+                        this.drivers = data.drivers || [];
+                    } catch (e) {
+                        this.error = e.message;
+                    } finally {
+                        this.loading.drivers = false;
+                    }
+                },
+
+                async loadRoutes() {
+                    this.loading.routes = true;
+                    try {
+                        const q = this.showArchived ? '?include_archived=true' : '';
+                        const data = await window.API.api('/api/routes' + q);
+                        this.routes = data.routes || [];
+                    } catch (e) {
+                        this.error = e.message;
+                    } finally {
+                        this.loading.routes = false;
+                    }
+                },
+
+                switchTab(t) {
+                    this.tab = t;
+                    this.error = '';
+                },
+
+                openModal(type, item) {
+                    this.modal = {
+                        open: true,
+                        type: type,
+                        mode: item ? 'edit' : 'create',
+                        id: item?.id || null,
+                        form: item ? { ...item } : this.getEmptyForm(type),
+                        saving: false,
+                        error: ''
+                    };
+                },
+
+                getEmptyForm(type) {
+                    if (type === 'vehicle') return { plate: '', model: '', type: 'own', volume: 0, fuel_rate: 0, amort_rate: 0 };
+                    if (type === 'driver') return { full_name: '', phone: '', license: '', default_rate: 0 };
+                    if (type === 'route') return { name: '', from_point: '', to_point: '', distance_km: 0, toll_cost: 0 };
+                    return {};
+                },
+
+                closeModal() {
+                    if (this.modal.saving) return;
+                    this.modal.open = false;
+                },
+
+                async saveModal() {
+                    this.modal.error = '';
+                    this.modal.saving = true;
+
+                    try {
+                        const endpoint = '/api/' + this.modal.type + 's' + (this.modal.id ? '/' + this.modal.id : '');
+                        const method = this.modal.id ? 'PUT' : 'POST';
+
+                        await window.API.api(endpoint, {
+                            method: method,
+                            body: JSON.stringify(this.modal.form)
+                        });
+
+                        this.modal.open = false;
+                        await this.loadAll();
+
+                    } catch (e) {
+                        this.modal.error = e.message;
+                    } finally {
+                        this.modal.saving = false;
+                    }
+                },
+
+                async deleteItem(type, item) {
+                    if (item.is_archived) {
+                        // Восстановление
+                        if (!confirm('Восстановить "' + (item.plate || item.full_name || item.name) + '"?')) return;
+
+                        try {
+                            const endpoint = '/api/' + type + '/' + item.id;
+                            await window.API.api(endpoint, {
+                                method: 'PUT',
+                                body: JSON.stringify({ is_archived: false })
+                            });
+                            await this.loadAll();
+                        } catch (e) {
+                            this.error = e.message;
+                        }
+                        return;
+                    }
+
+                    // Обычное удаление / архивация
+                    if (!confirm('Удалить "' + (item.plate || item.full_name || item.name) + '"?\n\nЕсли используется в рейсах, будет перемещён в архив.')) return;
+
+                    try {
+                        const endpoint = '/api/' + type + '/' + item.id;
+                        const result = await window.API.api(endpoint, { method: 'DELETE' });
+                        await this.loadAll();
+
+                        if (result.message) {
+                            // Информация об архивации — показать пользователю
+                            setTimeout(() => alert(result.message), 100);
+                        }
+                    } catch (e) {
+                        this.error = e.message;
+                    }
+                },
+
+                logout() {
+                    if (!confirm('Выйти из системы?')) return;
+                    window.API.clearAuth();
+                    window.location.href = '/login.html';
+                }
+            };
+        }
+    </script>
+</body>
+</html>
