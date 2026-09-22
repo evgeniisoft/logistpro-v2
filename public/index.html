@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ЛогистПро</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/styles.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="/assets/app.js"></script>
+</head>
+<body x-data="app()" x-init="init()">
+
+    <!-- ХЕДЕР -->
+    <header class="app-header">
+        <div class="app-header-left">
+            <a href="/" class="app-logo">
+                <span class="app-logo-mark">LP</span>
+                <span>ЛогистПро</span>
+            </a>
+            <nav class="app-nav">
+                <a href="/" class="app-nav-link active">Рейсы</a>
+                <a href="/incoming.html" class="app-nav-link">Входящие</a>
+                <a href="/reports.html" class="app-nav-link">Отчёты</a>
+                <a href="/journal.html" class="app-nav-link">Журнал</a>
+            </nav>
+        </div>
+        <div class="app-header-right">
+            <div class="user-badge">
+                <div class="user-avatar" x-text="userInitials"></div>
+                <div>
+                    <div x-text="user?.full_name || 'Загрузка...'" style="font-weight:500;"></div>
+                    <div x-text="roleLabel" style="font-size:11px;opacity:0.7;"></div>
+                </div>
+            </div>
+            <button class="btn btn-ghost btn-sm" @click="logout()" style="color:rgba(255,255,255,0.85);" title="Выйти">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- ОСНОВНОЙ КОНТЕНТ -->
+    <main class="app-main">
+        <div class="container">
+
+            <!-- ЗАГРУЗКА -->
+            <div x-show="loading" x-cloak>
+                <div class="skeleton" style="height:40px;width:300px;margin-bottom:24px;"></div>
+                <div class="skeleton" style="height:200px;margin-bottom:16px;"></div>
+            </div>
+
+            <!-- ОШИБКА -->
+            <div x-show="error && !loading" x-cloak class="alert alert-error" x-text="error"></div>
+
+            <!-- КОНТЕНТ -->
+            <div x-show="!loading && !error" x-cloak>
+
+                <!-- ЗАГОЛОВОК СТРАНИЦЫ -->
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+                    <div>
+                        <h1 style="font-size:24px;font-weight:600;margin:0 0 4px 0;">Доска рейсов</h1>
+                        <p style="font-size:13px;color:var(--text-secondary);margin:0;">
+                            Управление рейсами и статусами доставки
+                        </p>
+                    </div>
+                    <button class="btn btn-primary" @click="createTrip()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Новый рейс
+                    </button>
+                </div>
+
+                <!-- ПУСТОЕ СОСТОЯНИЕ (когда нет рейсов) -->
+                <div x-show="trips.length === 0" class="empty-state">
+                    <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"></path>
+                        <path d="M15 18H9"></path>
+                        <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"></path>
+                        <circle cx="17" cy="18" r="2"></circle>
+                        <circle cx="7" cy="18" r="2"></circle>
+                    </svg>
+                    <h3 class="empty-title">Пока нет рейсов</h3>
+                    <p class="empty-description">Создайте первый рейс, чтобы начать работу</p>
+                    <button class="btn btn-primary" @click="createTrip()">Создать первый рейс</button>
+                </div>
+
+                <!-- ТАБЛИЦА РЕЙСОВ (когда есть данные) -->
+                <div x-show="trips.length > 0" style="background:#fff;border:1px solid var(--border-light);border-radius:12px;overflow:hidden;">
+                    <div style="padding:16px 20px;border-bottom:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center;">
+                        <span style="font-size:13px;color:var(--text-secondary);">
+                            Всего рейсов: <strong style="color:var(--text-primary);" x-text="trips.length"></strong>
+                        </span>
+                        <button class="btn btn-secondary btn-sm" @click="loadTrips()">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M23 4v6h-6"></path>
+                                <path d="M1 20v-6h6"></path>
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                            </svg>
+                            Обновить
+                        </button>
+                    </div>
+                    <div x-html="renderTripsTable()"></div>
+                </div>
+
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        function app() {
+            return {
+                user: null,
+                trips: [],
+                loading: true,
+                error: '',
+
+                get userInitials() {
+                    if (!this.user?.full_name) return '?';
+                    return this.user.full_name
+                        .split(' ')
+                        .map(w => w[0])
+                        .slice(0, 2)
+                        .join('')
+                        .toUpperCase();
+                },
+
+                get roleLabel() {
+                    const roles = {
+                        'admin': 'Администратор',
+                        'senior_logist': 'Ст. логист',
+                        'logist': 'Логист',
+                        'manager': 'Руководитель',
+                        'viewer': 'Наблюдатель'
+                    };
+                    return roles[this.user?.role] || this.user?.role || '';
+                },
+
+                async init() {
+                    if (!window.AUTH.requireLogin()) return;
+                    this.user = window.API.getUser();
+                    await this.loadTrips();
+                },
+
+                async loadTrips() {
+                    this.loading = true;
+                    this.error = '';
+                    try {
+                        const data = await window.API.api('/api/trips');
+                        this.trips = data.trips || [];
+                    } catch (e) {
+                        this.error = e.message;
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                renderTripsTable() {
+                    if (this.trips.length === 0) return '';
+
+                    const statusLabels = {
+                        'forming': 'Формируется',
+                        'loading': 'Загрузка',
+                        'transit': 'В пути',
+                        'done': 'Завершён',
+                        'problem': 'Проблема'
+                    };
+
+                    const statusColors = {
+                        'forming': 'background:#F1F5F9;color:#475569;',
+                        'loading': 'background:#DBEAFE;color:#1E40AF;',
+                        'transit': 'background:#D1FAE5;color:#065F46;',
+                        'done': 'background:#E5E7EB;color:#374151;',
+                        'problem': 'background:#FEE2E2;color:#991B1B;'
+                    };
+
+                    let html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+                    html += '<thead><tr style="border-bottom:1px solid var(--border-light);background:#FAFBFC;">';
+                    html += '<th style="padding:12px 20px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Номер</th>';
+                    html += '<th style="padding:12px 20px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Дата</th>';
+                    html += '<th style="padding:12px 20px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Машина</th>';
+                    html += '<th style="padding:12px 20px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Водитель</th>';
+                    html += '<th style="padding:12px 20px;text-align:right;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Адресов</th>';
+                    html += '<th style="padding:12px 20px;text-align:right;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Пробег</th>';
+                    html += '<th style="padding:12px 20px;text-align:right;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Затраты</th>';
+                    html += '<th style="padding:12px 20px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Статус</th>';
+                    html += '</tr></thead><tbody>';
+
+                    this.trips.forEach(t => {
+                        html += '<tr style="border-bottom:1px solid var(--border-light);cursor:pointer;" onmouseover="this.style.background=\'#FAFBFC\'" onmouseout="this.style.background=\'#fff\'">';
+                        html += '<td style="padding:14px 20px;font-weight:600;">' + this.escapeHtml(t.trip_number) + '</td>';
+                        html += '<td style="padding:14px 20px;color:var(--text-secondary);">' + window.HELPERS.formatDate(t.trip_date) + '</td>';
+                        html += '<td style="padding:14px 20px;">' + this.escapeHtml(t.vehicle_plate || '—') + '</td>';
+                        html += '<td style="padding:14px 20px;">' + this.escapeHtml(t.driver_name || '—') + '</td>';
+                        html += '<td style="padding:14px 20px;text-align:right;">' + t.orders_count + '</td>';
+                        html += '<td style="padding:14px 20px;text-align:right;">' + (t.fact_km || 0) + ' км</td>';
+                        html += '<td style="padding:14px 20px;text-align:right;">' + window.HELPERS.formatMoney(t.total_costs) + '</td>';
+                        html += '<td style="padding:14px 20px;"><span style="display:inline-block;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:500;' + (statusColors[t.status] || '') + '">' + (statusLabels[t.status] || t.status) + '</span></td>';
+                        html += '</tr>';
+                    });
+
+                    html += '</tbody></table>';
+                    return html;
+                },
+
+                escapeHtml(str) {
+                    if (!str) return '';
+                    return String(str)
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#039;');
+                },
+
+                createTrip() {
+                    alert('Форма создания рейса появится на следующем этапе');
+                },
+
+                logout() {
+                    if (!confirm('Выйти из системы?')) return;
+                    window.API.clearAuth();
+                    window.location.href = '/login.html';
+                }
+            };
+        }
+    </script>
+</body>
+</html>
