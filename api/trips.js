@@ -45,10 +45,57 @@ async function handler(req, res) {
         [id],
       );
 
+      const trip = tripResult.rows[0];
+      const costs = costsResult.rows;
+
+      // Автоматические затраты
+      const autoCosts = [];
+
+      // Зарплата — из driver_rate_at_time (если не добавлена вручную)
+      const salaryExists = costs.some((c) => c.category === "salary");
+      if (!salaryExists && Number(trip.driver_rate_at_time) > 0) {
+        autoCosts.push({
+          id: null,
+          category: "salary",
+          amount: Number(trip.driver_rate_at_time),
+          note: "Автоматически из ставки водителя",
+          is_auto: true,
+        });
+      }
+
+      // Амортизация — пробег факт × ставка (для своих машин)
+      if (trip.vehicle_type === "own" && Number(trip.fact_km) > 0) {
+        const vehicleRes = await query(
+          "SELECT amort_rate FROM vehicles WHERE id = $1",
+          [trip.vehicle_id],
+        );
+        if (vehicleRes.rows.length > 0) {
+          const amortRate = Number(vehicleRes.rows[0].amort_rate) || 0;
+          if (amortRate > 0) {
+            const amortExists = costs.some((c) => c.category === "amort");
+            if (!amortExists) {
+              autoCosts.push({
+                id: null,
+                category: "amort",
+                amount: Math.round(Number(trip.fact_km) * amortRate),
+                note:
+                  "Автоматически: " +
+                  trip.fact_km +
+                  " км × " +
+                  amortRate +
+                  " ₽/км",
+                is_auto: true,
+              });
+            }
+          }
+        }
+      }
+
       return res.json({
-        trip: tripResult.rows[0],
+        trip: trip,
         orders: ordersResult.rows,
-        costs: costsResult.rows,
+        costs: costs,
+        auto_costs: autoCosts,
       });
     } catch (e) {
       console.error("GET trip error:", e);
@@ -187,12 +234,9 @@ async function handler(req, res) {
         return res.status(404).json({ error: "Рейс не найден" });
 
       if (["transit", "done"].includes(check.rows[0].status)) {
-        return res
-          .status(400)
-          .json({
-            error:
-              'Нельзя удалить рейс в статусе "' + check.rows[0].status + '"',
-          });
+        return res.status(400).json({
+          error: 'Нельзя удалить рейс в статусе "' + check.rows[0].status + '"',
+        });
       }
 
       await query("DELETE FROM trips WHERE id = $1", [id]);
@@ -233,12 +277,10 @@ async function handler(req, res) {
       const invalidIds = order_ids.filter((oid) => !existingIds.includes(oid));
 
       if (invalidIds.length > 0) {
-        return res
-          .status(400)
-          .json({
-            error: "Некоторые заказы не принадлежат этому рейсу",
-            invalid: invalidIds,
-          });
+        return res.status(400).json({
+          error: "Некоторые заказы не принадлежат этому рейсу",
+          invalid: invalidIds,
+        });
       }
 
       for (let i = 0; i < order_ids.length; i++) {
@@ -439,11 +481,9 @@ async function handler(req, res) {
 
       const trip = tripResult.rows[0];
       if (["done", "cancelled"].includes(trip.status)) {
-        return res
-          .status(400)
-          .json({
-            error: "Нельзя отметить проблему у завершённого/отменённого рейса",
-          });
+        return res.status(400).json({
+          error: "Нельзя отметить проблему у завершённого/отменённого рейса",
+        });
       }
 
       await query(
