@@ -719,19 +719,32 @@
 
                     this.savingNewOrder = true;
                     try {
-                        // Используем update_trip? Нет. Используем POST /api/trips?action=add-order
-                        // Такого endpoint пока нет. Создадим через прямое добавление.
-                        // Пока — вернём ошибку для напоминания.
-                        // TODO: добавить endpoint "add-order-to-trip"
-                        alert('Функция добавления адреса будет реализована на следующем шаге');
-                        this.savingNewOrder = false;
-                        return;
+                        const data = await window.API.api('/api/orders?action=create', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                trip_id: this.trip.id,
+                                external_id: this.newOrderForm.external_id || null,
+                                address: this.newOrderForm.address.trim(),
+                                contact_name: this.newOrderForm.contact_name || null,
+                                phone: this.newOrderForm.phone || null,
+                                volume: Number(this.newOrderForm.volume) || 0,
+                                note: this.newOrderForm.note || null
+                            })
+                        });
+
+                        // Добавляем локально
+                        this.orders.push(data.order);
+
+                        // Сбрасываем форму
+                        this.newOrderRow = false;
+                        this.newOrderForm = {};
+
                     } catch (e) {
-                        alert('Ошибка: ' + e.message);
+                        alert('Ошибка добавления: ' + e.message);
                     } finally {
                         this.savingNewOrder = false;
                     }
-                },
+                }
 
                 // ============ УДАЛЕНИЕ ============
 
