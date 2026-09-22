@@ -746,3 +746,327 @@ body {
     font-size: 11px;
     color: var(--text-secondary);
 }
+/* ============ СТРАНИЦА РЕЙСА ============ */
+
+.trip-page-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    border-radius: 6px;
+    transition: background 0.15s, color 0.15s;
+}
+
+.back-link:hover {
+    background: var(--bg-muted);
+    color: var(--text-primary);
+}
+
+.trip-page-title {
+    font-size: 24px;
+    font-weight: 600;
+    margin: 0;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.trip-status-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.trip-status-forming { background: #F1F5F9; color: #475569; }
+.trip-status-loading { background: #DBEAFE; color: #1E40AF; }
+.trip-status-transit { background: #D1FAE5; color: #065F46; }
+.trip-status-problem { background: #FEE2E2; color: #991B1B; }
+.trip-status-done { background: #E5E7EB; color: #374151; }
+.trip-status-cancelled { background: #F3F4F6; color: #6B7280; text-decoration: line-through; }
+
+/* ============ INFO GRID ============ */
+
+.info-card {
+    background: #fff;
+    border: 1px solid var(--border-light);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.info-item-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.info-item-value {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.info-item-sub {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* ============ ЗАГРУЗКА В КАРТОЧКЕ ============ */
+
+.trip-load-block {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-light);
+}
+
+.trip-load-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    margin-bottom: 8px;
+}
+
+.trip-load-info strong {
+    font-weight: 600;
+}
+
+/* ============ СЕКЦИИ ============ */
+
+.section-card {
+    background: #fff;
+    border: 1px solid var(--border-light);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 20px;
+}
+
+.section-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.section-card-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.section-card-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* ============ ТАБЛИЦА АДРЕСОВ ============ */
+
+.address-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.address-table thead th {
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    letter-spacing: 0.5px;
+    background: #FAFBFC;
+    border-bottom: 1px solid var(--border-light);
+    white-space: nowrap;
+}
+
+.address-table thead th.text-right {
+    text-align: right;
+}
+
+.address-table thead th.text-center {
+    text-align: center;
+}
+
+.address-table tbody td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: top;
+}
+
+.address-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.address-table tbody tr:hover {
+    background: #FAFBFC;
+}
+
+.address-table .col-seq {
+    width: 50px;
+    text-align: center;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.address-table .col-id {
+    width: 110px;
+    font-family: 'SF Mono', Consolas, monospace;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.address-table .col-address {
+    max-width: 300px;
+}
+
+.address-table .col-contact {
+    width: 150px;
+}
+
+.address-table .col-phone {
+    width: 140px;
+    font-family: 'SF Mono', Consolas, monospace;
+    font-size: 12px;
+}
+
+.address-table .col-volume {
+    width: 70px;
+    text-align: right;
+    font-weight: 500;
+}
+
+.address-table .col-note {
+    max-width: 200px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.address-table .col-actions {
+    width: 130px;
+    text-align: right;
+}
+
+.addr-note-preview {
+    display: inline-block;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+}
+
+/* ============ ТАБЛИЦА ЗАТРАТ ============ */
+
+.cost-table-page {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.cost-table-page thead th {
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    letter-spacing: 0.5px;
+    background: #FAFBFC;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.cost-table-page thead th.text-right {
+    text-align: right;
+}
+
+.cost-table-page tbody td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.cost-table-page tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.cost-table-page tbody tr.auto-row {
+    background: #FAFBFC;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.cost-table-page .col-amount {
+    text-align: right;
+    font-weight: 500;
+    font-family: 'SF Mono', Consolas, monospace;
+}
+
+.cost-table-page tfoot td {
+    padding: 14px;
+    border-top: 2px solid var(--border-light);
+    background: #FAFBFC;
+    font-weight: 700;
+    font-size: 14px;
+}
+
+.cost-table-page tfoot .col-amount {
+    text-align: right;
+}
+
+/* ============ ДЕЙСТВИЯ ВНИЗУ СТРАНИЦЫ ============ */
+
+.trip-actions-bar {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    padding: 20px 0;
+    border-top: 1px solid var(--border-light);
+    margin-top: 20px;
+    flex-wrap: wrap;
+}
+
+.trip-actions-bar .left-actions {
+    margin-right: auto;
+    display: flex;
+    gap: 8px;
+}
+
+.btn-danger {
+    background: #fff;
+    color: var(--alert-danger);
+    border: 1px solid #FECACA;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: #FEF2F2;
+    border-color: var(--alert-danger);
+}
