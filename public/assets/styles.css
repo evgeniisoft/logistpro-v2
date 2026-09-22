@@ -1196,3 +1196,83 @@ body {
     background: #D1FAE5;
     color: #059669;
 }
+/* ============ ПУТЕВОЙ ЛИСТ (печать) ============ */
+
+.waybill-print {
+    display: none;
+}
+
+@media print {
+    body * {
+        visibility: hidden;
+    }
+    
+    .waybill-print,
+    .waybill-print * {
+        visibility: visible;
+    }
+    
+    .waybill-print {
+        display: block !important;
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        background: #fff;
+        padding: 20px;
+        font-size: 11px;
+    }
+    
+    .waybill-print h1 {
+        text-align: center;
+        font-size: 18px;
+        margin: 0 0 6px 0;
+    }
+    
+    .waybill-print .subtitle {
+        text-align: center;
+        color: #666;
+        margin-bottom: 16px;
+    }
+    
+    .waybill-print .info-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 4px;
+    }
+    
+    .waybill-print table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 12px 0;
+    }
+    
+    .waybill-print th,
+    .waybill-print td {
+        border: 1px solid #000;
+        padding: 4px 6px;
+        font-size: 10px;
+        text-align: left;
+    }
+    
+    .waybill-print th {
+        background: #f0f0f0;
+    }
+    
+    .waybill-print .signatures {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 20px;
+    }
+    
+    .waybill-print .signatures div {
+        flex: 1;
+    }
+    
+    .waybill-print .signatures .line {
+        border-bottom: 1px solid #000;
+        margin-top: 24px;
+        margin-bottom: 3px;
+        width: 160px;
+    }
+}
