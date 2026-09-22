@@ -25,7 +25,7 @@ function validateTrip(data, isUpdate = false) {
         errors.push('Выручка не может быть отрицательной');
     }
 
-    const validStatuses = ['forming', 'loading', 'transit', 'done', 'problem'];
+    const validStatuses = ['forming', 'loading', 'transit', 'problem', 'done', 'cancelled'];
     if (data.status && !validStatuses.includes(data.status)) {
         errors.push('Недопустимый статус');
     }
