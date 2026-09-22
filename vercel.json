@@ -1,15 +1,15 @@
 {
   "version": 2,
-  "rewrites": [
-    { "source": "/api/orders/:id/move", "destination": "/api/orders/move?id=:id" },
-    { "source": "/api/orders/:id", "destination": "/api/orders/get?id=:id" },
-    { "source": "/api/trips/:id/reorder", "destination": "/api/trips/reorder?id=:id" },
-    { "source": "/api/trips/:id/move-all-orders", "destination": "/api/trips/move-all-orders?id=:id" },
-    { "source": "/api/trips/:id/cancel", "destination": "/api/trips/cancel?id=:id" },
-    { "source": "/api/trips/:id/problem", "destination": "/api/trips/problem?id=:id" },
-    { "source": "/api/trips/:id", "destination": "/api/trips/get?id=:id" },
-    { "source": "/api/vehicles/:id", "destination": "/api/vehicles/get?id=:id" },
-    { "source": "/api/drivers/:id", "destination": "/api/drivers/get?id=:id" },
-    { "source": "/api/routes/:id", "destination": "/api/routes/get?id=:id" }
+  "routes": [
+    { "src": "/api/orders/(\\d+)/move", "dest": "/api/orders/move?id=$1" },
+    { "src": "/api/orders/(\\d+)", "dest": "/api/orders/get?id=$1" },
+    { "src": "/api/trips/(\\d+)/reorder", "dest": "/api/trips/reorder?id=$1" },
+    { "src": "/api/trips/(\\d+)/move-all-orders", "dest": "/api/trips/move-all-orders?id=$1" },
+    { "src": "/api/trips/(\\d+)/cancel", "dest": "/api/trips/cancel?id=$1" },
+    { "src": "/api/trips/(\\d+)/problem", "dest": "/api/trips/problem?id=$1" },
+    { "src": "/api/trips/(\\d+)", "dest": "/api/trips/get?id=$1" },
+    { "src": "/api/vehicles/(\\d+)", "dest": "/api/vehicles/get?id=$1" },
+    { "src": "/api/drivers/(\\d+)", "dest": "/api/drivers/get?id=$1" },
+    { "src": "/api/routes/(\\d+)", "dest": "/api/routes/get?id=$1" }
   ]
 }
