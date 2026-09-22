@@ -1198,29 +1198,25 @@ body {
 }
 /* ============ ПУТЕВОЙ ЛИСТ (печать) ============ */
 
+/* На экране — скрыт */
 .waybill-print {
     display: none;
 }
 
 @media print {
-    body * {
-        visibility: hidden;
-    }
-    
-    .waybill-print,
-    .waybill-print * {
-        visibility: visible;
+    /* Скрываем всё, кроме путевого листа */
+    body > *:not(.waybill-print) {
+        display: none !important;
     }
     
     .waybill-print {
         display: block !important;
-        position: absolute;
-        left: 0;
-        top: 0;
+        position: static;
         width: 100%;
         background: #fff;
         padding: 20px;
         font-size: 11px;
+        color: #000;
     }
     
     .waybill-print h1 {
