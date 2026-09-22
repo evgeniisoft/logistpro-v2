@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ЛогистПро</title>
+    <title>Доска рейсов · ЛогистПро</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,9 +12,8 @@
     <script src="/assets/app.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
-<body x-data="app()" x-init="init()">
+<body x-data="boardPage()" x-init="$nextTick(() => init())">
 
-    <!-- ХЕДЕР -->
     <header class="app-header">
         <div class="app-header-left">
             <a href="/" class="app-logo">
@@ -33,7 +32,7 @@
             <div class="user-badge">
                 <div class="user-avatar" x-text="userInitials"></div>
                 <div>
-                    <div x-text="user?.full_name || 'Загрузка...'" style="font-weight:500;"></div>
+                    <div x-text="user?.full_name || ''" style="font-weight:500;"></div>
                     <div x-text="roleLabel" style="font-size:11px;opacity:0.7;"></div>
                 </div>
             </div>
@@ -47,122 +46,296 @@
         </div>
     </header>
 
-    <!-- ОСНОВНОЙ КОНТЕНТ -->
     <main class="app-main">
         <div class="container">
 
-            <!-- ЗАГРУЗКА -->
-            <div x-show="loading" x-cloak>
-                <div class="skeleton" style="height:40px;width:300px;margin-bottom:24px;"></div>
-                <div class="skeleton" style="height:200px;margin-bottom:16px;"></div>
-            </div>
-
-            <!-- ОШИБКА -->
-            <div x-show="error && !loading" x-cloak class="alert alert-error" x-text="error"></div>
-
-            <!-- КОНТЕНТ -->
-            <div x-show="!loading && !error" x-cloak>
-
-                <!-- ЗАГОЛОВОК СТРАНИЦЫ -->
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
-                    <div>
-                        <h1 style="font-size:24px;font-weight:600;margin:0 0 4px 0;">Доска рейсов</h1>
-                        <p style="font-size:13px;color:var(--text-secondary);margin:0;">
-                            Управление рейсами и статусами доставки
-                        </p>
-                    </div>
-                    <button class="btn btn-primary" @click="createTrip()">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+                <div>
+                    <h1 style="font-size:24px;font-weight:600;margin:0 0 4px 0;">Доска рейсов</h1>
+                    <p style="font-size:13px;color:var(--text-secondary);margin:0;">
+                        Управление рейсами и статусами доставки
+                    </p>
+                </div>
+                <div style="display:flex;gap:8px;">
+                    <button class="btn btn-secondary" @click="loadData()" :disabled="loading">
+                        Обновить
+                    </button>
+                    <button class="btn btn-primary" @click="openTripModal()">
                         Новый рейс
                     </button>
                 </div>
+            </div>
 
-                <!-- ПУСТОЕ СОСТОЯНИЕ (когда нет рейсов) -->
-                <div x-show="trips.length === 0" class="empty-state">
-                    <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"></path>
-                        <path d="M15 18H9"></path>
-                        <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"></path>
-                        <circle cx="17" cy="18" r="2"></circle>
-                        <circle cx="7" cy="18" r="2"></circle>
-                    </svg>
-                    <h3 class="empty-title">Пока нет рейсов</h3>
-                    <p class="empty-description">Создайте первый рейс, чтобы начать работу</p>
-                    <button class="btn btn-primary" @click="createTrip()">Создать первый рейс</button>
-                </div>
+            <div x-show="error" x-cloak class="alert alert-error" x-text="error"></div>
 
-                <!-- ТАБЛИЦА РЕЙСОВ (когда есть данные) -->
-                <div x-show="trips.length > 0" style="background:#fff;border:1px solid var(--border-light);border-radius:12px;overflow:hidden;">
-                    <div style="padding:16px 20px;border-bottom:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center;">
-                        <span style="font-size:13px;color:var(--text-secondary);">
-                            Всего рейсов: <strong style="color:var(--text-primary);" x-text="trips.length"></strong>
-                        </span>
-                        <button class="btn btn-secondary btn-sm" @click="loadTrips()">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M23 4v6h-6"></path>
-                                <path d="M1 20v-6h6"></path>
-                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                            </svg>
-                            Обновить
-                        </button>
+            <div x-show="loading" class="skeleton" style="height:400px;"></div>
+
+            <div x-show="!loading" class="board">
+                <template x-for="col in columns" :key="col.status">
+                    <div class="board-column" :class="dragOverStatus === col.status ? 'drag-over' : ''"
+                         @dragover.prevent="dragOverStatus = col.status"
+                         @dragleave="dragOverStatus = null"
+                         @drop="dropTrip(col.status)">
+                        <div class="board-column-header">
+                            <span x-text="col.title"></span>
+                            <span class="board-column-count" x-text="tripsByStatus(col.status).length"></span>
+                        </div>
+                        <template x-for="t in tripsByStatus(col.status)" :key="t.id">
+                            <div class="trip-card"
+                                 :class="draggedTripId === t.id ? 'dragging' : ''"
+                                 draggable="true"
+                                 @dragstart="dragStart(t.id)"
+                                 @dragend="dragEnd()"
+                                 @click="openTrip(t.id)">
+                                <div class="trip-card-number" x-text="t.trip_number"></div>
+                                <div class="trip-card-date" x-text="formatTripDate(t.trip_date)"></div>
+                                <div class="trip-card-row" x-text="t.vehicle_plate || '—'"></div>
+                                <div class="trip-card-row" x-text="t.driver_name || '—'"></div>
+                                <div class="trip-card-load">
+                                    <div x-text="t.orders_count + ' адресов · ' + (t.fact_km || 0) + ' км'"></div>
+                                </div>
+                            </div>
+                        </template>
+                        <div x-show="tripsByStatus(col.status).length === 0" style="padding:20px;text-align:center;font-size:12px;color:var(--text-muted);">
+                            Нет рейсов
+                        </div>
                     </div>
-                    <div x-html="renderTripsTable()"></div>
-                </div>
-
+                </template>
             </div>
 
         </div>
     </main>
 
+    <!-- МОДАЛКА: НОВЫЙ РЕЙС -->
+    <div x-show="tripModal.open" x-cloak class="modal-backdrop" @click.self="closeTripModal()">
+        <div class="modal-window modal-window-wide" @click.stop>
+            <div class="modal-header">
+                <h2 class="modal-title">Новый рейс</h2>
+                <button class="modal-close" @click="closeTripModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <div x-show="tripModal.error" class="alert alert-error" x-text="tripModal.error"></div>
+
+                <!-- Секция 1: Основные данные -->
+                <div class="form-section">
+                    <h3 class="form-section-title">Основные данные</h3>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Дата рейса *</label>
+                            <input type="date" class="form-input" x-model="tripModal.form.trip_date" :disabled="tripModal.saving">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Тип рейса *</label>
+                            <select class="form-input" x-model="tripModal.form.trip_type" :disabled="tripModal.saving">
+                                <option value="city">Городской</option>
+                                <option value="intercity">Междугородний</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Машина *</label>
+                            <select class="form-input" x-model.number="tripModal.form.vehicle_id" @change="onVehicleChange()" :disabled="tripModal.saving">
+                                <option :value="null">— Выберите машину —</option>
+                                <template x-for="v in vehicles" :key="v.id">
+                                    <option :value="v.id" x-text="v.plate + ' · ' + (v.model || '') + ' · ' + (v.volume || '?') + ' м³'"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Водитель *</label>
+                            <select class="form-input" x-model.number="tripModal.form.driver_id" @change="onDriverChange()" :disabled="tripModal.saving">
+                                <option :value="null">— Выберите водителя —</option>
+                                <template x-for="d in drivers" :key="d.id">
+                                    <option :value="d.id" x-text="d.full_name + ' · ' + (d.default_rate || 0) + ' ₽'"></option>
+                                </template>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Пробег план, км</label>
+                            <input type="number" class="form-input" x-model.number="tripModal.form.plan_km" min="0" :disabled="tripModal.saving">
+                        </div>
+                        <div class="form-group" x-show="tripModal.form.trip_type === 'intercity'">
+                            <label class="form-label">Маршрут</label>
+                            <select class="form-input" x-model.number="tripModal.form.route_id" :disabled="tripModal.saving">
+                                <option :value="null">— Выберите маршрут —</option>
+                                <template x-for="r in routes" :key="r.id">
+                                    <option :value="r.id" x-text="r.name + ' · ' + (r.distance_km || 0) + ' км'"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div class="form-group" x-show="tripModal.form.trip_type === 'city'">
+                            <label class="form-label">Комментарий</label>
+                            <input type="text" class="form-input" x-model="tripModal.form.comment" placeholder="Необязательно" :disabled="tripModal.saving">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Секция 2: Адреса доставки -->
+                <div class="form-section">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+                        <h3 class="form-section-title" style="margin:0;">Адреса доставки</h3>
+                        <button class="btn btn-secondary btn-sm" @click="addAddress()" :disabled="tripModal.saving">
+                            + Добавить адрес
+                        </button>
+                    </div>
+
+                    <!-- Индикатор загрузки -->
+                    <div x-show="tripModal.form.vehicle_id" style="margin-bottom:16px;">
+                        <div class="load-info">
+                            <span>Загрузка: <strong x-text="totalVolume + ' м³'"></strong> из <strong x-text="selectedVehicleVolume + ' м³'"></strong></span>
+                            <span><strong x-text="loadPercent + '%'"></strong></span>
+                        </div>
+                        <div class="load-bar">
+                            <div class="load-bar-fill" :class="loadColor" :style="'width:' + Math.min(loadPercent, 100) + '%'"></div>
+                        </div>
+                    </div>
+
+                    <div x-show="tripModal.form.addresses.length === 0" class="address-list">
+                        <div class="address-list-empty">
+                            Нет адресов. Нажмите «+ Добавить адрес», чтобы начать.
+                        </div>
+                    </div>
+
+                    <div x-show="tripModal.form.addresses.length > 0" class="address-list">
+                        <div class="address-list-header">
+                            <div>№</div>
+                            <div>ID заказа</div>
+                            <div>Адрес</div>
+                            <div>Контакт</div>
+                            <div>Телефон</div>
+                            <div>м³</div>
+                            <div>Примечание</div>
+                            <div></div>
+                        </div>
+                        <template x-for="(addr, index) in tripModal.form.addresses" :key="index">
+                            <div class="address-list-row">
+                                <div class="seq-num" x-text="index + 1"></div>
+                                <input type="text" x-model="addr.external_id" placeholder="#12345" :disabled="tripModal.saving">
+                                <input type="text" x-model="addr.address" placeholder="ул. Ленина, 15" :disabled="tripModal.saving">
+                                <input type="text" x-model="addr.contact_name" placeholder="Иванов И.И." :disabled="tripModal.saving">
+                                <input type="text" x-model="addr.phone" placeholder="+79001234567" :disabled="tripModal.saving">
+                                <input type="number" x-model.number="addr.volume" step="0.1" min="0" :disabled="tripModal.saving">
+                                <textarea x-model="addr.note" placeholder="Примечание" :disabled="tripModal.saving"></textarea>
+                                <button class="btn-remove" @click="removeAddress(index)" :disabled="tripModal.saving" title="Удалить">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                    </svg>
+                                </button>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @click="closeTripModal()" :disabled="tripModal.saving">Отмена</button>
+                <button class="btn btn-primary" @click="saveTrip()" :disabled="tripModal.saving">
+                    <span x-show="!tripModal.saving">Создать рейс</span>
+                    <span x-show="tripModal.saving" x-cloak>Сохранение...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
-        function app() {
+        function boardPage() {
             return {
                 user: null,
                 trips: [],
+                vehicles: [],
+                drivers: [],
+                routes: [],
                 loading: true,
                 error: '',
 
+                draggedTripId: null,
+                dragOverStatus: null,
+
+                columns: [
+                    { status: 'forming', title: 'Формируется' },
+                    { status: 'loading', title: 'Загрузка' },
+                    { status: 'transit', title: 'В пути' },
+                    { status: 'done', title: 'Завершён' }
+                ],
+
+                tripModal: {
+                    open: false,
+                    saving: false,
+                    error: '',
+                    form: {}
+                },
+
                 get userInitials() {
                     if (!this.user?.full_name) return '?';
-                    return this.user.full_name
-                        .split(' ')
-                        .map(w => w[0])
-                        .slice(0, 2)
-                        .join('')
-                        .toUpperCase();
+                    return this.user.full_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
                 },
 
                 get roleLabel() {
-                    const roles = {
-                        'admin': 'Администратор',
-                        'senior_logist': 'Ст. логист',
-                        'logist': 'Логист',
-                        'manager': 'Руководитель',
-                        'viewer': 'Наблюдатель'
-                    };
+                    const roles = { 'admin': 'Администратор', 'senior_logist': 'Ст. логист', 'logist': 'Логист', 'manager': 'Руководитель', 'viewer': 'Наблюдатель' };
                     return roles[this.user?.role] || this.user?.role || '';
                 },
 
+                get selectedVehicleVolume() {
+                    const v = this.vehicles.find(x => x.id === this.tripModal.form.vehicle_id);
+                    return v ? Number(v.volume) : 0;
+                },
+
+                get totalVolume() {
+                    const total = this.tripModal.form.addresses.reduce((sum, a) => sum + (Number(a.volume) || 0), 0);
+                    return Math.round(total * 100) / 100;
+                },
+
+                get loadPercent() {
+                    const cap = this.selectedVehicleVolume;
+                    if (!cap) return 0;
+                    return Math.round(this.totalVolume / cap * 100);
+                },
+
+                get loadColor() {
+                    const p = this.loadPercent;
+                    if (p > 100) return 'load-orange';
+                    if (p >= 81) return 'load-green';
+                    if (p >= 51) return 'load-yellow';
+                    return 'load-red';
+                },
+
                 async init() {
-                    // Ждём, пока app.js загрузится
                     if (!window.AUTH) {
                         setTimeout(() => this.init(), 50);
                         return;
                     }
                     if (!window.AUTH.requireLogin()) return;
                     this.user = window.API.getUser();
-                    await this.loadTrips();
+                    await this.loadData();
                 },
 
-                async loadTrips() {
+                async loadData() {
                     this.loading = true;
                     this.error = '';
                     try {
-                        const data = await window.API.api('/api/trips');
-                        this.trips = data.trips || [];
+                        const [trips, vehicles, drivers, routes] = await Promise.all([
+                            window.API.api('/api/trips'),
+                            window.API.api('/api/vehicles'),
+                            window.API.api('/api/drivers'),
+                            window.API.api('/api/routes')
+                        ]);
+                        this.trips = trips.trips || [];
+                        this.vehicles = vehicles.vehicles || [];
+                        this.drivers = drivers.drivers || [];
+                        this.routes = routes.routes || [];
                     } catch (e) {
                         this.error = e.message;
                     } finally {
@@ -170,66 +343,175 @@
                     }
                 },
 
-                renderTripsTable() {
-                    if (this.trips.length === 0) return '';
-
-                    const statusLabels = {
-                        'forming': 'Формируется',
-                        'loading': 'Загрузка',
-                        'transit': 'В пути',
-                        'done': 'Завершён',
-                        'problem': 'Проблема'
-                    };
-
-                    const statusColors = {
-                        'forming': 'background:#F1F5F9;color:#475569;',
-                        'loading': 'background:#DBEAFE;color:#1E40AF;',
-                        'transit': 'background:#D1FAE5;color:#065F46;',
-                        'done': 'background:#E5E7EB;color:#374151;',
-                        'problem': 'background:#FEE2E2;color:#991B1B;'
-                    };
-
-                    let html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
-                    html += '<thead><tr style="border-bottom:1px solid var(--border-light);background:#FAFBFC;">';
-                    html += '<th style="padding:12px 20px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Номер</th>';
-                    html += '<th style="padding:12px 20px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Дата</th>';
-                    html += '<th style="padding:12px 20px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Машина</th>';
-                    html += '<th style="padding:12px 20px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Водитель</th>';
-                    html += '<th style="padding:12px 20px;text-align:right;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Адресов</th>';
-                    html += '<th style="padding:12px 20px;text-align:right;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Пробег</th>';
-                    html += '<th style="padding:12px 20px;text-align:right;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Затраты</th>';
-                    html += '<th style="padding:12px 20px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Статус</th>';
-                    html += '</tr></thead><tbody>';
-
-                    this.trips.forEach(t => {
-                        html += '<tr style="border-bottom:1px solid var(--border-light);cursor:pointer;" onmouseover="this.style.background=\'#FAFBFC\'" onmouseout="this.style.background=\'#fff\'">';
-                        html += '<td style="padding:14px 20px;font-weight:600;">' + this.escapeHtml(t.trip_number) + '</td>';
-                        html += '<td style="padding:14px 20px;color:var(--text-secondary);">' + window.HELPERS.formatDate(t.trip_date) + '</td>';
-                        html += '<td style="padding:14px 20px;">' + this.escapeHtml(t.vehicle_plate || '—') + '</td>';
-                        html += '<td style="padding:14px 20px;">' + this.escapeHtml(t.driver_name || '—') + '</td>';
-                        html += '<td style="padding:14px 20px;text-align:right;">' + t.orders_count + '</td>';
-                        html += '<td style="padding:14px 20px;text-align:right;">' + (t.fact_km || 0) + ' км</td>';
-                        html += '<td style="padding:14px 20px;text-align:right;">' + window.HELPERS.formatMoney(t.total_costs) + '</td>';
-                        html += '<td style="padding:14px 20px;"><span style="display:inline-block;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:500;' + (statusColors[t.status] || '') + '">' + (statusLabels[t.status] || t.status) + '</span></td>';
-                        html += '</tr>';
-                    });
-
-                    html += '</tbody></table>';
-                    return html;
+                formatTripDate(d) {
+                    if (!d) return '—';
+                    return window.HELPERS.formatDate(d);
                 },
 
-                escapeHtml(str) {
-                    if (!str) return '';
-                    return String(str)
-                        .replace(/&/g, '&amp;')
-                        .replace(/</g, '&lt;')
-                        .replace(/>/g, '&gt;')
-                        .replace(/"/g, '&quot;')
-                        .replace(/'/g, '&#039;');
+                tripsByStatus(status) {
+                    return this.trips.filter(t => t.status === status);
                 },
 
-                createTrip() {
-                    alert('Форма создания рейса появится на следующем этапе');
+                openTrip(tripId) {
+                    window.location.href = '/trip.html?id=' + tripId;
+                },
+
+                // ============ DRAG & DROP ============
+
+                dragStart(tripId) {
+                    this.draggedTripId = tripId;
+                },
+
+                dragEnd() {
+                    this.draggedTripId = null;
+                    this.dragOverStatus = null;
+                },
+
+                async dropTrip(newStatus) {
+                    const tripId = this.draggedTripId;
+                    this.dragOverStatus = null;
+                    this.draggedTripId = null;
+
+                    if (!tripId) return;
+
+                    const trip = this.trips.find(t => t.id === tripId);
+                    if (!trip || trip.status === newStatus) return;
+
+                    // Проверка перехода в "Завершён"
+                    if (newStatus === 'done') {
+                        const detail = await window.API.api('/api/trips?action=get&id=' + tripId);
+                        if (!detail.trip.fact_km || Number(detail.trip.fact_km) <= 0) {
+                            alert('Заполните пробег факт перед завершением рейса');
+                            return;
+                        }
+                        if (!detail.costs || detail.costs.length === 0) {
+                            alert('Добавьте хотя бы одну затрату перед завершением рейса');
+                            return;
+                        }
+                    }
+
+                    const previousStatus = trip.status;
+                    trip.status = newStatus;
+
+                    try {
+                        await window.API.api('/api/trips?action=update&id=' + tripId, {
+                            method: 'PUT',
+                            body: JSON.stringify({ status: newStatus })
+                        });
+                    } catch (e) {
+                        trip.status = previousStatus;
+                        alert('Ошибка: ' + e.message);
+                    }
+                },
+
+                // ============ МОДАЛКА СОЗДАНИЯ ============
+
+                openTripModal() {
+                    if (this.vehicles.length === 0) {
+                        alert('Сначала добавьте машину в справочниках');
+                        return;
+                    }
+                    if (this.drivers.length === 0) {
+                        alert('Сначала добавьте водителя в справочниках');
+                        return;
+                    }
+
+                    this.tripModal = {
+                        open: true,
+                        saving: false,
+                        error: '',
+                        form: {
+                            trip_date: new Date().toISOString().slice(0, 10),
+                            trip_type: 'city',
+                            vehicle_id: null,
+                            driver_id: null,
+                            route_id: null,
+                            plan_km: 100,
+                            comment: '',
+                            addresses: [this.emptyAddress()]
+                        }
+                    };
+                },
+
+                closeTripModal() {
+                    if (this.tripModal.saving) return;
+                    this.tripModal.open = false;
+                },
+
+                emptyAddress() {
+                    return {
+                        external_id: '',
+                        address: '',
+                        contact_name: '',
+                        phone: '',
+                        volume: 0,
+                        note: ''
+                    };
+                },
+
+                addAddress() {
+                    this.tripModal.form.addresses.push(this.emptyAddress());
+                },
+
+                removeAddress(index) {
+                    this.tripModal.form.addresses.splice(index, 1);
+                },
+
+                onVehicleChange() {
+                    // Можно добавить логику при смене машины
+                },
+
+                onDriverChange() {
+                    // Можно добавить логику при смене водителя
+                },
+
+                async saveTrip() {
+                    this.tripModal.error = '';
+                    const form = this.tripModal.form;
+
+                    // Валидация
+                    if (!form.trip_date) { this.tripModal.error = 'Укажите дату рейса'; return; }
+                    if (!form.vehicle_id) { this.tripModal.error = 'Выберите машину'; return; }
+                    if (!form.driver_id) { this.tripModal.error = 'Выберите водителя'; return; }
+
+                    const validAddresses = form.addresses.filter(a => a.address && a.address.trim());
+                    if (validAddresses.length === 0) {
+                        this.tripModal.error = 'Добавьте хотя бы один адрес';
+                        return;
+                    }
+
+                    this.tripModal.saving = true;
+
+                    try {
+                        await window.API.api('/api/trips', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                trip_date: form.trip_date,
+                                trip_type: form.trip_type,
+                                vehicle_id: form.vehicle_id,
+                                driver_id: form.driver_id,
+                                route_id: form.route_id || null,
+                                plan_km: form.plan_km || 0,
+                                comment: form.comment || null,
+                                addresses: validAddresses.map(a => ({
+                                    external_id: a.external_id || null,
+                                    address: a.address,
+                                    contact_name: a.contact_name || null,
+                                    phone: a.phone || null,
+                                    volume: Number(a.volume) || 0,
+                                    note: a.note || null
+                                }))
+                            })
+                        });
+
+                        this.tripModal.open = false;
+                        await this.loadData();
+
+                    } catch (e) {
+                        this.tripModal.error = e.message;
+                    } finally {
+                        this.tripModal.saving = false;
+                    }
                 },
 
                 logout() {
