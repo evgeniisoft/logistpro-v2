@@ -76,57 +76,126 @@
 
                 <!-- Информация о рейсе -->
                 <div class="info-card">
-                    <div class="info-grid">
-                        <div class="info-item">
-                            <div class="info-item-label">Дата</div>
-                            <div class="info-item-value" x-text="formatDate(trip.trip_date)"></div>
+                    <!-- Режим просмотра / редактирования -->
+                    <template x-if="!editingTrip">
+                        <div>
+                            <div class="info-grid">
+                                <div class="info-item">
+                                    <div class="info-item-label">Дата</div>
+                                    <div class="info-item-value" x-text="formatDate(trip.trip_date)"></div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-item-label">Тип рейса</div>
+                                    <div class="info-item-value" x-text="trip.trip_type === 'city' ? 'Городской' : 'Междугородний'"></div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-item-label">Машина</div>
+                                    <div class="info-item-value" x-text="trip.vehicle_plate || '—'"></div>
+                                    <div class="info-item-sub" x-text="trip.vehicle_model || ''"></div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-item-label">Водитель</div>
+                                    <div class="info-item-value" x-text="trip.driver_name || '—'"></div>
+                                    <div class="info-item-sub" x-text="trip.driver_rate_at_time ? formatMoney(trip.driver_rate_at_time) : ''"></div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-item-label">Пробег план</div>
+                                    <div class="info-item-value" x-text="(trip.plan_km || 0) + ' км'"></div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-item-label">Пробег факт</div>
+                                    <div class="info-item-value" x-text="(trip.fact_km || 0) + ' км'"></div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-item-label">Ставка за рейс</div>
+                                    <div class="info-item-value" x-text="formatMoney(trip.driver_rate_at_time)"></div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-item-label">Выручка</div>
+                                    <div class="info-item-value" x-text="formatMoney(trip.revenue)"></div>
+                                </div>
+                            </div>
+                            <div x-show="trip.comment" style="margin-top:20px;padding-top:20px;border-top:1px solid var(--border-light);">
+                                <div class="info-item-label">Комментарий</div>
+                                <div style="font-size:13px;color:var(--text-primary);margin-top:4px;" x-text="trip.comment"></div>
+                            </div>
+                            <div x-show="trip.status === 'problem' && trip.problem_comment" style="margin-top:20px;padding:12px 14px;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;">
+                                <div style="font-size:11px;font-weight:600;color:#991B1B;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Проблема</div>
+                                <div style="font-size:13px;color:#991B1B;" x-text="trip.problem_comment"></div>
+                            </div>
+                            <div x-show="trip.status === 'cancelled' && trip.cancel_reason" style="margin-top:20px;padding:12px 14px;background:#F3F4F6;border:1px solid #E5E7EB;border-radius:8px;">
+                                <div style="font-size:11px;font-weight:600;color:#6B7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Причина отмены</div>
+                                <div style="font-size:13px;color:#6B7280;" x-text="trip.cancel_reason"></div>
+                            </div>
                         </div>
-                        <div class="info-item">
-                            <div class="info-item-label">Тип рейса</div>
-                            <div class="info-item-value" x-text="trip.trip_type === 'city' ? 'Городской' : 'Междугородний'"></div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-item-label">Машина</div>
-                            <div class="info-item-value" x-text="trip.vehicle_plate || '—'"></div>
-                            <div class="info-item-sub" x-text="trip.vehicle_model || ''"></div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-item-label">Водитель</div>
-                            <div class="info-item-value" x-text="trip.driver_name || '—'"></div>
-                            <div class="info-item-sub" x-text="trip.driver_rate_at_time ? formatMoney(trip.driver_rate_at_time) : ''"></div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-item-label">Пробег план</div>
-                            <div class="info-item-value" x-text="(trip.plan_km || 0) + ' км'"></div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-item-label">Пробег факт</div>
-                            <div class="info-item-value" x-text="(trip.fact_km || 0) + ' км'"></div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-item-label">Ставка за рейс</div>
-                            <div class="info-item-value" x-text="formatMoney(trip.driver_rate_at_time)"></div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-item-label">Выручка</div>
-                            <div class="info-item-value" x-text="formatMoney(trip.revenue)"></div>
-                        </div>
-                    </div>
+                    </template>
 
-                    <div x-show="trip.comment" style="margin-top:20px;padding-top:20px;border-top:1px solid var(--border-light);">
-                        <div class="info-item-label">Комментарий</div>
-                        <div style="font-size:13px;color:var(--text-primary);margin-top:4px;" x-text="trip.comment"></div>
-                    </div>
+                    <!-- Режим редактирования -->
+                    <template x-if="editingTrip">
+                        <div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">Дата рейса</label>
+                                    <input type="date" class="form-input" x-model="editTripForm.trip_date">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Тип рейса</label>
+                                    <select class="form-input" x-model="editTripForm.trip_type">
+                                        <option value="city">Городской</option>
+                                        <option value="intercity">Междугородний</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">Машина</label>
+                                    <select class="form-input" x-model.number="editTripForm.vehicle_id">
+                                        <template x-for="v in vehicles" :key="v.id">
+                                            <option :value="v.id" x-text="v.plate + ' · ' + (v.model || '') + ' · ' + (v.volume || '?') + ' м³'"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Водитель</label>
+                                    <select class="form-input" x-model.number="editTripForm.driver_id">
+                                        <template x-for="d in drivers" :key="d.id">
+                                            <option :value="d.id" x-text="d.full_name + ' · ' + (d.default_rate || 0) + ' ₽'"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">Пробег план, км</label>
+                                    <input type="number" class="form-input" x-model.number="editTripForm.plan_km" min="0">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Пробег факт, км</label>
+                                    <input type="number" class="form-input" x-model.number="editTripForm.fact_km" min="0">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Ставка за рейс, ₽</label>
+                                    <input type="number" class="form-input" x-model.number="editTripForm.driver_rate_at_time" min="0">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Выручка, ₽</label>
+                                    <input type="number" class="form-input" x-model.number="editTripForm.revenue" min="0">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Комментарий</label>
+                                <input type="text" class="form-input" x-model="editTripForm.comment" placeholder="Необязательно">
+                            </div>
 
-                    <div x-show="trip.status === 'problem' && trip.problem_comment" style="margin-top:20px;padding:12px 14px;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;">
-                        <div style="font-size:11px;font-weight:600;color:#991B1B;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Проблема</div>
-                        <div style="font-size:13px;color:#991B1B;" x-text="trip.problem_comment"></div>
-                    </div>
-
-                    <div x-show="trip.status === 'cancelled' && trip.cancel_reason" style="margin-top:20px;padding:12px 14px;background:#F3F4F6;border:1px solid #E5E7EB;border-radius:8px;">
-                        <div style="font-size:11px;font-weight:600;color:#6B7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Причина отмены</div>
-                        <div style="font-size:13px;color:#6B7280;" x-text="trip.cancel_reason"></div>
-                    </div>
+                            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+                                <button class="btn btn-secondary" @click="cancelEditTrip()" :disabled="savingTrip">Отмена</button>
+                                <button class="btn btn-primary" @click="saveTrip()" :disabled="savingTrip">
+                                    <span x-show="!savingTrip">Сохранить</span>
+                                    <span x-show="savingTrip" x-cloak>Сохранение...</span>
+                                </button>
+                            </div>
+                        </div>
+                    </template>
 
                     <!-- Загрузка -->
                     <div class="trip-load-block">
@@ -555,11 +624,149 @@
                 <!-- Действия -->
                 <div class="trip-actions-bar">
                     <div class="left-actions">
-                        <button class="btn btn-secondary" disabled title="Будет добавлено на следующем этапе">Отметить проблему</button>
-                        <button class="btn btn-danger" disabled title="Будет добавлено на следующем этапе">Отменить рейс</button>
+                        <button class="btn btn-secondary" @click="printWaybill()" title="Распечатать путевой лист">
+                            Путевой лист
+                        </button>
+                        <template x-if="trip.status !== 'done' && trip.status !== 'cancelled'">
+                            <button class="btn btn-secondary" @click="openProblemModal()">Отметить проблему</button>
+                        </template>
+                        <template x-if="trip.status !== 'done' && trip.status !== 'cancelled'">
+                            <button class="btn btn-danger" @click="openCancelModal()">Отменить рейс</button>
+                        </template>
                     </div>
-                    <button class="btn btn-secondary" disabled title="Будет добавлено на следующем этапе">Удалить рейс</button>
-                    <button class="btn btn-primary" @click="goBack()">К доске</button>
+                    <template x-if="(user?.role === 'admin' || user?.role === 'senior_logist') && trip.status !== 'transit' && trip.status !== 'done'">
+                        <button class="btn btn-danger" @click="deleteTrip()">Удалить рейс</button>
+                    </template>
+                    <template x-if="!editingTrip">
+                        <button class="btn btn-primary" @click="startEditTrip()">Редактировать</button>
+                    </template>
+                </div>
+
+                <!-- МОДАЛКА: ПРОБЛЕМА -->
+                <div x-show="problemModal.open" x-cloak class="modal-backdrop" @click.self="problemModal.open = false">
+                    <div class="modal-window" @click.stop>
+                        <div class="modal-header">
+                            <h2 class="modal-title">Отметить проблему</h2>
+                            <button class="modal-close" @click="problemModal.open = false">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            <div x-show="problemModal.error" class="alert alert-error" x-text="problemModal.error"></div>
+                            <div class="form-group">
+                                <label class="form-label">Что случилось? *</label>
+                                <textarea class="form-input" x-model="problemModal.comment" rows="4" placeholder="Например: сломался двигатель, стоит на М-10, ждёт эвакуатор" :disabled="problemModal.saving"></textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-secondary" @click="problemModal.open = false" :disabled="problemModal.saving">Отмена</button>
+                            <button class="btn btn-primary" @click="submitProblem()" :disabled="problemModal.saving">
+                                <span x-show="!problemModal.saving">Отметить проблему</span>
+                                <span x-show="problemModal.saving" x-cloak>Отправка...</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- МОДАЛКА: ОТМЕНА РЕЙСА -->
+                <div x-show="cancelModal.open" x-cloak class="modal-backdrop" @click.self="cancelModal.open = false">
+                    <div class="modal-window" @click.stop>
+                        <div class="modal-header">
+                            <h2 class="modal-title">Отменить рейс</h2>
+                            <button class="modal-close" @click="cancelModal.open = false">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            <div x-show="cancelModal.error" class="alert alert-error" x-text="cancelModal.error"></div>
+
+                            <div class="form-group">
+                                <label class="form-label">Причина отмены *</label>
+                                <textarea class="form-input" x-model="cancelModal.reason" rows="3" placeholder="Например: клиент отказался от доставки" :disabled="cancelModal.saving"></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Что делать с заказами? *</label>
+                                <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
+                                    <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;padding:12px;border:1px solid var(--border-light);border-radius:6px;">
+                                        <input type="radio" value="return_to_incoming" x-model="cancelModal.orders_action" style="margin-top:2px;">
+                                        <div>
+                                            <div style="font-weight:500;font-size:13px;">Вернуть заказы в пул</div>
+                                            <div style="font-size:12px;color:var(--text-secondary);">Заказы можно будет назначить на другие рейсы</div>
+                                        </div>
+                                    </label>
+                                    <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;padding:12px;border:1px solid var(--border-light);border-radius:6px;">
+                                        <input type="radio" value="mark_cancelled" x-model="cancelModal.orders_action" style="margin-top:2px;">
+                                        <div>
+                                            <div style="font-weight:500;font-size:13px;">Пометить заказы отменёнными</div>
+                                            <div style="font-size:12px;color:var(--text-secondary);">Заказы останутся в рейсе с пометкой «отменён»</div>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-secondary" @click="cancelModal.open = false" :disabled="cancelModal.saving">Назад</button>
+                            <button class="btn btn-danger" @click="submitCancel()" :disabled="cancelModal.saving">
+                                <span x-show="!cancelModal.saving">Отменить рейс</span>
+                                <span x-show="cancelModal.saving" x-cloak>Отмена...</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ПУТЕВОЙ ЛИСТ (для печати) -->
+                <div x-show="false" x-cloak id="waybillPrint" class="waybill-print">
+                    <h1>ПУТЕВОЙ ЛИСТ № <span x-text="trip?.trip_number || '—'"></span></h1>
+                    <div class="subtitle">Дата рейса: <span x-text="formatDate(trip?.trip_date)"></span></div>
+                    <div class="info-row"><span>Машина:</span> <span x-text="(trip?.vehicle_plate || '—') + ' (' + (vehicleVolume || '?') + ' м³)'"></span></div>
+                    <div class="info-row"><span>Водитель:</span> <span x-text="trip?.driver_name || '—'"></span></div>
+                    <div class="info-row"><span>Пробег план:</span> <span x-text="(trip?.plan_km || '—') + ' км'"></span></div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>№</th>
+                                <th>ID заказа</th>
+                                <th>Адрес</th>
+                                <th>Примечание</th>
+                                <th>Контакт</th>
+                                <th>Телефон</th>
+                                <th>м³</th>
+                                <th>Статус</th>
+                                <th>Подпись</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="(o, i) in orders" :key="o.id">
+                                <tr>
+                                    <td x-text="i + 1"></td>
+                                    <td x-text="o.external_id || ('#' + o.id)"></td>
+                                    <td x-text="o.address"></td>
+                                    <td x-text="o.note || '—'"></td>
+                                    <td x-text="o.contact_name || '—'"></td>
+                                    <td x-text="o.phone || '—'"></td>
+                                    <td x-text="o.volume || '—'"></td>
+                                    <td style="width:100px;">[  ] Доставлено</td>
+                                    <td style="width:120px;"></td>
+                                </tr>
+                            </template>
+                            <tr style="font-weight:600;">
+                                <td colspan="6">ИТОГО: <span x-text="orders.length"></span> адресов, <span x-text="totalVolume"></span> м³</td>
+                                <td colspan="3"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="signatures">
+                        <div><div class="line"></div>Водитель (подпись)</div>
+                        <div><div class="line"></div>Диспетчер (подпись)</div>
+                        <div>Дата: ____ ________ 202_ г.</div>
+                    </div>
                 </div>
 
             </div>
@@ -576,8 +783,20 @@
                 orders: [],
                 costs: [],
                 autoCosts: [],
+                vehicles: [],
+                drivers: [],
+                routes: [],
                 loading: true,
                 error: '',
+
+                // Редактирование рейса
+                editingTrip: false,
+                editTripForm: {},
+                savingTrip: false,
+
+                // Модалки
+                problemModal: { open: false, comment: '', saving: false, error: '' },
+                cancelModal: { open: false, reason: '', orders_action: 'return_to_incoming', saving: false, error: '' },
 
                 // Затраты — inline редактирование
                 editingCostId: null,
@@ -676,21 +895,29 @@
                 },
 
                 async loadTrip(tripId) {
-                    this.loading = true;
-                    this.error = '';
-                    try {
-                        const data = await window.API.api('/api/trips?action=get&id=' + tripId);
-                        this.trip = data.trip;
-                        this.orders = data.orders || [];
-                        this.costs = data.costs || [];
-                        this.autoCosts = data.auto_costs || [];
-                        document.title = 'Рейс ' + this.trip.trip_number + ' · ЛогистПро';
-                    } catch (e) {
-                        this.error = e.message;
-                    } finally {
-                        this.loading = false;
-                    }
-                },
+                this.loading = true;
+                this.error = '';
+                try {
+                    const [tripData, vehicles, drivers, routes] = await Promise.all([
+                        window.API.api('/api/trips?action=get&id=' + tripId),
+                        window.API.api('/api/vehicles'),
+                        window.API.api('/api/drivers'),
+                        window.API.api('/api/routes')
+                    ]);
+                    this.trip = tripData.trip;
+                    this.orders = tripData.orders || [];
+                    this.costs = tripData.costs || [];
+                    this.autoCosts = tripData.auto_costs || [];
+                    this.vehicles = vehicles.vehicles || [];
+                    this.drivers = drivers.drivers || [];
+                    this.routes = routes.routes || [];
+                    document.title = 'Рейс ' + this.trip.trip_number + ' · ЛогистПро';
+                } catch (e) {
+                    this.error = e.message;
+                } finally {
+                    this.loading = false;
+                }
+            },
 
                 // ============ DRAG & DROP ============
 
@@ -1023,6 +1250,163 @@
                     }
                 },
 
+                // ============ РЕДАКТИРОВАНИЕ РЕЙСА ============
+
+                startEditTrip() {
+                    this.editingTrip = true;
+                    this.editTripForm = {
+                        trip_date: this.trip.trip_date ? this.trip.trip_date.substring(0, 10) : '',
+                        trip_type: this.trip.trip_type,
+                        vehicle_id: this.trip.vehicle_id,
+                        driver_id: this.trip.driver_id,
+                        route_id: this.trip.route_id || null,
+                        plan_km: Number(this.trip.plan_km) || 0,
+                        fact_km: Number(this.trip.fact_km) || 0,
+                        driver_rate_at_time: Number(this.trip.driver_rate_at_time) || 0,
+                        revenue: Number(this.trip.revenue) || 0,
+                        comment: this.trip.comment || ''
+                    };
+                },
+
+                cancelEditTrip() {
+                    this.editingTrip = false;
+                    this.editTripForm = {};
+                },
+
+                async saveTrip() {
+                    if (!this.editTripForm.trip_date) {
+                        alert('Укажите дату рейса');
+                        return;
+                    }
+
+                    this.savingTrip = true;
+                    try {
+                        const data = await window.API.api('/api/trips?action=update&id=' + this.trip.id, {
+                            method: 'PUT',
+                            body: JSON.stringify({
+                                trip_date: this.editTripForm.trip_date,
+                                trip_type: this.editTripForm.trip_type,
+                                vehicle_id: this.editTripForm.vehicle_id,
+                                driver_id: this.editTripForm.driver_id,
+                                route_id: this.editTripForm.route_id,
+                                plan_km: this.editTripForm.plan_km,
+                                fact_km: this.editTripForm.fact_km,
+                                driver_rate_at_time: this.editTripForm.driver_rate_at_time,
+                                revenue: this.editTripForm.revenue,
+                                comment: this.editTripForm.comment || null
+                            })
+                        });
+
+                        // Перезагружаем данные рейса
+                        await this.loadTrip(this.trip.id);
+                        this.editingTrip = false;
+                        this.editTripForm = {};
+
+                    } catch (e) {
+                        alert('Ошибка сохранения: ' + e.message);
+                    } finally {
+                        this.savingTrip = false;
+                    }
+                },
+
+                // ============ ПРОБЛЕМА ============
+
+                openProblemModal() {
+                    this.problemModal = {
+                        open: true,
+                        comment: '',
+                        saving: false,
+                        error: ''
+                    };
+                },
+
+                async submitProblem() {
+                    if (!this.problemModal.comment.trim()) {
+                        this.problemModal.error = 'Опишите проблему';
+                        return;
+                    }
+
+                    this.problemModal.saving = true;
+                    this.problemModal.error = '';
+
+                    try {
+                        await window.API.api('/api/trips?action=problem&id=' + this.trip.id, {
+                            method: 'POST',
+                            body: JSON.stringify({ comment: this.problemModal.comment.trim() })
+                        });
+
+                        this.problemModal.open = false;
+                        await this.loadTrip(this.trip.id);
+
+                    } catch (e) {
+                        this.problemModal.error = e.message;
+                    } finally {
+                        this.problemModal.saving = false;
+                    }
+                },
+
+                // ============ ОТМЕНА ============
+
+                openCancelModal() {
+                    this.cancelModal = {
+                        open: true,
+                        reason: '',
+                        orders_action: 'return_to_incoming',
+                        saving: false,
+                        error: ''
+                    };
+                },
+
+                async submitCancel() {
+                    if (!this.cancelModal.reason.trim()) {
+                        this.cancelModal.error = 'Укажите причину отмены';
+                        return;
+                    }
+
+                    if (!confirm('Отменить рейс ' + this.trip.trip_number + '?')) return;
+
+                    this.cancelModal.saving = true;
+                    this.cancelModal.error = '';
+
+                    try {
+                        await window.API.api('/api/trips?action=cancel&id=' + this.trip.id, {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                reason: this.cancelModal.reason.trim(),
+                                orders_action: this.cancelModal.orders_action
+                            })
+                        });
+
+                        this.cancelModal.open = false;
+                        await this.loadTrip(this.trip.id);
+
+                    } catch (e) {
+                        this.cancelModal.error = e.message;
+                    } finally {
+                        this.cancelModal.saving = false;
+                    }
+                },
+
+                // ============ УДАЛЕНИЕ ============
+
+                async deleteTrip() {
+                    if (!confirm('Удалить рейс ' + this.trip.trip_number + '?\n\nВсе адреса и затраты этого рейса также будут удалены.')) return;
+
+                    try {
+                        await window.API.api('/api/trips?action=delete&id=' + this.trip.id, {
+                            method: 'DELETE'
+                        });
+                        window.location.href = '/';
+                    } catch (e) {
+                        alert('Ошибка удаления: ' + e.message);
+                    }
+                },
+
+                // ============ ПУТЕВОЙ ЛИСТ ============
+
+                printWaybill() {
+                    window.print();
+                },
 
                 goBack() {
                     window.location.href = '/';
