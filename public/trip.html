@@ -397,39 +397,155 @@
                     <div class="section-card-header">
                         <h2 class="section-card-title">
                             Затраты
-                            <span style="font-weight:400;color:var(--text-secondary);font-size:13px;margin-left:8px;" x-text="'(' + totalCosts + ' ₽)'"></span>
+                            <span style="font-weight:400;color:var(--text-secondary);font-size:13px;margin-left:8px;" x-text="'(' + totalCostsAll + ' ₽)'"></span>
                         </h2>
                         <div class="section-card-actions">
-                            <button class="btn btn-secondary btn-sm" disabled title="Будет добавлено на следующем этапе">+ Добавить затрату</button>
+                            <button class="btn btn-secondary btn-sm" @click="addNewCost()" :disabled="newCostRow || editingCostId" v-show="!newCostRow">
+                                + Добавить затрату
+                            </button>
                         </div>
                     </div>
 
-                    <div x-show="costs.length === 0" style="padding:40px;text-align:center;color:var(--text-secondary);font-size:13px;">
+                    <div x-show="costs.length === 0 && autoCosts.length === 0 && !newCostRow" style="padding:40px;text-align:center;color:var(--text-secondary);font-size:13px;">
                         Затрат пока нет
                     </div>
 
-                    <div x-show="costs.length > 0" style="overflow-x:auto;">
+                    <div x-show="costs.length > 0 || autoCosts.length > 0 || newCostRow" style="overflow-x:auto;">
                         <table class="cost-table-page">
                             <thead>
                                 <tr>
                                     <th style="width:200px;">Категория</th>
                                     <th>Примечание</th>
                                     <th class="text-right" style="width:150px;">Сумма</th>
+                                    <th style="width:120px;text-align:right;">Действия</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <template x-for="cost in costs" :key="cost.id">
-                                    <tr>
+                                <!-- Автоматические затраты (только просмотр) -->
+                                <template x-for="cost in autoCosts" :key="'auto-' + cost.category">
+                                    <tr class="auto-row">
                                         <td x-text="categoryLabel(cost.category)"></td>
-                                        <td x-text="cost.note || '—'" style="color:var(--text-secondary);font-size:12px;"></td>
+                                        <td x-text="cost.note" style="font-size:12px;"></td>
                                         <td class="col-amount" x-text="formatMoney(cost.amount)"></td>
+                                        <td style="text-align:right;color:var(--text-muted);font-size:11px;">авто</td>
+                                    </tr>
+                                </template>
+
+                                <!-- Обычные затраты -->
+                                <template x-for="cost in costs" :key="cost.id">
+                                    <tr :class="{ 'row-editing': editingCostId === cost.id }">
+                                        <!-- Просмотр -->
+                                        <template x-if="editingCostId !== cost.id">
+                                            <td x-text="categoryLabel(cost.category)"></td>
+                                        </template>
+                                        <template x-if="editingCostId === cost.id">
+                                            <td>
+                                                <select x-model="editCostForm.category" class="form-input" style="font-size:12px;padding:4px 8px;">
+                                                    <option value="fuel">Топливо</option>
+                                                    <option value="toll">Платные дороги</option>
+                                                    <option value="repair">Ремонт</option>
+                                                    <option value="fine">Штрафы</option>
+                                                    <option value="other">Прочее</option>
+                                                </select>
+                                            </td>
+                                        </template>
+
+                                        <template x-if="editingCostId !== cost.id">
+                                            <td x-text="cost.note || '—'" style="color:var(--text-secondary);font-size:12px;"></td>
+                                        </template>
+                                        <template x-if="editingCostId === cost.id">
+                                            <td>
+                                                <input type="text" x-model="editCostForm.note" class="form-input" style="font-size:12px;padding:4px 8px;" placeholder="Примечание">
+                                            </td>
+                                        </template>
+
+                                        <template x-if="editingCostId !== cost.id">
+                                            <td class="col-amount" x-text="formatMoney(cost.amount)"></td>
+                                        </template>
+                                        <template x-if="editingCostId === cost.id">
+                                            <td class="col-amount">
+                                                <input type="number" x-model.number="editCostForm.amount" class="form-input" style="font-size:12px;padding:4px 8px;text-align:right;" step="0.01" min="0">
+                                            </td>
+                                        </template>
+
+                                        <!-- Действия -->
+                                        <td style="text-align:right;">
+                                            <template x-if="editingCostId !== cost.id">
+                                                <div style="display:flex;gap:2px;justify-content:flex-end;">
+                                                    <button class="btn-action" @click="startEditCost(cost)" title="Редактировать">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                                        </svg>
+                                                    </button>
+                                                    <button class="btn-action danger" @click="deleteCost(cost)" title="Удалить">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                            <polyline points="3 6 5 6 21 6"></polyline>
+                                                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            </template>
+                                            <template x-if="editingCostId === cost.id">
+                                                <div style="display:flex;gap:2px;justify-content:flex-end;">
+                                                    <button class="btn-action success" @click="saveEditCost()" :disabled="savingCost" title="Сохранить">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                            <polyline points="20 6 9 17 4 12"></polyline>
+                                                        </svg>
+                                                    </button>
+                                                    <button class="btn-action" @click="cancelEditCost()" :disabled="savingCost" title="Отмена">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            </template>
+                                        </td>
+                                    </tr>
+                                </template>
+
+                                <!-- Новая затрата -->
+                                <template x-if="newCostRow">
+                                    <tr class="row-editing">
+                                        <td>
+                                            <select x-model="newCostForm.category" class="form-input" style="font-size:12px;padding:4px 8px;">
+                                                <option value="fuel">Топливо</option>
+                                                <option value="toll">Платные дороги</option>
+                                                <option value="repair">Ремонт</option>
+                                                <option value="fine">Штрафы</option>
+                                                <option value="other">Прочее</option>
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <input type="text" x-model="newCostForm.note" class="form-input" style="font-size:12px;padding:4px 8px;" placeholder="Примечание">
+                                        </td>
+                                        <td class="col-amount">
+                                            <input type="number" x-model.number="newCostForm.amount" class="form-input" style="font-size:12px;padding:4px 8px;text-align:right;" step="0.01" min="0" placeholder="0">
+                                        </td>
+                                        <td style="text-align:right;">
+                                            <div style="display:flex;gap:2px;justify-content:flex-end;">
+                                                <button class="btn-action success" @click="saveNewCost()" :disabled="savingCost" title="Добавить">
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                                    </svg>
+                                                </button>
+                                                <button class="btn-action" @click="cancelNewCost()" :disabled="savingCost" title="Отмена">
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        </td>
                                     </tr>
                                 </template>
                             </tbody>
                             <tfoot>
                                 <tr>
                                     <td colspan="2">Итого затрат</td>
-                                    <td class="col-amount" x-text="formatMoney(totalCosts)"></td>
+                                    <td class="col-amount" x-text="formatMoney(totalCostsAll)"></td>
+                                    <td></td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -459,8 +575,16 @@
                 trip: null,
                 orders: [],
                 costs: [],
+                autoCosts: [],
                 loading: true,
                 error: '',
+
+                // Затраты — inline редактирование
+                editingCostId: null,
+                editCostForm: {},
+                newCostRow: false,
+                newCostForm: {},
+                savingCost: false,
 
                 // Drag & drop состояние
                 draggedOrderId: null,
@@ -519,8 +643,16 @@
                     return 'load-red';
                 },
 
-                get totalCosts() {
+                get totalCostsManual() {
                     return this.costs.reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
+                },
+
+                get totalCostsAuto() {
+                    return this.autoCosts.reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
+                },
+
+                get totalCostsAll() {
+                    return this.totalCostsManual + this.totalCostsAuto;
                 },
 
                 async init() {
@@ -551,6 +683,7 @@
                         this.trip = data.trip;
                         this.orders = data.orders || [];
                         this.costs = data.costs || [];
+                        this.autoCosts = data.auto_costs || [];
                         document.title = 'Рейс ' + this.trip.trip_number + ' · ЛогистПро';
                     } catch (e) {
                         this.error = e.message;
@@ -781,6 +914,115 @@
                     };
                     return labels[cat] || cat;
                 },
+
+                // ============ ЗАТРАТЫ ============
+
+                addNewCost() {
+                    this.newCostRow = true;
+                    this.newCostForm = {
+                        category: 'fuel',
+                        amount: 0,
+                        note: ''
+                    };
+                },
+
+                cancelNewCost() {
+                    this.newCostRow = false;
+                    this.newCostForm = {};
+                },
+
+                async saveNewCost() {
+                    if (!this.newCostForm.amount || Number(this.newCostForm.amount) <= 0) {
+                        alert('Введите сумму');
+                        return;
+                    }
+
+                    this.savingCost = true;
+                    try {
+                        const data = await window.API.api('/api/costs?action=create', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                trip_id: this.trip.id,
+                                category: this.newCostForm.category,
+                                amount: Number(this.newCostForm.amount),
+                                note: this.newCostForm.note || null
+                            })
+                        });
+
+                        this.costs.unshift(data.cost);
+                        this.newCostRow = false;
+                        this.newCostForm = {};
+
+                    } catch (e) {
+                        alert('Ошибка: ' + e.message);
+                    } finally {
+                        this.savingCost = false;
+                    }
+                },
+
+                startEditCost(cost) {
+                    this.editingCostId = cost.id;
+                    this.editCostForm = {
+                        category: cost.category,
+                        amount: cost.amount,
+                        note: cost.note || ''
+                    };
+                },
+
+                cancelEditCost() {
+                    this.editingCostId = null;
+                    this.editCostForm = {};
+                },
+
+                async saveEditCost() {
+                    if (Number(this.editCostForm.amount) <= 0) {
+                        alert('Сумма должна быть положительной');
+                        return;
+                    }
+
+                    this.savingCost = true;
+                    try {
+                        const data = await window.API.api('/api/costs?action=update&id=' + this.editingCostId, {
+                            method: 'PUT',
+                            body: JSON.stringify({
+                                category: this.editCostForm.category,
+                                amount: Number(this.editCostForm.amount),
+                                note: this.editCostForm.note || null
+                            })
+                        });
+
+                        const cost = this.costs.find(c => c.id === this.editingCostId);
+                        if (cost) {
+                            cost.category = data.cost.category;
+                            cost.amount = data.cost.amount;
+                            cost.note = data.cost.note;
+                        }
+
+                        this.editingCostId = null;
+                        this.editCostForm = {};
+
+                    } catch (e) {
+                        alert('Ошибка: ' + e.message);
+                    } finally {
+                        this.savingCost = false;
+                    }
+                },
+
+                async deleteCost(cost) {
+                    if (!confirm('Удалить затрату "' + this.categoryLabel(cost.category) + '" на ' + this.formatMoney(cost.amount) + '?')) return;
+
+                    try {
+                        await window.API.api('/api/costs?action=delete&id=' + cost.id, {
+                            method: 'DELETE'
+                        });
+
+                        this.costs = this.costs.filter(c => c.id !== cost.id);
+
+                    } catch (e) {
+                        alert('Ошибка: ' + e.message);
+                    }
+                },
+
 
                 goBack() {
                     window.location.href = '/';
