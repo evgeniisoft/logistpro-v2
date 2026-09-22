@@ -1,168 +1,285 @@
-const { query } = require('./_lib/db');
-const { requireAuth } = require('./_lib/auth');
-const { logChange } = require('./_lib/journal');
+const { query } = require("./_lib/db");
+const { requireAuth } = require("./_lib/auth");
+const { logChange } = require("./_lib/journal");
 
 async function handler(req, res) {
-    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-    const action = req.query.action || 'get';
-    const id = req.query.id;
+  const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+  const action = req.query.action || "get";
+  const id = req.query.id;
 
-    if (!id) {
-        return res.status(400).json({ error: 'ID заказа не указан' });
+  // ============ CREATE (добавить заказ в рейс) ============
+  if (action === "create") {
+    if (req.method !== "POST")
+      return res.status(405).json({ error: "Method not allowed" });
+
+    const { trip_id, external_id, address, contact_name, phone, volume, note } =
+      req.body;
+
+    if (!trip_id) return res.status(400).json({ error: "Не указан trip_id" });
+    if (!address || !address.trim())
+      return res.status(400).json({ error: "Адрес обязателен" });
+
+    try {
+      // Проверяем, что рейс существует
+      const tripCheck = await query(
+        "SELECT id, trip_number FROM trips WHERE id = $1",
+        [trip_id],
+      );
+      if (tripCheck.rows.length === 0) {
+        return res.status(404).json({ error: "Рейс не найден" });
+      }
+
+      // Определяем sequence_num — последний в рейсе + 1
+      const maxSeqResult = await query(
+        "SELECT COALESCE(MAX(sequence_num), 0) as max FROM orders WHERE trip_id = $1",
+        [trip_id],
+      );
+      const nextSeq = maxSeqResult.rows[0].max + 1;
+
+      // Вставляем заказ
+      const result = await query(
+        `INSERT INTO orders (
+                    trip_id, external_id, address, contact_name, phone, volume, sequence_num, note, source
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'manual')
+                RETURNING *`,
+        [
+          trip_id,
+          external_id || null,
+          address.trim(),
+          contact_name || null,
+          phone || null,
+          volume || 0,
+          nextSeq,
+          note || null,
+        ],
+      );
+
+      await logChange(
+        req.user.id,
+        "orders",
+        result.rows[0].id,
+        "Добавлен",
+        "",
+        "Рейс " + tripCheck.rows[0].trip_number,
+        ip,
+      );
+
+      return res.status(201).json({ success: true, order: result.rows[0] });
+    } catch (e) {
+      console.error("POST order create error:", e);
+      return res
+        .status(500)
+        .json({ error: "Ошибка сервера", details: e.message });
     }
+  }
 
-    // ============ GET ============
-    if (action === 'get') {
-        if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  // Для всех остальных actions нужен id
+  if (!id) {
+    return res.status(400).json({ error: "ID заказа не указан" });
+  }
 
-        try {
-            const result = await query(
-                `SELECT o.*, t.trip_number 
+  // ============ GET ============
+  if (action === "get") {
+    if (req.method !== "GET")
+      return res.status(405).json({ error: "Method not allowed" });
+
+    try {
+      const result = await query(
+        `SELECT o.*, t.trip_number 
                  FROM orders o
                  LEFT JOIN trips t ON t.id = o.trip_id
                  WHERE o.id = $1`,
-                [id]
+        [id],
+      );
+
+      if (result.rows.length === 0)
+        return res.status(404).json({ error: "Заказ не найден" });
+      return res.json({ order: result.rows[0] });
+    } catch (e) {
+      return res.status(500).json({ error: "Ошибка сервера" });
+    }
+  }
+
+  // ============ UPDATE ============
+  if (action === "update") {
+    if (req.method !== "PUT")
+      return res.status(405).json({ error: "Method not allowed" });
+
+    const fields = req.body;
+    const allowedFields = [
+      "address",
+      "contact_name",
+      "phone",
+      "volume",
+      "note",
+      "sequence_num",
+      "status",
+    ];
+
+    try {
+      const current = await query("SELECT * FROM orders WHERE id = $1", [id]);
+      if (current.rows.length === 0)
+        return res.status(404).json({ error: "Заказ не найден" });
+
+      const order = current.rows[0];
+      const updates = [];
+      const params = [];
+      let paramIndex = 1;
+
+      for (const field of allowedFields) {
+        if (fields[field] !== undefined) {
+          updates.push(`${field} = $${paramIndex++}`);
+          params.push(fields[field]);
+
+          if (String(order[field]) !== String(fields[field])) {
+            await logChange(
+              req.user.id,
+              "orders",
+              id,
+              field,
+              order[field],
+              fields[field],
+              ip,
             );
-
-            if (result.rows.length === 0) return res.status(404).json({ error: 'Заказ не найден' });
-            return res.json({ order: result.rows[0] });
-
-        } catch (e) {
-            return res.status(500).json({ error: 'Ошибка сервера' });
+          }
         }
+      }
+
+      if (updates.length === 0)
+        return res.json({ success: true, message: "Нет изменений" });
+
+      updates.push("updated_at = NOW()");
+      params.push(id);
+      const sql = `UPDATE orders SET ${updates.join(", ")} WHERE id = $${paramIndex} RETURNING *`;
+      const result = await query(sql, params);
+
+      return res.json({ success: true, order: result.rows[0] });
+    } catch (e) {
+      console.error("PUT order error:", e);
+      return res
+        .status(500)
+        .json({ error: "Ошибка сервера", details: e.message });
     }
+  }
 
-    // ============ UPDATE ============
-    if (action === 'update') {
-        if (req.method !== 'PUT') return res.status(405).json({ error: 'Method not allowed' });
+  // ============ DELETE ============
+  if (action === "delete") {
+    if (req.method !== "DELETE")
+      return res.status(405).json({ error: "Method not allowed" });
 
-        const fields = req.body;
-        const allowedFields = ['address', 'contact_name', 'phone', 'volume', 'note', 'sequence_num', 'status'];
+    try {
+      const current = await query("SELECT * FROM orders WHERE id = $1", [id]);
+      if (current.rows.length === 0)
+        return res.status(404).json({ error: "Заказ не найден" });
 
-        try {
-            const current = await query('SELECT * FROM orders WHERE id = $1', [id]);
-            if (current.rows.length === 0) return res.status(404).json({ error: 'Заказ не найден' });
+      const order = current.rows[0];
+      await query("DELETE FROM orders WHERE id = $1", [id]);
+      await logChange(
+        req.user.id,
+        "orders",
+        id,
+        "Удаление",
+        order.address,
+        "",
+        ip,
+      );
 
-            const order = current.rows[0];
-            const updates = [];
-            const params = [];
-            let paramIndex = 1;
-
-            for (const field of allowedFields) {
-                if (fields[field] !== undefined) {
-                    updates.push(`${field} = $${paramIndex++}`);
-                    params.push(fields[field]);
-
-                    if (String(order[field]) !== String(fields[field])) {
-                        await logChange(req.user.id, 'orders', id, field, order[field], fields[field], ip);
-                    }
-                }
-            }
-
-            if (updates.length === 0) return res.json({ success: true, message: 'Нет изменений' });
-
-            updates.push('updated_at = NOW()');
-            params.push(id);
-            const sql = `UPDATE orders SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
-            const result = await query(sql, params);
-
-            return res.json({ success: true, order: result.rows[0] });
-
-        } catch (e) {
-            console.error('PUT order error:', e);
-            return res.status(500).json({ error: 'Ошибка сервера', details: e.message });
-        }
+      return res.json({ success: true });
+    } catch (e) {
+      return res.status(500).json({ error: "Ошибка сервера" });
     }
+  }
 
-    // ============ DELETE ============
-    if (action === 'delete') {
-        if (req.method !== 'DELETE') return res.status(405).json({ error: 'Method not allowed' });
+  // ============ MOVE ============
+  if (action === "move") {
+    if (req.method !== "POST")
+      return res.status(405).json({ error: "Method not allowed" });
 
-        try {
-            const current = await query('SELECT * FROM orders WHERE id = $1', [id]);
-            if (current.rows.length === 0) return res.status(404).json({ error: 'Заказ не найден' });
+    const { to_trip_id, reason, position } = req.body;
+    if (!to_trip_id)
+      return res.status(400).json({ error: "Не указан целевой рейс" });
 
-            const order = current.rows[0];
-            await query('DELETE FROM orders WHERE id = $1', [id]);
-            await logChange(req.user.id, 'orders', id, 'Удаление', order.address, '', ip);
+    try {
+      const orderResult = await query("SELECT * FROM orders WHERE id = $1", [
+        id,
+      ]);
+      if (orderResult.rows.length === 0)
+        return res.status(404).json({ error: "Заказ не найден" });
 
-            return res.json({ success: true });
+      const order = orderResult.rows[0];
+      const fromTripId = order.trip_id;
 
-        } catch (e) {
-            return res.status(500).json({ error: 'Ошибка сервера' });
-        }
-    }
+      if (fromTripId === parseInt(to_trip_id)) {
+        return res.status(400).json({ error: "Заказ уже в этом рейсе" });
+      }
 
-    // ============ MOVE ============
-    if (action === 'move') {
-        if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+      const targetTrip = await query(
+        "SELECT id, trip_number FROM trips WHERE id = $1",
+        [to_trip_id],
+      );
+      if (targetTrip.rows.length === 0)
+        return res.status(404).json({ error: "Целевой рейс не найден" });
 
-        const { to_trip_id, reason, position } = req.body;
-        if (!to_trip_id) return res.status(400).json({ error: 'Не указан целевой рейс' });
+      let newSequence = position;
+      if (!newSequence) {
+        const maxSeq = await query(
+          "SELECT COALESCE(MAX(sequence_num), 0) as max FROM orders WHERE trip_id = $1",
+          [to_trip_id],
+        );
+        newSequence = maxSeq.rows[0].max + 1;
+      }
 
-        try {
-            const orderResult = await query('SELECT * FROM orders WHERE id = $1', [id]);
-            if (orderResult.rows.length === 0) return res.status(404).json({ error: 'Заказ не найден' });
+      await query(
+        "UPDATE orders SET trip_id = $1, sequence_num = $2, updated_at = NOW() WHERE id = $3",
+        [to_trip_id, newSequence, id],
+      );
 
-            const order = orderResult.rows[0];
-            const fromTripId = order.trip_id;
-
-            if (fromTripId === parseInt(to_trip_id)) {
-                return res.status(400).json({ error: 'Заказ уже в этом рейсе' });
-            }
-
-            const targetTrip = await query('SELECT id, trip_number FROM trips WHERE id = $1', [to_trip_id]);
-            if (targetTrip.rows.length === 0) return res.status(404).json({ error: 'Целевой рейс не найден' });
-
-            let newSequence = position;
-            if (!newSequence) {
-                const maxSeq = await query(
-                    'SELECT COALESCE(MAX(sequence_num), 0) as max FROM orders WHERE trip_id = $1',
-                    [to_trip_id]
-                );
-                newSequence = maxSeq.rows[0].max + 1;
-            }
-
-            await query(
-                'UPDATE orders SET trip_id = $1, sequence_num = $2, updated_at = NOW() WHERE id = $3',
-                [to_trip_id, newSequence, id]
-            );
-
-            await query(
-                `INSERT INTO order_history (order_id, from_trip_id, to_trip_id, reason, moved_by)
+      await query(
+        `INSERT INTO order_history (order_id, from_trip_id, to_trip_id, reason, moved_by)
                  VALUES ($1, $2, $3, $4, $5)`,
-                [id, fromTripId, to_trip_id, reason || null, req.user.id]
-            );
+        [id, fromTripId, to_trip_id, reason || null, req.user.id],
+      );
 
-            await logChange(req.user.id, 'orders', id, 'Перенос',
-                'Рейс ' + (fromTripId || 'нет'), 'Рейс ' + to_trip_id, ip);
+      await logChange(
+        req.user.id,
+        "orders",
+        id,
+        "Перенос",
+        "Рейс " + (fromTripId || "нет"),
+        "Рейс " + to_trip_id,
+        ip,
+      );
 
-            // Пересчитываем очерёдность
-            if (fromTripId) await renumberOrders(fromTripId);
-            await renumberOrders(to_trip_id);
+      // Пересчитываем очерёдность
+      if (fromTripId) await renumberOrders(fromTripId);
+      await renumberOrders(to_trip_id);
 
-            return res.json({
-                success: true,
-                message: 'Заказ перенесён в рейс ' + targetTrip.rows[0].trip_number
-            });
-
-        } catch (e) {
-            console.error('POST order move error:', e);
-            return res.status(500).json({ error: 'Ошибка сервера', details: e.message });
-        }
+      return res.json({
+        success: true,
+        message: "Заказ перенесён в рейс " + targetTrip.rows[0].trip_number,
+      });
+    } catch (e) {
+      console.error("POST order move error:", e);
+      return res
+        .status(500)
+        .json({ error: "Ошибка сервера", details: e.message });
     }
+  }
 
-    return res.status(405).json({ error: 'Unknown action: ' + action });
+  return res.status(405).json({ error: "Unknown action: " + action });
 }
 
 async function renumberOrders(tripId) {
-    const orders = await query(
-        'SELECT id FROM orders WHERE trip_id = $1 ORDER BY sequence_num ASC NULLS LAST, id ASC',
-        [tripId]
-    );
-    for (let i = 0; i < orders.rows.length; i++) {
-        await query('UPDATE orders SET sequence_num = $1 WHERE id = $2', [i + 1, orders.rows[i].id]);
-    }
+  const orders = await query(
+    "SELECT id FROM orders WHERE trip_id = $1 ORDER BY sequence_num ASC NULLS LAST, id ASC",
+    [tripId],
+  );
+  for (let i = 0; i < orders.rows.length; i++) {
+    await query("UPDATE orders SET sequence_num = $1 WHERE id = $2", [
+      i + 1,
+      orders.rows[i].id,
+    ]);
+  }
 }
 
 module.exports = requireAuth(handler);
