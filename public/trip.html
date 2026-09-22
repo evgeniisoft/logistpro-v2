@@ -56,7 +56,8 @@
             <div x-show="error && !loading" x-cloak class="alert alert-error" x-text="error"></div>
 
             <!-- Контент -->
-            <div x-show="!loading && !error && trip" x-cloak>
+            <template x-if="!loading && !error && trip">
+                <div>
 
                 <!-- Шапка страницы -->
                 <div class="trip-page-header">
@@ -446,7 +447,8 @@
                 </div>
 
             </div>
-
+            </div>
+        </template>
         </div>
     </main>
 
