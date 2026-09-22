@@ -34,7 +34,7 @@ async function handler(req, res) {
             }
 
             const ordersResult = await query(
-                'SELECT * FROM orders WHERE trip_id = $1 ORDER BY sequence_num ASC',
+                'SELECT * FROM orders WHERE trip_id = $1 ORDER BY sequence_num ASC NULLS LAST, id ASC',
                 [tripId]
             );
 
@@ -66,7 +66,6 @@ async function handler(req, res) {
         }
 
         try {
-            // Получаем текущий рейс
             const current = await query('SELECT * FROM trips WHERE id = $1', [tripId]);
             if (current.rows.length === 0) {
                 return res.status(404).json({ error: 'Рейс не найден' });
@@ -82,10 +81,11 @@ async function handler(req, res) {
                 });
             }
 
-            // Разрешённые поля для обновления
             const allowedFields = [
                 'trip_date', 'trip_type', 'vehicle_id', 'driver_id', 'route_id',
-                'route_text', 'plan_km', 'fact_km', 'status', 'revenue', 'comment'
+                'route_text', 'plan_km', 'fact_km', 'status', 'revenue', 'comment',
+                'cancel_reason', 'problem_comment',
+                'vehicle_volume_at_time', 'driver_rate_at_time'
             ];
 
             const updates = [];
@@ -94,11 +94,34 @@ async function handler(req, res) {
 
             for (const field of allowedFields) {
                 if (fields[field] !== undefined) {
+                    // Проверка смены водителя — обновляем ставку из справочника
+                    if (field === 'driver_id' && fields[field] !== trip.driver_id) {
+                        const newDriver = await query(
+                            'SELECT default_rate FROM drivers WHERE id = $1',
+                            [fields[field]]
+                        );
+                        if (newDriver.rows.length > 0) {
+                            updates.push(`driver_rate_at_time = $${paramIndex++}`);
+                            params.push(newDriver.rows[0].default_rate);
+                        }
+                    }
+
+                    // Проверка смены машины — обновляем объём из справочника
+                    if (field === 'vehicle_id' && fields[field] !== trip.vehicle_id) {
+                        const newVehicle = await query(
+                            'SELECT volume FROM vehicles WHERE id = $1',
+                            [fields[field]]
+                        );
+                        if (newVehicle.rows.length > 0) {
+                            updates.push(`vehicle_volume_at_time = $${paramIndex++}`);
+                            params.push(newVehicle.rows[0].volume);
+                        }
+                    }
+
                     updates.push(`${field} = $${paramIndex++}`);
                     params.push(fields[field]);
 
-                    // Логируем изменение
-                    if (trip[field] !== fields[field]) {
+                    if (String(trip[field]) !== String(fields[field])) {
                         await logChange(
                             req.user.id, 'trips', tripId,
                             field, trip[field], fields[field], ip
@@ -111,13 +134,11 @@ async function handler(req, res) {
                 return res.json({ success: true, message: 'Нет изменений' });
             }
 
-            // Увеличиваем version
             updates.push(`version = version + 1`);
             updates.push(`updated_at = NOW()`);
 
             params.push(tripId);
             const sql = `UPDATE trips SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
-
             const result = await query(sql, params);
 
             res.json({
@@ -140,16 +161,20 @@ async function handler(req, res) {
 
         try {
             const check = await query(
-                'SELECT trip_number FROM trips WHERE id = $1',
+                'SELECT trip_number, status FROM trips WHERE id = $1',
                 [tripId]
             );
             if (check.rows.length === 0) {
                 return res.status(404).json({ error: 'Рейс не найден' });
             }
 
-            const tripNumber = check.rows[0].trip_number;
+            if (check.rows[0].status === 'transit' || check.rows[0].status === 'done') {
+                return res.status(400).json({
+                    error: 'Нельзя удалить рейс в статусе "' + check.rows[0].status + '"'
+                });
+            }
 
-            // Каскадное удаление через ON DELETE CASCADE в БД
+            const tripNumber = check.rows[0].trip_number;
             await query('DELETE FROM trips WHERE id = $1', [tripId]);
 
             await logChange(
