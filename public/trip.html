@@ -722,7 +722,7 @@
                 </div>
 
                 <!-- ПУТЕВОЙ ЛИСТ (для печати) -->
-                <div x-show="false" x-cloak id="waybillPrint" class="waybill-print">
+                <div id="waybillPrint" class="waybill-print">
                     <h1>ПУТЕВОЙ ЛИСТ № <span x-text="trip?.trip_number || '—'"></span></h1>
                     <div class="subtitle">Дата рейса: <span x-text="formatDate(trip?.trip_date)"></span></div>
                     <div class="info-row"><span>Машина:</span> <span x-text="(trip?.vehicle_plate || '—') + ' (' + (vehicleVolume || '?') + ' м³)'"></span></div>
