@@ -144,19 +144,25 @@
                     <div class="section-card-header">
                         <h2 class="section-card-title">
                             Адреса доставки
-                            <span style="font-weight:400;color:var(--text-secondary);font-size:13px;margin-left:8px;" x-text="'(' + orders.length + ')'"></span>
+                            <span style="font-weight:400;color:var(--text-secondary);font-size:13px;margin-left:8px;"
+                                x-text="'(' + orders.length + ')'"></span>
                         </h2>
                         <div class="section-card-actions">
-                            <button class="btn btn-secondary btn-sm" disabled title="Будет добавлено на следующем этапе">+ Добавить адрес</button>
-                            <button class="btn btn-secondary btn-sm" disabled title="Будет добавлено на следующем этапе">+ Из входящих</button>
+                            <button class="btn btn-secondary btn-sm" @click="addNewOrder()" :disabled="reorderSaving || editingOrderId">
+                                + Добавить адрес
+                            </button>
+                            <button class="btn btn-secondary btn-sm" disabled title="Будет добавлено на следующем этапе">
+                                + Из входящих
+                            </button>
                         </div>
                     </div>
-
-                    <div x-show="orders.length === 0" style="padding:40px;text-align:center;color:var(--text-secondary);font-size:13px;">
+                
+                    <div x-show="orders.length === 0 && !newOrderRow"
+                        style="padding:40px;text-align:center;color:var(--text-secondary);font-size:13px;">
                         В рейсе пока нет адресов
                     </div>
-
-                    <div x-show="orders.length > 0" style="overflow-x:auto;">
+                
+                    <div x-show="orders.length > 0 || newOrderRow" style="overflow-x:auto;">
                         <table class="address-table">
                             <thead>
                                 <tr>
@@ -171,37 +177,212 @@
                                 </tr>
                             </thead>
                             <tbody>
+                                <!-- Существующие заказы -->
                                 <template x-for="(order, index) in orders" :key="order.id">
-                                    <tr>
-                                        <td class="col-seq" x-text="index + 1"></td>
-                                        <td class="col-id">
-                                            <span x-text="order.external_id || ('#' + order.id)"></span>
+                                    <tr :class="{
+                                        'dragging': draggedOrderId === order.id,
+                                        'drag-over': dragOverOrderIndex === index && draggedOrderId !== order.id,
+                                        'row-editing': editingOrderId === order.id
+                                    }" :draggable="editingOrderId !== order.id && !reorderSaving"
+                                        @dragstart="onDragStart(order.id, index)" @dragover.prevent="onDragOver(index)"
+                                        @dragleave="onDragLeave(index)" @drop.prevent="onDrop(index)" @dragend="onDragEnd()">
+                
+                                        <!-- Режим просмотра -->
+                                        <template x-if="editingOrderId !== order.id">
+                                            <td class="col-seq-with-handle">
+                                                <span class="drag-handle" title="Перетащите для изменения порядка">
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                        <circle cx="9" cy="6" r="1"></circle>
+                                                        <circle cx="9" cy="12" r="1"></circle>
+                                                        <circle cx="9" cy="18" r="1"></circle>
+                                                        <circle cx="15" cy="6" r="1"></circle>
+                                                        <circle cx="15" cy="12" r="1"></circle>
+                                                        <circle cx="15" cy="18" r="1"></circle>
+                                                    </svg>
+                                                </span>
+                                                <span class="seq-number" x-text="index + 1"></span>
+                                            </td>
+                                        </template>
+                                        <template x-if="editingOrderId === order.id">
+                                            <td class="col-seq">
+                                                <span x-text="index + 1"></span>
+                                            </td>
+                                        </template>
+                
+                                        <!-- Просмотр/редактирование -->
+                                        <template x-if="editingOrderId !== order.id">
+                                            <td class="col-id">
+                                                <span x-text="order.external_id || ('#' + order.id)"></span>
+                                            </td>
+                                        </template>
+                                        <template x-if="editingOrderId === order.id">
+                                            <td class="col-id">
+                                                <input type="text" x-model="editForm.external_id" placeholder="#12345">
+                                            </td>
+                                        </template>
+                
+                                        <template x-if="editingOrderId !== order.id">
+                                            <td class="col-address" x-text="order.address"></td>
+                                        </template>
+                                        <template x-if="editingOrderId === order.id">
+                                            <td class="col-address">
+                                                <input type="text" x-model="editForm.address" placeholder="ул. Ленина, 15">
+                                            </td>
+                                        </template>
+                
+                                        <template x-if="editingOrderId !== order.id">
+                                            <td class="col-contact" x-text="order.contact_name || '—'"></td>
+                                        </template>
+                                        <template x-if="editingOrderId === order.id">
+                                            <td class="col-contact">
+                                                <input type="text" x-model="editForm.contact_name" placeholder="Иванов И.И.">
+                                            </td>
+                                        </template>
+                
+                                        <template x-if="editingOrderId !== order.id">
+                                            <td class="col-phone" x-text="order.phone || '—'"></td>
+                                        </template>
+                                        <template x-if="editingOrderId === order.id">
+                                            <td class="col-phone">
+                                                <input type="text" x-model="editForm.phone" placeholder="+79001234567">
+                                            </td>
+                                        </template>
+                
+                                        <template x-if="editingOrderId !== order.id">
+                                            <td class="col-volume" x-text="order.volume || '—'"></td>
+                                        </template>
+                                        <template x-if="editingOrderId === order.id">
+                                            <td class="col-volume">
+                                                <input type="number" x-model.number="editForm.volume" step="0.1" min="0">
+                                            </td>
+                                        </template>
+                
+                                        <template x-if="editingOrderId !== order.id">
+                                            <td class="col-note">
+                                                <template x-if="order.note">
+                                                    <span class="addr-note-preview" :title="order.note" x-text="order.note"></span>
+                                                </template>
+                                                <template x-if="!order.note">
+                                                    <span style="color:var(--text-muted);">—</span>
+                                                </template>
+                                            </td>
+                                        </template>
+                                        <template x-if="editingOrderId === order.id">
+                                            <td class="col-note">
+                                                <textarea x-model="editForm.note" placeholder="Примечание"></textarea>
+                                            </td>
+                                        </template>
+                
+                                        <!-- Действия -->
+                                        <td class="col-actions">
+                                            <template x-if="editingOrderId !== order.id">
+                                                <div style="display:flex;gap:2px;justify-content:flex-end;">
+                                                    <button class="btn-action" @click="moveUp(index)"
+                                                        :disabled="index === 0 || reorderSaving" title="Выше">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                            stroke-linejoin="round">
+                                                            <line x1="12" y1="19" x2="12" y2="5"></line>
+                                                            <polyline points="5 12 12 5 19 12"></polyline>
+                                                        </svg>
+                                                    </button>
+                                                    <button class="btn-action" @click="moveDown(index)"
+                                                        :disabled="index === orders.length - 1 || reorderSaving" title="Ниже">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                            stroke-linejoin="round">
+                                                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                                                            <polyline points="19 12 12 19 5 12"></polyline>
+                                                        </svg>
+                                                    </button>
+                                                    <button class="btn-action" @click="startEdit(order)" title="Редактировать">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                            stroke-linejoin="round">
+                                                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                                        </svg>
+                                                    </button>
+                                                    <button class="btn-action danger" @click="deleteOrder(order)" title="Удалить">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                            stroke-linejoin="round">
+                                                            <polyline points="3 6 5 6 21 6"></polyline>
+                                                            <path
+                                                                d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+                                                            </path>
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            </template>
+                                            <template x-if="editingOrderId === order.id">
+                                                <div style="display:flex;gap:2px;justify-content:flex-end;">
+                                                    <button class="btn-action success" @click="saveEdit()" :disabled="savingEdit"
+                                                        title="Сохранить">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                            stroke-linejoin="round">
+                                                            <polyline points="20 6 9 17 4 12"></polyline>
+                                                        </svg>
+                                                    </button>
+                                                    <button class="btn-action" @click="cancelEdit()" :disabled="savingEdit"
+                                                        title="Отмена">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                            stroke-linejoin="round">
+                                                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            </template>
                                         </td>
-                                        <td class="col-address" x-text="order.address"></td>
-                                        <td class="col-contact" x-text="order.contact_name || '—'"></td>
-                                        <td class="col-phone" x-text="order.phone || '—'"></td>
-                                        <td class="col-volume" x-text="order.volume || '—'"></td>
+                                    </tr>
+                                </template>
+                
+                                <!-- Новая строка добавления -->
+                                <template x-if="newOrderRow">
+                                    <tr class="row-editing">
+                                        <td class="col-seq">
+                                            <span x-text="orders.length + 1"></span>
+                                        </td>
+                                        <td class="col-id">
+                                            <input type="text" x-model="newOrderForm.external_id" placeholder="#12345">
+                                        </td>
+                                        <td class="col-address">
+                                            <input type="text" x-model="newOrderForm.address" placeholder="ул. Ленина, 15">
+                                        </td>
+                                        <td class="col-contact">
+                                            <input type="text" x-model="newOrderForm.contact_name" placeholder="Иванов И.И.">
+                                        </td>
+                                        <td class="col-phone">
+                                            <input type="text" x-model="newOrderForm.phone" placeholder="+79001234567">
+                                        </td>
+                                        <td class="col-volume">
+                                            <input type="number" x-model.number="newOrderForm.volume" step="0.1" min="0">
+                                        </td>
                                         <td class="col-note">
-                                            <template x-if="order.note">
-                                                <span class="addr-note-preview" :title="order.note" x-text="order.note"></span>
-                                            </template>
-                                            <template x-if="!order.note">
-                                                <span style="color:var(--text-muted);">—</span>
-                                            </template>
+                                            <textarea x-model="newOrderForm.note" placeholder="Примечание"></textarea>
                                         </td>
                                         <td class="col-actions">
-                                            <button class="btn-action" disabled title="Редактирование на следующем этапе">
-                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                                                </svg>
-                                            </button>
-                                            <button class="btn-action" disabled title="Удаление на следующем этапе" style="color:var(--alert-danger);">
-                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                    <polyline points="3 6 5 6 21 6"></polyline>
-                                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                                </svg>
-                                            </button>
+                                            <div style="display:flex;gap:2px;justify-content:flex-end;">
+                                                <button class="btn-action success" @click="saveNewOrder()" :disabled="savingNewOrder"
+                                                    title="Добавить">
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                                    </svg>
+                                                </button>
+                                                <button class="btn-action" @click="cancelNewOrder()" :disabled="savingNewOrder"
+                                                    title="Отмена">
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                    </svg>
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 </template>
@@ -279,6 +460,22 @@
                 loading: true,
                 error: '',
 
+                // Drag & drop состояние
+                draggedOrderId: null,
+                draggedOrderIndex: null,
+                dragOverOrderIndex: null,
+                reorderSaving: false,
+
+                // Inline редактирование
+                editingOrderId: null,
+                editForm: {},
+                savingEdit: false,
+
+                // Добавление нового
+                newOrderRow: false,
+                newOrderForm: {},
+                savingNewOrder: false,
+
                 get userInitials() {
                     if (!this.user?.full_name) return '?';
                     return this.user.full_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
@@ -291,12 +488,8 @@
 
                 get statusLabel() {
                     const labels = {
-                        'forming': 'Формируется',
-                        'loading': 'Загрузка',
-                        'transit': 'В пути',
-                        'problem': 'Проблема',
-                        'done': 'Завершён',
-                        'cancelled': 'Отменён'
+                        'forming': 'Формируется', 'loading': 'Загрузка', 'transit': 'В пути',
+                        'problem': 'Проблема', 'done': 'Завершён', 'cancelled': 'Отменён'
                     };
                     return labels[this.trip?.status] || this.trip?.status || '';
                 },
@@ -356,7 +549,6 @@
                         this.trip = data.trip;
                         this.orders = data.orders || [];
                         this.costs = data.costs || [];
-
                         document.title = 'Рейс ' + this.trip.trip_number + ' · ЛогистПро';
                     } catch (e) {
                         this.error = e.message;
@@ -364,6 +556,199 @@
                         this.loading = false;
                     }
                 },
+
+                // ============ DRAG & DROP ============
+
+                onDragStart(orderId, index) {
+                    this.draggedOrderId = orderId;
+                    this.draggedOrderIndex = index;
+                },
+
+                onDragOver(index) {
+                    if (this.draggedOrderId === null) return;
+                    this.dragOverOrderIndex = index;
+                },
+
+                onDragLeave(index) {
+                    if (this.dragOverOrderIndex === index) {
+                        this.dragOverOrderIndex = null;
+                    }
+                },
+
+                async onDrop(targetIndex) {
+                    const sourceIndex = this.draggedOrderIndex;
+                    this.draggedOrderId = null;
+                    this.draggedOrderIndex = null;
+                    this.dragOverOrderIndex = null;
+
+                    if (sourceIndex === null || sourceIndex === targetIndex) return;
+
+                    // Переставляем локально
+                    const moved = this.orders.splice(sourceIndex, 1)[0];
+                    this.orders.splice(targetIndex, 0, moved);
+
+                    // Сохраняем на сервере
+                    await this.saveOrder()
+                },
+
+                onDragEnd() {
+                    this.draggedOrderId = null;
+                    this.draggedOrderIndex = null;
+                    this.dragOverOrderIndex = null;
+                },
+
+                // ============ КНОПКИ ВВЕРХ/ВНИЗ ============
+
+                async moveUp(index) {
+                    if (index === 0) return;
+                    const moved = this.orders.splice(index, 1)[0];
+                    this.orders.splice(index - 1, 0, moved);
+                    await this.saveOrder();
+                },
+
+                async moveDown(index) {
+                    if (index === this.orders.length - 1) return;
+                    const moved = this.orders.splice(index, 1)[0];
+                    this.orders.splice(index + 1, 0, moved);
+                    await this.saveOrder();
+                },
+
+                // Сохранение очерёдности на сервере
+                async saveOrder() {
+                    this.reorderSaving = true;
+                    try {
+                        const orderIds = this.orders.map(o => o.id);
+                        await window.API.api('/api/trips?action=reorder&id=' + this.trip.id, {
+                            method: 'POST',
+                            body: JSON.stringify({ order_ids: orderIds })
+                        });
+                    } catch (e) {
+                        alert('Ошибка сохранения порядка: ' + e.message);
+                        // Перезагружаем с сервера
+                        await this.loadTrip(this.trip.id);
+                    } finally {
+                        this.reorderSaving = false;
+                    }
+                },
+
+                // ============ INLINE РЕДАКТИРОВАНИЕ ============
+
+                startEdit(order) {
+                    this.editingOrderId = order.id;
+                    this.editForm = {
+                        external_id: order.external_id || '',
+                        address: order.address,
+                        contact_name: order.contact_name || '',
+                        phone: order.phone || '',
+                        volume: order.volume || 0,
+                        note: order.note || ''
+                    };
+                },
+
+                cancelEdit() {
+                    this.editingOrderId = null;
+                    this.editForm = {};
+                },
+
+                async saveEdit() {
+                    if (!this.editForm.address || !this.editForm.address.trim()) {
+                        alert('Адрес обязателен');
+                        return;
+                    }
+
+                    this.savingEdit = true;
+                    try {
+                        await window.API.api('/api/orders?action=update&id=' + this.editingOrderId, {
+                            method: 'PUT',
+                            body: JSON.stringify({
+                                external_id: this.editForm.external_id || null,
+                                address: this.editForm.address.trim(),
+                                contact_name: this.editForm.contact_name || null,
+                                phone: this.editForm.phone || null,
+                                volume: Number(this.editForm.volume) || 0,
+                                note: this.editForm.note || null
+                            })
+                        });
+
+                        // Обновляем локально
+                        const order = this.orders.find(o => o.id === this.editingOrderId);
+                        if (order) {
+                            order.external_id = this.editForm.external_id || null;
+                            order.address = this.editForm.address.trim();
+                            order.contact_name = this.editForm.contact_name || null;
+                            order.phone = this.editForm.phone || null;
+                            order.volume = Number(this.editForm.volume) || 0;
+                            order.note = this.editForm.note || null;
+                        }
+
+                        this.editingOrderId = null;
+                        this.editForm = {};
+                    } catch (e) {
+                        alert('Ошибка сохранения: ' + e.message);
+                    } finally {
+                        this.savingEdit = false;
+                    }
+                },
+
+                // ============ ДОБАВЛЕНИЕ ============
+
+                addNewOrder() {
+                    this.newOrderRow = true;
+                    this.newOrderForm = {
+                        external_id: '',
+                        address: '',
+                        contact_name: '',
+                        phone: '',
+                        volume: 0,
+                        note: ''
+                    };
+                },
+
+                cancelNewOrder() {
+                    this.newOrderRow = false;
+                    this.newOrderForm = {};
+                },
+
+                async saveNewOrder() {
+                    if (!this.newOrderForm.address || !this.newOrderForm.address.trim()) {
+                        alert('Адрес обязателен');
+                        return;
+                    }
+
+                    this.savingNewOrder = true;
+                    try {
+                        // Используем update_trip? Нет. Используем POST /api/trips?action=add-order
+                        // Такого endpoint пока нет. Создадим через прямое добавление.
+                        // Пока — вернём ошибку для напоминания.
+                        // TODO: добавить endpoint "add-order-to-trip"
+                        alert('Функция добавления адреса будет реализована на следующем шаге');
+                        this.savingNewOrder = false;
+                        return;
+                    } catch (e) {
+                        alert('Ошибка: ' + e.message);
+                    } finally {
+                        this.savingNewOrder = false;
+                    }
+                },
+
+                // ============ УДАЛЕНИЕ ============
+
+                async deleteOrder(order) {
+                    if (!confirm('Удалить адрес "' + order.address + '"?')) return;
+
+                    try {
+                        await window.API.api('/api/orders?action=delete&id=' + order.id, {
+                            method: 'DELETE'
+                        });
+
+                        // Удаляем из локального массива
+                        this.orders = this.orders.filter(o => o.id !== order.id);
+                    } catch (e) {
+                        alert('Ошибка удаления: ' + e.message);
+                    }
+                },
+
+                // ============ ХЕЛПЕРЫ ============
 
                 formatDate(d) {
                     if (!d) return '—';
@@ -376,13 +761,8 @@
 
                 categoryLabel(cat) {
                     const labels = {
-                        'salary': 'Зарплата',
-                        'amort': 'Амортизация',
-                        'fuel': 'Топливо',
-                        'toll': 'Платные дороги',
-                        'repair': 'Ремонт',
-                        'fine': 'Штрафы',
-                        'other': 'Прочее'
+                        'salary': 'Зарплата', 'amort': 'Амортизация', 'fuel': 'Топливо',
+                        'toll': 'Платные дороги', 'repair': 'Ремонт', 'fine': 'Штрафы', 'other': 'Прочее'
                     };
                     return labels[cat] || cat;
                 },
