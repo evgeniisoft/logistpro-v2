@@ -541,8 +541,16 @@
                     this.modal.saving = true;
 
                     try {
-                        const endpoint = '/api/' + this.modal.type + 's' + (this.modal.id ? '/' + this.modal.id : '');
-                        const method = this.modal.id ? 'PUT' : 'POST';
+                        let endpoint, method;
+                        if (this.modal.id) {
+                            // Обновление
+                            endpoint = '/api/' + this.modal.type + 's?action=update&id=' + this.modal.id;
+                            method = 'PUT';
+                        } else {
+                            // Создание
+                            endpoint = '/api/' + this.modal.type + 's';
+                            method = 'POST';
+                        }
 
                         await window.API.api(endpoint, {
                             method: method,
@@ -565,7 +573,7 @@
                         if (!confirm('Восстановить "' + (item.plate || item.full_name || item.name) + '"?')) return;
 
                         try {
-                            const endpoint = '/api/' + type + '/' + item.id;
+                            const endpoint = '/api/' + type + '?action=update&id=' + item.id;
                             await window.API.api(endpoint, {
                                 method: 'PUT',
                                 body: JSON.stringify({ is_archived: false })
@@ -581,7 +589,7 @@
                     if (!confirm('Удалить "' + (item.plate || item.full_name || item.name) + '"?\n\nЕсли используется в рейсах, будет перемещён в архив.')) return;
 
                     try {
-                        const endpoint = '/api/' + type + '/' + item.id;
+                        const endpoint = '/api/' + type + '?action=delete&id=' + item.id;
                         const result = await window.API.api(endpoint, { method: 'DELETE' });
                         await this.loadAll();
 
