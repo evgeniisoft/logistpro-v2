@@ -9,8 +9,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/assets/styles.css">
+    <script src="/assets/app.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <script defer src="/assets/app.js"></script>
 </head>
 <body x-data="app()" x-init="init()">
 
@@ -146,6 +146,11 @@
                 },
 
                 async init() {
+                    // Ждём, пока app.js загрузится
+                    if (!window.AUTH) {
+                        setTimeout(() => this.init(), 50);
+                        return;
+                    }
                     if (!window.AUTH.requireLogin()) return;
                     this.user = window.API.getUser();
                     await this.loadTrips();
