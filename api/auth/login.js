@@ -1,6 +1,5 @@
-const bcrypt = require('bcryptjs');
 const { query } = require('../_lib/db');
-const { generateToken } = require('../_lib/auth');
+const { hashPassword, generateToken } = require('../_lib/auth');
 
 module.exports = async (req, res) => {
     if (req.method !== 'POST') {
@@ -35,9 +34,9 @@ module.exports = async (req, res) => {
             return res.status(403).json({ error: 'Учётная запись заблокирована' });
         }
 
-        const passwordMatch = await bcrypt.compare(password, user.password_hash);
+        const inputHash = hashPassword(password);
 
-        if (!passwordMatch) {
+        if (inputHash !== user.password_hash) {
             await query(
                 'INSERT INTO login_history (user_id, login, ip, status) VALUES ($1, $2, $3, $4)',
                 [user.id, login, ip, 'failed']
