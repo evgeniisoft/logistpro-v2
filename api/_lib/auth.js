@@ -1,6 +1,15 @@
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-vercel-env';
+const PASSWORD_SALT = 'logistpro-2026-salt';
+
+function hashPassword(password) {
+    return crypto
+        .createHash('sha256')
+        .update(password + PASSWORD_SALT)
+        .digest('hex');
+}
 
 function generateToken(user) {
     return jwt.sign(
@@ -38,4 +47,4 @@ function requireAuth(handler) {
     };
 }
 
-module.exports = { generateToken, verifyToken, requireAuth };
+module.exports = { hashPassword, generateToken, verifyToken, requireAuth };
