@@ -506,3 +506,243 @@ body {
 .form-row .form-group {
     flex: 1;
 }
+/* ============ ПОЛОСКА ЗАГРУЗКИ ============ */
+
+.load-bar {
+    height: 8px;
+    background: var(--bg-muted);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+}
+
+.load-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s, background-color 0.3s;
+}
+
+.load-bar-fill.load-red { background: #DC2626; }
+.load-bar-fill.load-yellow { background: #D97706; }
+.load-bar-fill.load-green { background: #059669; }
+.load-bar-fill.load-orange { background: #EA580C; }
+
+.load-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    margin-bottom: 6px;
+    color: var(--text-secondary);
+}
+
+.load-info strong {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+/* ============ СПИСОК АДРЕСОВ В ФОРМЕ ============ */
+
+.address-list {
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 12px;
+}
+
+.address-list-header {
+    display: grid;
+    grid-template-columns: 40px 100px 1fr 130px 130px 70px 150px 40px;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--bg-muted);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    letter-spacing: 0.5px;
+}
+
+.address-list-row {
+    display: grid;
+    grid-template-columns: 40px 100px 1fr 130px 130px 70px 150px 40px;
+    gap: 8px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--border-light);
+    align-items: center;
+}
+
+.address-list-row input {
+    padding: 6px 8px;
+    border: 1px solid var(--border-light);
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: inherit;
+    outline: none;
+    width: 100%;
+}
+
+.address-list-row input:focus {
+    border-color: var(--color-accent);
+}
+
+.address-list-row textarea {
+    padding: 6px 8px;
+    border: 1px solid var(--border-light);
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: inherit;
+    outline: none;
+    width: 100%;
+    height: 34px;
+    resize: vertical;
+}
+
+.address-list-row textarea:focus {
+    border-color: var(--color-accent);
+}
+
+.address-list-row .seq-num {
+    text-align: center;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.address-list-row .btn-remove {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.address-list-row .btn-remove:hover {
+    background: #FEE2E2;
+    color: var(--alert-danger);
+}
+
+.address-list-empty {
+    padding: 24px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+/* ============ МОДАЛКА (расширение) ============ */
+
+.modal-window-wide {
+    max-width: 1100px;
+}
+
+.form-section {
+    margin-bottom: 24px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.form-section:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+    margin-bottom: 0;
+}
+
+.form-section-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0 0 14px 0;
+    color: var(--text-primary);
+}
+
+/* ============ ДОСКА РЕЙСОВ ============ */
+
+.board {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+}
+
+.board-column {
+    background: var(--bg-muted);
+    border-radius: 10px;
+    padding: 12px;
+    min-height: 300px;
+    transition: background 0.15s;
+}
+
+.board-column.drag-over {
+    background: #DBEAFE;
+}
+
+.board-column-header {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+    padding: 6px 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.board-column-count {
+    background: #fff;
+    color: var(--text-secondary);
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.trip-card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 8px;
+    cursor: grab;
+    border: 1px solid var(--border-light);
+    transition: box-shadow 0.15s, transform 0.1s;
+}
+
+.trip-card:hover {
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+.trip-card.dragging {
+    opacity: 0.4;
+    transform: scale(0.98);
+}
+
+.trip-card:active {
+    cursor: grabbing;
+}
+
+.trip-card-number {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.trip-card-date {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.trip-card-row {
+    font-size: 12px;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.trip-card-load {
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
