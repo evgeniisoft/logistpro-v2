@@ -212,47 +212,51 @@ async function handler(req, res) {
         `SELECT 
                     t.id AS trip_id,
                     t.driver_id,
+                    t.hired_driver_info,
                     t.fact_km,
                     t.revenue,
                     t.vehicle_volume_at_time,
-                    t.status,
                     t.driver_rate_at_time,
-                    t.vehicle_id,
+                    t.status,
                     d.full_name AS driver_name,
                     d.phone AS driver_phone,
                     v.type AS vehicle_type,
                     v.amort_rate AS vehicle_amort_rate,
                     (SELECT COALESCE(SUM(o.volume), 0) FROM orders o WHERE o.trip_id = t.id) AS load_volume
                  FROM trips t
-                 JOIN drivers d ON d.id = t.driver_id
+                 LEFT JOIN drivers d ON d.id = t.driver_id
                  LEFT JOIN vehicles v ON v.id = t.vehicle_id
                  ${whereClause}`,
         periodParams,
       );
 
-      // Только ручные затраты (без salary/amort, они считаются отдельно)
       const costsResult = await query(
         `SELECT 
                     t.id AS trip_id,
-                    t.driver_id,
                     c.category,
                     COALESCE(SUM(c.amount), 0) AS costs
                  FROM costs c
                  JOIN trips t ON t.id = c.trip_id
                  ${whereClause}
-                 GROUP BY t.id, t.driver_id, c.category`,
+                 GROUP BY t.id, c.category`,
         periodParams,
       );
 
       const driversMap = {};
 
       tripsResult.rows.forEach((t) => {
-        const did = t.driver_id;
-        if (!driversMap[did]) {
-          driversMap[did] = {
-            driver_id: did,
-            driver_name: t.driver_name,
-            driver_phone: t.driver_phone,
+        const isHired = !!t.hired_driver_info;
+        const key = isHired
+          ? "hired_" + t.hired_driver_info
+          : "own_" + t.driver_id;
+
+        if (!driversMap[key]) {
+          driversMap[key] = {
+            key,
+            is_hired: isHired,
+            driver_id: isHired ? null : t.driver_id,
+            driver_name: isHired ? t.hired_driver_info : t.driver_name,
+            driver_phone: isHired ? null : t.driver_phone,
             trips_count: 0,
             trips_done: 0,
             total_km: 0,
@@ -263,7 +267,8 @@ async function handler(req, res) {
             load_count: 0,
           };
         }
-        const d = driversMap[did];
+
+        const d = driversMap[key];
         d.trips_count++;
         if (t.status === "done") d.trips_done++;
         d.total_km += Number(t.fact_km) || 0;
@@ -277,23 +282,23 @@ async function handler(req, res) {
           d.load_count++;
         }
 
-        // Зарплата (автоматически, если не в costs)
-        const salaryInCosts = costsResult.rows.find(
-          (c) => c.trip_id === t.trip_id && c.category === "salary",
+        const tripCosts = costsResult.rows.filter(
+          (c) => c.trip_id === t.trip_id,
         );
-        if (salaryInCosts) {
-          d.total_costs += Number(salaryInCosts.costs);
-        } else if (Number(t.driver_rate_at_time) > 0) {
+        tripCosts.forEach((c) => {
+          d.total_costs += Number(c.costs);
+        });
+
+        // Зарплата
+        const hasSalaryInCosts = tripCosts.some((c) => c.category === "salary");
+        if (!hasSalaryInCosts && Number(t.driver_rate_at_time) > 0) {
           d.total_costs += Number(t.driver_rate_at_time);
         }
 
-        // Амортизация (автоматически, если не в costs)
-        const amortInCosts = costsResult.rows.find(
-          (c) => c.trip_id === t.trip_id && c.category === "amort",
-        );
-        if (amortInCosts) {
-          d.total_costs += Number(amortInCosts.costs);
-        } else if (
+        // Амортизация
+        const hasAmortInCosts = tripCosts.some((c) => c.category === "amort");
+        if (
+          !hasAmortInCosts &&
           t.vehicle_type === "own" &&
           Number(t.vehicle_amort_rate) > 0 &&
           Number(t.fact_km) > 0
@@ -302,23 +307,14 @@ async function handler(req, res) {
             Number(t.fact_km) * Number(t.vehicle_amort_rate),
           );
         }
-
-        // Остальные ручные затраты
-        const otherCosts = costsResult.rows.filter(
-          (c) =>
-            c.trip_id === t.trip_id &&
-            !["salary", "amort"].includes(c.category),
-        );
-        otherCosts.forEach((c) => {
-          d.total_costs += Number(c.costs);
-        });
       });
 
-      const data = Object.values(driversMap)
+      const allData = Object.values(driversMap)
         .map((d) => ({
           driver_id: d.driver_id,
           driver_name: d.driver_name,
           driver_phone: d.driver_phone,
+          is_hired: d.is_hired,
           trips_count: d.trips_count,
           trips_done: d.trips_done,
           total_km: d.total_km,
@@ -332,7 +328,11 @@ async function handler(req, res) {
         }))
         .sort((a, b) => b.trips_count - a.trips_count);
 
-      return res.json({ data });
+      return res.json({
+        data: allData,
+        own: allData.filter((d) => !d.is_hired),
+        hired: allData.filter((d) => d.is_hired),
+      });
     }
 
     // ============ BY VEHICLES ============
@@ -341,6 +341,7 @@ async function handler(req, res) {
         `SELECT 
                     t.id AS trip_id,
                     t.vehicle_id,
+                    t.hired_vehicle_info,
                     t.fact_km,
                     t.revenue,
                     t.driver_rate_at_time,
@@ -349,7 +350,7 @@ async function handler(req, res) {
                     v.type AS vehicle_type,
                     v.amort_rate AS vehicle_amort_rate
                  FROM trips t
-                 JOIN vehicles v ON v.id = t.vehicle_id
+                 LEFT JOIN vehicles v ON v.id = t.vehicle_id
                  ${whereClause}`,
         periodParams,
       );
@@ -357,82 +358,90 @@ async function handler(req, res) {
       const costsResult = await query(
         `SELECT 
                     t.id AS trip_id,
-                    t.vehicle_id,
                     c.category,
                     COALESCE(SUM(c.amount), 0) AS costs
                  FROM costs c
                  JOIN trips t ON t.id = c.trip_id
                  ${whereClause}
-                 GROUP BY t.id, t.vehicle_id, c.category`,
+                 GROUP BY t.id, c.category`,
         periodParams,
       );
 
       const vehiclesMap = {};
 
       tripsResult.rows.forEach((t) => {
-        const vid = t.vehicle_id;
-        if (!vehiclesMap[vid]) {
-          vehiclesMap[vid] = {
-            vehicle_id: vid,
-            vehicle_plate: t.vehicle_plate,
-            vehicle_model: t.vehicle_model,
-            vehicle_type: t.vehicle_type,
+        // Ключ: для своих — vehicle_id, для наёмных — hired_vehicle_info
+        const isHired = !!t.hired_vehicle_info;
+        const key = isHired
+          ? "hired_" + t.hired_vehicle_info
+          : "own_" + t.vehicle_id;
+
+        if (!vehiclesMap[key]) {
+          vehiclesMap[key] = {
+            key,
+            is_hired: isHired,
+            vehicle_id: isHired ? null : t.vehicle_id,
+            vehicle_plate: isHired ? t.hired_vehicle_info : t.vehicle_plate,
+            vehicle_model: isHired ? null : t.vehicle_model,
+            vehicle_type: isHired ? "hired" : t.vehicle_type || "own",
             trips_count: 0,
             total_km: 0,
             total_revenue: 0,
             total_costs: 0,
             total_repairs: 0,
+            total_amort: 0,
           };
         }
-        const v = vehiclesMap[vid];
+
+        const v = vehiclesMap[key];
         v.trips_count++;
         v.total_km += Number(t.fact_km) || 0;
         v.total_revenue += Number(t.revenue) || 0;
 
-        // Зарплата
-        const salaryInCosts = costsResult.rows.find(
-          (c) => c.trip_id === t.trip_id && c.category === "salary",
+        // Ручные затраты
+        const tripCosts = costsResult.rows.filter(
+          (c) => c.trip_id === t.trip_id,
         );
-        if (salaryInCosts) {
-          v.total_costs += Number(salaryInCosts.costs);
-        } else if (Number(t.driver_rate_at_time) > 0) {
-          v.total_costs += Number(t.driver_rate_at_time);
-        }
+        tripCosts.forEach((c) => {
+          const amount = Number(c.costs);
+          v.total_costs += amount;
+          if (c.category === "repair") v.total_repairs += amount;
+          if (c.category === "amort") v.total_amort += amount;
+        });
 
-        // Амортизация
-        const amortInCosts = costsResult.rows.find(
-          (c) => c.trip_id === t.trip_id && c.category === "amort",
-        );
-        if (amortInCosts) {
-          v.total_costs += Number(amortInCosts.costs);
-        } else if (
-          t.vehicle_type === "own" &&
+        // Автоматическая амортизация (только для своих, если нет вручную)
+        if (!isHired && v.vehicle_amort_rate === undefined) {
+          v.vehicle_amort_rate = Number(t.vehicle_amort_rate) || 0;
+        }
+        const hasAmortInCosts = tripCosts.some((c) => c.category === "amort");
+        if (
+          !isHired &&
+          !hasAmortInCosts &&
           Number(t.vehicle_amort_rate) > 0 &&
           Number(t.fact_km) > 0
         ) {
           v.total_costs += Math.round(
             Number(t.fact_km) * Number(t.vehicle_amort_rate),
           );
+          v.total_amort += Math.round(
+            Number(t.fact_km) * Number(t.vehicle_amort_rate),
+          );
         }
 
-        // Остальные
-        const otherCosts = costsResult.rows.filter(
-          (c) =>
-            c.trip_id === t.trip_id &&
-            !["salary", "amort"].includes(c.category),
-        );
-        otherCosts.forEach((c) => {
-          v.total_costs += Number(c.costs);
-          if (c.category === "repair") v.total_repairs += Number(c.costs);
-        });
+        // Зарплата водителя
+        const hasSalaryInCosts = tripCosts.some((c) => c.category === "salary");
+        if (!hasSalaryInCosts && Number(t.driver_rate_at_time) > 0) {
+          v.total_costs += Number(t.driver_rate_at_time);
+        }
       });
 
-      const data = Object.values(vehiclesMap)
+      const allData = Object.values(vehiclesMap)
         .map((v) => ({
           vehicle_id: v.vehicle_id,
           vehicle_plate: v.vehicle_plate,
           vehicle_model: v.vehicle_model,
           vehicle_type: v.vehicle_type,
+          is_hired: v.is_hired,
           trips_count: v.trips_count,
           total_km: v.total_km,
           total_revenue: v.total_revenue,
@@ -446,7 +455,11 @@ async function handler(req, res) {
         }))
         .sort((a, b) => b.total_km - a.total_km);
 
-      return res.json({ data });
+      return res.json({
+        data: allData,
+        own: allData.filter((v) => !v.is_hired),
+        hired: allData.filter((v) => v.is_hired),
+      });
     }
 
     // ============ BY MONTHS ============
