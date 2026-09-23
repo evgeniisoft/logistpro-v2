@@ -713,7 +713,7 @@
                 async applyCustomRange() {
                     if (this.customFrom || this.customTo) {
                         await this.loadAll();
-                        this.$nextTick(() => this.renderCharts());
+                        // renderCharts вызовется внутри loadAll через setTimeout
                     }
                 },
 
@@ -761,14 +761,15 @@
                         this.byRoutes = byRoutes.data || [];
                         this.costsBreakdown = costsBreakdown.data || [];
 
-                        // Рисуем графики (дебаунс внутри метода)
-                        this.$nextTick(() => this.renderCharts());
-
+                        // Рисуем графики после сброса loading
                     } catch (e) {
                         this.error = e.message;
                     } finally {
                         this.loading = false;
                     }
+
+                    // Рисуем графики после того, как DOM отрисовался (loading = false)
+                    setTimeout(() => this.renderCharts(), 300);
                 },
 
                 switchTab(tab) {
