@@ -133,27 +133,31 @@
             <!-- ============ ДАШБОРД ============ -->
             <div x-show="!loading && tab === 'dashboard'" x-cloak>
                 <!-- KPI -->
-                <div class="kpi-grid">
+                <div class="kpi-grid" :class="!showRevenue ? 'kpi-grid-2' : ''">
                     <div class="kpi-card">
                         <div class="kpi-label">Рейсов</div>
                         <div class="kpi-value" x-text="kpi.trips_count || 0"></div>
-                        <div class="kpi-sub" x-text="'Завершено: ' + (kpi.trips_done || 0) + ' · Отменено: ' + (kpi.trips_cancelled || 0)"></div>
+                        <div class="kpi-sub" x-text="'Завершено: ' + (kpi.trips_done || 0) + ' · Отменено: ' + (kpi.trips_cancelled || 0) + ' · Пробег: ' + formatNumber(kpi.total_km || 0) + ' км'"></div>
                     </div>
-                    <div class="kpi-card">
-                        <div class="kpi-label">Выручка</div>
-                        <div class="kpi-value" x-text="formatMoney(kpi.revenue || 0)"></div>
-                        <div class="kpi-sub" x-text="'Средний чек: ' + formatMoney(kpi.avg_revenue || 0)"></div>
-                    </div>
+                    <template x-if="showRevenue">
+                        <div class="kpi-card">
+                            <div class="kpi-label">Выручка</div>
+                            <div class="kpi-value" x-text="formatMoney(kpi.revenue || 0)"></div>
+                            <div class="kpi-sub" x-text="'Средний чек: ' + formatMoney(kpi.avg_revenue || 0)"></div>
+                        </div>
+                    </template>
                     <div class="kpi-card">
                         <div class="kpi-label">Затраты</div>
                         <div class="kpi-value" x-text="formatMoney(kpi.costs || 0)"></div>
                         <div class="kpi-sub" x-text="'Средние на рейс: ' + formatMoney(kpi.avg_trip_cost || 0)"></div>
                     </div>
-                    <div class="kpi-card">
-                        <div class="kpi-label">Маржа</div>
-                        <div class="kpi-value" :class="(kpi.margin || 0) >= 0 ? 'positive' : 'negative'" x-text="formatMoney(kpi.margin || 0)"></div>
-                        <div class="kpi-sub" x-text="'Рентабельность: ' + (kpi.margin_percent || 0) + '%'"></div>
-                    </div>
+                    <template x-if="showRevenue">
+                        <div class="kpi-card">
+                            <div class="kpi-label">Маржа</div>
+                            <div class="kpi-value" :class="(kpi.margin || 0) >= 0 ? 'positive' : 'negative'" x-text="formatMoney(kpi.margin || 0)"></div>
+                            <div class="kpi-sub" x-text="'Рентабельность: ' + (kpi.margin_percent || 0) + '%'"></div>
+                        </div>
+                    </template>
                 </div>
 
                 <!-- Графики -->
@@ -233,7 +237,9 @@
                                     <th @click="sortBy('drivers', 'avg_load_percent')">Ср. загрузка</th>
                                     <th @click="sortBy('drivers', 'costs')">Затраты</th>
                                     <th @click="sortBy('drivers', 'cost_per_trip')">Затр/рейс</th>
-                                    <th @click="sortBy('drivers', 'total_revenue')">Выручка</th>
+                                    <template x-if="showRevenue">
+                                        <th @click="sortBy('drivers', 'total_revenue')">Выручка</th>
+                                    </template>
                                 </tr>
                             </thead>
                             <tbody>
@@ -245,7 +251,9 @@
                                         <td :class="d.avg_load_percent < 50 ? 'col-negative' : ''" x-text="d.avg_load_percent + '%'"></td>
                                         <td class="col-money" x-text="formatMoney(d.costs)"></td>
                                         <td class="col-money" x-text="formatMoney(d.cost_per_trip)"></td>
-                                        <td class="col-money" x-text="formatMoney(d.total_revenue)"></td>
+                                        <template x-if="showRevenue">
+                                            <td class="col-money" x-text="formatMoney(d.total_revenue)"></td>
+                                        </template>
                                     </tr>
                                 </template>
                             </tbody>
@@ -272,7 +280,9 @@
                                     <th @click="sortBy('vehicles', 'repairs')">Ремонты</th>
                                     <th @click="sortBy('vehicles', 'costs')">Затраты</th>
                                     <th @click="sortBy('vehicles', 'cost_per_km')">Затр/км</th>
-                                    <th @click="sortBy('vehicles', 'margin')">Маржа</th>
+                                    <template x-if="showRevenue">
+                                        <th @click="sortBy('vehicles', 'margin')">Маржа</th>
+                                    </template>
                                 </tr>
                             </thead>
                             <tbody>
@@ -285,7 +295,9 @@
                                         <td class="col-money" :class="v.repairs > 20000 ? 'col-negative' : ''" x-text="v.repairs > 0 ? formatMoney(v.repairs) : '—'"></td>
                                         <td class="col-money" x-text="formatMoney(v.costs)"></td>
                                         <td class="col-money" :class="v.cost_per_km > 40 ? 'col-negative' : ''" x-text="v.cost_per_km + ' ₽'"></td>
-                                        <td class="col-money" :class="v.margin >= 0 ? 'col-positive' : 'col-negative'" x-text="formatMoney(v.margin)"></td>
+                                        <template x-if="showRevenue">
+                                            <td class="col-money" :class="v.margin >= 0 ? 'col-positive' : 'col-negative'" x-text="formatMoney(v.margin)"></td>
+                                        </template>
                                     </tr>
                                 </template>
                             </tbody>
@@ -315,10 +327,16 @@
                                     <th>Месяц</th>
                                     <th>Рейсов</th>
                                     <th>Пробег, км</th>
-                                    <th>Выручка</th>
+                                    <template x-if="showRevenue">
+                                        <th>Выручка</th>
+                                    </template>
                                     <th>Затраты</th>
-                                    <th>Маржа</th>
-                                    <th>Рентабельность</th>
+                                    <template x-if="showRevenue">
+                                        <th>Маржа</th>
+                                    </template>
+                                    <template x-if="showRevenue">
+                                        <th>Рентабельность</th>
+                                    </template>
                                 </tr>
                             </thead>
                             <tbody>
@@ -327,10 +345,16 @@
                                         <td class="col-name" x-text="m.month_label"></td>
                                         <td x-text="m.trips_count"></td>
                                         <td x-text="formatNumber(m.total_km)"></td>
-                                        <td class="col-money" x-text="formatMoney(m.revenue)"></td>
+                                        <template x-if="showRevenue">
+                                            <td class="col-money" x-text="formatMoney(m.revenue)"></td>
+                                        </template>
                                         <td class="col-money" x-text="formatMoney(m.costs)"></td>
-                                        <td class="col-money" :class="m.margin >= 0 ? 'col-positive' : 'col-negative'" x-text="formatMoney(m.margin)"></td>
-                                        <td :class="m.margin_percent >= 0 ? 'col-positive' : 'col-negative'" x-text="m.margin_percent + '%'"></td>
+                                        <template x-if="showRevenue">
+                                            <td class="col-money" :class="m.margin >= 0 ? 'col-positive' : 'col-negative'" x-text="formatMoney(m.margin)"></td>
+                                        </template>
+                                        <template x-if="showRevenue">
+                                            <td :class="m.margin_percent >= 0 ? 'col-positive' : 'col-negative'" x-text="m.margin_percent + '%'"></td>
+                                        </template>
                                     </tr>
                                 </template>
                             </tbody>
@@ -355,8 +379,12 @@
                                     <th @click="sortBy('routes', 'total_km')">Пробег, км</th>
                                     <th @click="sortBy('routes', 'avg_load_percent')">Ср. загрузка</th>
                                     <th @click="sortBy('routes', 'costs')">Затраты</th>
-                                    <th @click="sortBy('routes', 'total_revenue')">Выручка</th>
-                                    <th @click="sortBy('routes', 'margin')">Маржа</th>
+                                    <template x-if="showRevenue">
+                                        <th @click="sortBy('routes', 'total_revenue')">Выручка</th>
+                                    </template>
+                                    <template x-if="showRevenue">
+                                        <th @click="sortBy('routes', 'margin')">Маржа</th>
+                                    </template>
                                 </tr>
                             </thead>
                             <tbody>
@@ -367,8 +395,12 @@
                                         <td x-text="formatNumber(r.total_km)"></td>
                                         <td :class="r.avg_load_percent < 50 ? 'col-negative' : ''" x-text="r.avg_load_percent + '%'"></td>
                                         <td class="col-money" x-text="formatMoney(r.costs)"></td>
-                                        <td class="col-money" x-text="formatMoney(r.total_revenue)"></td>
-                                        <td class="col-money" :class="r.margin >= 0 ? 'col-positive' : 'col-negative'" x-text="formatMoney(r.margin)"></td>
+                                        <template x-if="showRevenue">
+                                            <td class="col-money" x-text="formatMoney(r.total_revenue)"></td>
+                                        </template>
+                                        <template x-if="showRevenue">
+                                            <td class="col-money" :class="r.margin >= 0 ? 'col-positive' : 'col-negative'" x-text="formatMoney(r.margin)"></td>
+                                        </template>
                                     </tr>
                                 </template>
                             </tbody>
@@ -431,6 +463,7 @@
                 tab: 'dashboard',
                 loading: true,
                 error: '',
+                showRevenue: false,
 
                 // Фильтры
                 preset: 'current',
@@ -496,6 +529,16 @@
                     }
                     if (!window.AUTH.requireLogin()) return;
                     this.user = window.API.getUser();
+                    
+                    // Загружаем настройки (для show_revenue)
+                    try {
+                        const settings = await window.API.api('/api/settings');
+                        const setting = (settings.settings || []).find(s => s.key === 'show_revenue');
+                        this.showRevenue = setting?.value === 'true';
+                    } catch (e) {
+                        console.error('Ошибка загрузки настроек:', e);
+                        this.showRevenue = false;
+                    }
                     
                     // Загружаем справочники для фильтров
                     await this.loadReferences();
@@ -643,19 +686,24 @@
                     }
                     if (ctxMonthly && this.monthly.length > 0) {
                         const labels = [...this.monthly].reverse().map(m => m.month_label);
-                        const revenue = [...this.monthly].reverse().map(m => m.revenue);
                         const costs = [...this.monthly].reverse().map(m => m.costs);
-                        const margin = [...this.monthly].reverse().map(m => m.margin);
+                        
+                        const datasets = [
+                            { label: 'Затраты', data: costs, backgroundColor: '#DC2626' }
+                        ];
+                        
+                        if (this.showRevenue) {
+                            const revenue = [...this.monthly].reverse().map(m => m.revenue);
+                            const margin = [...this.monthly].reverse().map(m => m.margin);
+                            datasets.unshift({ label: 'Выручка', data: revenue, backgroundColor: '#059669' });
+                            datasets.push({ label: 'Маржа', data: margin, backgroundColor: '#2563EB' });
+                        }
 
                         this.chartMonthly = new Chart(ctxMonthly, {
                             type: 'bar',
                             data: {
                                 labels: labels,
-                                datasets: [
-                                    { label: 'Выручка', data: revenue, backgroundColor: '#059669' },
-                                    { label: 'Затраты', data: costs, backgroundColor: '#DC2626' },
-                                    { label: 'Маржа', data: margin, backgroundColor: '#2563EB' }
-                                ]
+                                datasets: datasets
                             },
                             options: {
                                 responsive: true,
@@ -714,21 +762,26 @@
                         this.chartMonthsFull.destroy();
                         this.chartMonthsFull = null;
                     }
-                    if (ctxMonthsFull && this.byMonths.length > 0) {
-                        const labels = [...this.byMonths].reverse().map(m => m.month_label);
-                        const revenue = [...this.byMonths].reverse().map(m => m.revenue);
-                        const costs = [...this.byMonths].reverse().map(m => m.costs);
-                        const margin = [...this.byMonths].reverse().map(m => m.margin);
+                    if (ctxMonthly && this.monthly.length > 0) {
+                        const labels = [...this.monthly].reverse().map(m => m.month_label);
+                        const costs = [...this.monthly].reverse().map(m => m.costs);
+                        
+                        const datasets = [
+                            { label: 'Затраты', data: costs, backgroundColor: '#DC2626' }
+                        ];
+                        
+                        if (this.showRevenue) {
+                            const revenue = [...this.monthly].reverse().map(m => m.revenue);
+                            const margin = [...this.monthly].reverse().map(m => m.margin);
+                            datasets.unshift({ label: 'Выручка', data: revenue, backgroundColor: '#059669' });
+                            datasets.push({ label: 'Маржа', data: margin, backgroundColor: '#2563EB' });
+                        }
 
-                        this.chartMonthsFull = new Chart(ctxMonthsFull, {
-                            type: 'line',
+                        this.chartMonthly = new Chart(ctxMonthly, {
+                            type: 'bar',
                             data: {
                                 labels: labels,
-                                datasets: [
-                                    { label: 'Выручка', data: revenue, borderColor: '#059669', backgroundColor: 'rgba(5, 150, 105, 0.1)', tension: 0.3, fill: true },
-                                    { label: 'Затраты', data: costs, borderColor: '#DC2626', backgroundColor: 'rgba(220, 38, 38, 0.1)', tension: 0.3, fill: true },
-                                    { label: 'Маржа', data: margin, borderColor: '#2563EB', backgroundColor: 'rgba(37, 99, 235, 0.1)', tension: 0.3, fill: true }
-                                ]
+                                datasets: datasets
                             },
                             options: {
                                 responsive: true,
