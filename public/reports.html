@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Отчёты · ЛогистПро</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/styles.css">
+    <script src="/assets/app.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body x-data="reportsPage()" x-init="$nextTick(() => init())">
+
+    <header class="app-header">
+        <div class="app-header-left">
+            <a href="/" class="app-logo">
+                <span class="app-logo-mark">LP</span>
+                <span>ЛогистПро</span>
+            </a>
+            <nav class="app-nav">
+                <a href="/" class="app-nav-link">Рейсы</a>
+                <a href="/incoming.html" class="app-nav-link">Входящие</a>
+                <a href="/reports.html" class="app-nav-link active">Отчёты</a>
+                <a href="/references.html" class="app-nav-link">Справочники</a>
+                <a href="/journal.html" class="app-nav-link">Журнал</a>
+            </nav>
+        </div>
+        <div class="app-header-right">
+            <div class="user-badge">
+                <div class="user-avatar" x-text="userInitials"></div>
+                <div>
+                    <div x-text="user?.full_name || ''" style="font-weight:500;"></div>
+                    <div x-text="roleLabel" style="font-size:11px;opacity:0.7;"></div>
+                </div>
+            </div>
+            <button class="btn btn-ghost btn-sm" @click="logout()" style="color:rgba(255,255,255,0.85);" title="Выйти">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <main class="app-main">
+        <div class="container">
+
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+                <div>
+                    <h1 style="font-size:24px;font-weight:600;margin:0 0 4px 0;">Отчёты</h1>
+                    <p style="font-size:13px;color:var(--text-secondary);margin:0;">
+                        Аналитика по рейсам, водителям, машинам
+                    </p>
+                </div>
+                <div style="display:flex;gap:8px;">
+                    <button class="btn btn-secondary" @click="loadAll()" :disabled="loading">
+                        Обновить
+                    </button>
+                    <button class="btn btn-secondary" @click="exportCSV()" :disabled="!hasTableData">
+                        Экспорт CSV
+                    </button>
+                </div>
+            </div>
+
+            <!-- Фильтры -->
+            <div class="reports-filters">
+                <div class="form-group" style="margin-bottom:0;">
+                    <label class="form-label">Период</label>
+                    <div class="preset-buttons">
+                        <button class="preset-btn" :class="preset === 'current' ? 'active' : ''" @click="setPreset('current')">Текущий месяц</button>
+                        <button class="preset-btn" :class="preset === 'prev' ? 'active' : ''" @click="setPreset('prev')">Прошлый месяц</button>
+                        <button class="preset-btn" :class="preset === 'year' ? 'active' : ''" @click="setPreset('year')">Этот год</button>
+                        <button class="preset-btn" :class="preset === 'all' ? 'active' : ''" @click="setPreset('all')">Всё время</button>
+                        <button class="preset-btn" :class="preset === 'custom' ? 'active' : ''" @click="setPreset('custom')">Произвольно</button>
+                    </div>
+                </div>
+
+                <template x-if="preset === 'custom'">
+                    <div style="display:flex;gap:8px;align-items:flex-end;">
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label class="form-label">С</label>
+                            <input type="date" class="form-input" x-model="customFrom" @change="applyCustomRange()" style="width:150px;">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label class="form-label">По</label>
+                            <input type="date" class="form-input" x-model="customTo" @change="applyCustomRange()" style="width:150px;">
+                        </div>
+                    </div>
+                </template>
+
+                <div class="form-group" style="margin-bottom:0;">
+                    <label class="form-label">Водитель</label>
+                    <select class="form-input" x-model="filterDriverId" @change="loadAll()" style="width:180px;">
+                        <option value="">Все водители</option>
+                        <template x-for="d in drivers" :key="d.id">
+                            <option :value="d.id" x-text="d.full_name"></option>
+                        </template>
+                    </select>
+                </div>
+
+                <div class="form-group" style="margin-bottom:0;">
+                    <label class="form-label">Машина</label>
+                    <select class="form-input" x-model="filterVehicleId" @change="loadAll()" style="width:180px;">
+                        <option value="">Все машины</option>
+                        <template x-for="v in vehicles" :key="v.id">
+                            <option :value="v.id" x-text="v.plate + ' · ' + (v.model || '')"></option>
+                        </template>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Табы -->
+            <div class="incoming-tabs">
+                <button class="incoming-tab" :class="tab === 'dashboard' ? 'active' : ''" @click="switchTab('dashboard')">Дашборд</button>
+                <button class="incoming-tab" :class="tab === 'drivers' ? 'active' : ''" @click="switchTab('drivers')">По водителям</button>
+                <button class="incoming-tab" :class="tab === 'vehicles' ? 'active' : ''" @click="switchTab('vehicles')">По машинам</button>
+                <button class="incoming-tab" :class="tab === 'months' ? 'active' : ''" @click="switchTab('months')">По месяцам</button>
+                <button class="incoming-tab" :class="tab === 'routes' ? 'active' : ''" @click="switchTab('routes')">По маршрутам</button>
+                <button class="incoming-tab" :class="tab === 'costs' ? 'active' : ''" @click="switchTab('costs')">Затраты</button>
+            </div>
+
+            <!-- Ошибка -->
+            <div x-show="error" x-cloak class="alert alert-error" x-text="error"></div>
+
+            <!-- Загрузка -->
+            <div x-show="loading" class="skeleton" style="height:400px;"></div>
+
+            <!-- ============ ДАШБОРД ============ -->
+            <div x-show="!loading && tab === 'dashboard'" x-cloak>
+                <!-- KPI -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Рейсов</div>
+                        <div class="kpi-value" x-text="kpi.trips_count || 0"></div>
+                        <div class="kpi-sub" x-text="'Завершено: ' + (kpi.trips_done || 0) + ' · Отменено: ' + (kpi.trips_cancelled || 0)"></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Выручка</div>
+                        <div class="kpi-value" x-text="formatMoney(kpi.revenue || 0)"></div>
+                        <div class="kpi-sub" x-text="'Средний чек: ' + formatMoney(kpi.avg_revenue || 0)"></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Затраты</div>
+                        <div class="kpi-value" x-text="formatMoney(kpi.costs || 0)"></div>
+                        <div class="kpi-sub" x-text="'Средние на рейс: ' + formatMoney(kpi.avg_trip_cost || 0)"></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Маржа</div>
+                        <div class="kpi-value" :class="(kpi.margin || 0) >= 0 ? 'positive' : 'negative'" x-text="formatMoney(kpi.margin || 0)"></div>
+                        <div class="kpi-sub" x-text="'Рентабельность: ' + (kpi.margin_percent || 0) + '%'"></div>
+                    </div>
+                </div>
+
+                <!-- Графики -->
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <h3 class="chart-card-title">Динамика по месяцам</h3>
+                        <div class="chart-container">
+                            <canvas id="chartMonthly"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h3 class="chart-card-title">Затраты по статьям</h3>
+                        <div class="chart-container">
+                            <canvas id="chartCosts"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Топ-5 -->
+                <div class="top-lists-grid">
+                    <div class="top-list-card">
+                        <h3 class="top-list-title">Топ водителей</h3>
+                        <template x-if="topDrivers.length > 0">
+                            <div class="top-list">
+                                <template x-for="(d, i) in topDrivers" :key="d.driver_id">
+                                    <div class="top-item">
+                                        <div class="top-rank" x-text="i + 1"></div>
+                                        <div class="top-name" x-text="d.driver_name"></div>
+                                        <div class="top-bar-container">
+                                            <div class="top-bar-fill" :style="'width:' + (d.trips_count / topDriversMax * 100) + '%'"></div>
+                                        </div>
+                                        <div class="top-value" x-text="d.trips_count"></div>
+                                        <div class="top-sub" x-text="formatNumber(d.total_km) + ' км'"></div>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                        <div x-show="topDrivers.length === 0" style="padding:20px;text-align:center;color:var(--text-secondary);font-size:13px;">Нет данных</div>
+                    </div>
+
+                    <div class="top-list-card">
+                        <h3 class="top-list-title">Топ машин</h3>
+                        <template x-if="topVehicles.length > 0">
+                            <div class="top-list">
+                                <template x-for="(v, i) in topVehicles" :key="v.vehicle_id">
+                                    <div class="top-item">
+                                        <div class="top-rank" x-text="i + 1"></div>
+                                        <div class="top-name" x-text="v.vehicle_plate + (v.vehicle_model ? ' · ' + v.vehicle_model : '')"></div>
+                                        <div class="top-bar-container">
+                                            <div class="top-bar-fill" :style="'width:' + (v.trips_count / topVehiclesMax * 100) + '%'"></div>
+                                        </div>
+                                        <div class="top-value" x-text="v.trips_count"></div>
+                                        <div class="top-sub" x-text="formatNumber(v.total_km) + ' км'"></div>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                        <div x-show="topVehicles.length === 0" style="padding:20px;text-align:center;color:var(--text-secondary);font-size:13px;">Нет данных</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============ ПО ВОДИТЕЛЯМ ============ -->
+            <div x-show="!loading && tab === 'drivers'" x-cloak>
+                <div class="report-table-wrapper">
+                    <div class="report-table-header">
+                        <h3 class="report-table-title">Отчёт по водителям</h3>
+                    </div>
+                    <div x-show="byDrivers.length === 0" style="padding:40px;text-align:center;color:var(--text-secondary);font-size:13px;">Нет данных за выбранный период</div>
+                    <div x-show="byDrivers.length > 0" style="overflow-x:auto;">
+                        <table class="report-table">
+                            <thead>
+                                <tr>
+                                    <th @click="sortBy('drivers', 'driver_name')">Водитель</th>
+                                    <th @click="sortBy('drivers', 'trips_count')">Рейсов</th>
+                                    <th @click="sortBy('drivers', 'total_km')">Пробег, км</th>
+                                    <th @click="sortBy('drivers', 'avg_load_percent')">Ср. загрузка</th>
+                                    <th @click="sortBy('drivers', 'costs')">Затраты</th>
+                                    <th @click="sortBy('drivers', 'cost_per_trip')">Затр/рейс</th>
+                                    <th @click="sortBy('drivers', 'total_revenue')">Выручка</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="d in byDrivers" :key="d.driver_id">
+                                    <tr>
+                                        <td class="col-name" x-text="d.driver_name"></td>
+                                        <td x-text="d.trips_count"></td>
+                                        <td x-text="formatNumber(d.total_km)"></td>
+                                        <td :class="d.avg_load_percent < 50 ? 'col-negative' : ''" x-text="d.avg_load_percent + '%'"></td>
+                                        <td class="col-money" x-text="formatMoney(d.costs)"></td>
+                                        <td class="col-money" x-text="formatMoney(d.cost_per_trip)"></td>
+                                        <td class="col-money" x-text="formatMoney(d.total_revenue)"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============ ПО МАШИНАМ ============ -->
+            <div x-show="!loading && tab === 'vehicles'" x-cloak>
+                <div class="report-table-wrapper">
+                    <div class="report-table-header">
+                        <h3 class="report-table-title">Отчёт по машинам</h3>
+                    </div>
+                    <div x-show="byVehicles.length === 0" style="padding:40px;text-align:center;color:var(--text-secondary);font-size:13px;">Нет данных за выбранный период</div>
+                    <div x-show="byVehicles.length > 0" style="overflow-x:auto;">
+                        <table class="report-table">
+                            <thead>
+                                <tr>
+                                    <th @click="sortBy('vehicles', 'vehicle_plate')">Машина</th>
+                                    <th @click="sortBy('vehicles', 'vehicle_type')">Тип</th>
+                                    <th @click="sortBy('vehicles', 'trips_count')">Рейсов</th>
+                                    <th @click="sortBy('vehicles', 'total_km')">Пробег, км</th>
+                                    <th @click="sortBy('vehicles', 'repairs')">Ремонты</th>
+                                    <th @click="sortBy('vehicles', 'costs')">Затраты</th>
+                                    <th @click="sortBy('vehicles', 'cost_per_km')">Затр/км</th>
+                                    <th @click="sortBy('vehicles', 'margin')">Маржа</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="v in byVehicles" :key="v.vehicle_id">
+                                    <tr :class="v.cost_per_km > 40 ? 'warning' : ''">
+                                        <td class="col-name" x-text="v.vehicle_plate + (v.vehicle_model ? ' · ' + v.vehicle_model : '')"></td>
+                                        <td x-text="v.vehicle_type === 'own' ? 'Своя' : 'Наёмная'"></td>
+                                        <td x-text="v.trips_count"></td>
+                                        <td x-text="formatNumber(v.total_km)"></td>
+                                        <td class="col-money" :class="v.repairs > 20000 ? 'col-negative' : ''" x-text="v.repairs > 0 ? formatMoney(v.repairs) : '—'"></td>
+                                        <td class="col-money" x-text="formatMoney(v.costs)"></td>
+                                        <td class="col-money" :class="v.cost_per_km > 40 ? 'col-negative' : ''" x-text="v.cost_per_km + ' ₽'"></td>
+                                        <td class="col-money" :class="v.margin >= 0 ? 'col-positive' : 'col-negative'" x-text="formatMoney(v.margin)"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============ ПО МЕСЯЦАМ ============ -->
+            <div x-show="!loading && tab === 'months'" x-cloak>
+                <div class="chart-card" style="margin-bottom:20px;">
+                    <h3 class="chart-card-title">Динамика по месяцам</h3>
+                    <div class="chart-container">
+                        <canvas id="chartMonthsFull"></canvas>
+                    </div>
+                </div>
+
+                <div class="report-table-wrapper">
+                    <div class="report-table-header">
+                        <h3 class="report-table-title">Отчёт по месяцам</h3>
+                    </div>
+                    <div x-show="byMonths.length === 0" style="padding:40px;text-align:center;color:var(--text-secondary);font-size:13px;">Нет данных</div>
+                    <div x-show="byMonths.length > 0" style="overflow-x:auto;">
+                        <table class="report-table">
+                            <thead>
+                                <tr>
+                                    <th>Месяц</th>
+                                    <th>Рейсов</th>
+                                    <th>Пробег, км</th>
+                                    <th>Выручка</th>
+                                    <th>Затраты</th>
+                                    <th>Маржа</th>
+                                    <th>Рентабельность</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="m in byMonths" :key="m.month">
+                                    <tr>
+                                        <td class="col-name" x-text="m.month_label"></td>
+                                        <td x-text="m.trips_count"></td>
+                                        <td x-text="formatNumber(m.total_km)"></td>
+                                        <td class="col-money" x-text="formatMoney(m.revenue)"></td>
+                                        <td class="col-money" x-text="formatMoney(m.costs)"></td>
+                                        <td class="col-money" :class="m.margin >= 0 ? 'col-positive' : 'col-negative'" x-text="formatMoney(m.margin)"></td>
+                                        <td :class="m.margin_percent >= 0 ? 'col-positive' : 'col-negative'" x-text="m.margin_percent + '%'"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============ ПО МАРШРУТАМ ============ -->
+            <div x-show="!loading && tab === 'routes'" x-cloak>
+                <div class="report-table-wrapper">
+                    <div class="report-table-header">
+                        <h3 class="report-table-title">Отчёт по маршрутам</h3>
+                    </div>
+                    <div x-show="byRoutes.length === 0" style="padding:40px;text-align:center;color:var(--text-secondary);font-size:13px;">Нет данных за выбранный период</div>
+                    <div x-show="byRoutes.length > 0" style="overflow-x:auto;">
+                        <table class="report-table">
+                            <thead>
+                                <tr>
+                                    <th>Маршрут</th>
+                                    <th @click="sortBy('routes', 'trips_count')">Рейсов</th>
+                                    <th @click="sortBy('routes', 'total_km')">Пробег, км</th>
+                                    <th @click="sortBy('routes', 'avg_load_percent')">Ср. загрузка</th>
+                                    <th @click="sortBy('routes', 'costs')">Затраты</th>
+                                    <th @click="sortBy('routes', 'total_revenue')">Выручка</th>
+                                    <th @click="sortBy('routes', 'margin')">Маржа</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="r in byRoutes" :key="r.route_id">
+                                    <tr>
+                                        <td class="col-name" x-text="r.route_name"></td>
+                                        <td x-text="r.trips_count"></td>
+                                        <td x-text="formatNumber(r.total_km)"></td>
+                                        <td :class="r.avg_load_percent < 50 ? 'col-negative' : ''" x-text="r.avg_load_percent + '%'"></td>
+                                        <td class="col-money" x-text="formatMoney(r.costs)"></td>
+                                        <td class="col-money" x-text="formatMoney(r.total_revenue)"></td>
+                                        <td class="col-money" :class="r.margin >= 0 ? 'col-positive' : 'col-negative'" x-text="formatMoney(r.margin)"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============ ЗАТРАТЫ ============ -->
+            <div x-show="!loading && tab === 'costs'" x-cloak>
+                <div class="charts-grid" style="grid-template-columns:1fr 1fr;">
+                    <div class="chart-card">
+                        <h3 class="chart-card-title">Затраты по статьям</h3>
+                        <div class="chart-container">
+                            <canvas id="chartCostsFull"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="report-table-wrapper">
+                        <div class="report-table-header">
+                            <h3 class="report-table-title">Детализация</h3>
+                        </div>
+                        <div style="overflow-x:auto;">
+                            <table class="report-table">
+                                <thead>
+                                    <tr>
+                                        <th>Статья</th>
+                                        <th>Записей</th>
+                                        <th>Сумма</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="c in costsBreakdown" :key="c.category">
+                                        <tr>
+                                            <td class="col-name" x-text="categoryLabel(c.category)"></td>
+                                            <td x-text="c.count"></td>
+                                            <td class="col-money" x-text="formatMoney(c.total)"></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <td colspan="2">Итого</td>
+                                        <td class="col-money" x-text="formatMoney(costsTotal)"></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        function reportsPage() {
+            return {
+                user: null,
+                tab: 'dashboard',
+                loading: true,
+                error: '',
+
+                // Фильтры
+                preset: 'current',
+                customFrom: '',
+                customTo: '',
+                filterDriverId: '',
+                filterVehicleId: '',
+
+                // Справочники для фильтров
+                drivers: [],
+                vehicles: [],
+
+                // Данные отчётов
+                kpi: {},
+                topDrivers: [],
+                topVehicles: [],
+                monthly: [],
+                byDrivers: [],
+                byVehicles: [],
+                byMonths: [],
+                byRoutes: [],
+                costsBreakdown: [],
+
+                // Графики
+                chartMonthly: null,
+                chartCosts: null,
+                chartMonthsFull: null,
+                chartCostsFull: null,
+
+                get userInitials() {
+                    if (!this.user?.full_name) return '?';
+                    return this.user.full_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+                },
+
+                get roleLabel() {
+                    const roles = { 'admin': 'Администратор', 'senior_logist': 'Ст. логист', 'logist': 'Логист', 'manager': 'Руководитель', 'viewer': 'Наблюдатель' };
+                    return roles[this.user?.role] || this.user?.role || '';
+                },
+
+                get topDriversMax() {
+                    if (this.topDrivers.length === 0) return 1;
+                    return Math.max(...this.topDrivers.map(d => d.trips_count));
+                },
+
+                get topVehiclesMax() {
+                    if (this.topVehicles.length === 0) return 1;
+                    return Math.max(...this.topVehicles.map(v => v.trips_count));
+                },
+
+                get costsTotal() {
+                    return this.costsBreakdown.reduce((sum, c) => sum + Number(c.total), 0);
+                },
+
+                get hasTableData() {
+                    return this.byDrivers.length > 0 || this.byVehicles.length > 0 || 
+                           this.byMonths.length > 0 || this.byRoutes.length > 0;
+                },
+
+                async init() {
+                    if (!window.AUTH) {
+                        setTimeout(() => this.init(), 50);
+                        return;
+                    }
+                    if (!window.AUTH.requireLogin()) return;
+                    this.user = window.API.getUser();
+                    
+                    // Загружаем справочники для фильтров
+                    await this.loadReferences();
+                    
+                    // Устанавливаем пресет по умолчанию
+                    this.setPreset('current', false);
+                    
+                    await this.loadAll();
+                },
+
+                async loadReferences() {
+                    try {
+                        const [d, v] = await Promise.all([
+                            window.API.api('/api/drivers'),
+                            window.API.api('/api/vehicles')
+                        ]);
+                        this.drivers = d.drivers || [];
+                        this.vehicles = v.vehicles || [];
+                    } catch (e) {
+                        console.error('Ошибка загрузки справочников:', e);
+                    }
+                },
+
+                setPreset(preset, reload = true) {
+                    this.preset = preset;
+                    const now = new Date();
+
+                    if (preset === 'current') {
+                        const from = new Date(now.getFullYear(), now.getMonth(), 1);
+                        const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+                        this.customFrom = this.formatDateInput(from);
+                        this.customTo = this.formatDateInput(to);
+                    } else if (preset === 'prev') {
+                        const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                        const to = new Date(now.getFullYear(), now.getMonth(), 0);
+                        this.customFrom = this.formatDateInput(from);
+                        this.customTo = this.formatDateInput(to);
+                    } else if (preset === 'year') {
+                        const from = new Date(now.getFullYear(), 0, 1);
+                        const to = new Date(now.getFullYear(), 11, 31);
+                        this.customFrom = this.formatDateInput(from);
+                        this.customTo = this.formatDateInput(to);
+                    } else if (preset === 'all') {
+                        this.customFrom = '';
+                        this.customTo = '';
+                    }
+
+                    if (reload) this.loadAll();
+                },
+
+                applyCustomRange() {
+                    if (this.customFrom || this.customTo) {
+                        this.loadAll();
+                    }
+                },
+
+                formatDateInput(d) {
+                    const y = d.getFullYear();
+                    const m = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    return y + '-' + m + '-' + day;
+                },
+
+                getQueryParams() {
+                    const params = new URLSearchParams();
+                    if (this.customFrom) params.append('from', this.customFrom);
+                    if (this.customTo) params.append('to', this.customTo);
+                    if (this.filterDriverId) params.append('driver_id', this.filterDriverId);
+                    if (this.filterVehicleId) params.append('vehicle_id', this.filterVehicleId);
+                    return params.toString();
+                },
+
+                async loadAll() {
+                    this.loading = true;
+                    this.error = '';
+
+                    const q = this.getQueryParams();
+                    const suffix = q ? '&' + q : '';
+
+                    try {
+                        const [dashboard, byDrivers, byVehicles, byMonths, byRoutes, costsBreakdown] = await Promise.all([
+                            window.API.api('/api/reports?action=dashboard' + suffix),
+                            window.API.api('/api/reports?action=by-drivers' + suffix),
+                            window.API.api('/api/reports?action=by-vehicles' + suffix),
+                            window.API.api('/api/reports?action=by-months' + suffix),
+                            window.API.api('/api/reports?action=by-routes' + suffix),
+                            window.API.api('/api/reports?action=costs-breakdown' + suffix)
+                        ]);
+
+                        this.kpi = dashboard.kpi || {};
+                        this.topDrivers = dashboard.top_drivers || [];
+                        this.topVehicles = dashboard.top_vehicles || [];
+                        this.monthly = dashboard.monthly || [];
+
+                        this.byDrivers = byDrivers.data || [];
+                        this.byVehicles = byVehicles.data || [];
+                        this.byMonths = byMonths.data || [];
+                        this.byRoutes = byRoutes.data || [];
+                        this.costsBreakdown = costsBreakdown.data || [];
+
+                        // Рисуем графики
+                        this.$nextTick(() => this.renderCharts());
+
+                    } catch (e) {
+                        this.error = e.message;
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                switchTab(tab) {
+                    this.tab = tab;
+                    this.$nextTick(() => this.renderCharts());
+                },
+
+                sortBy(collection, field) {
+                    const arr = this[collection === 'drivers' ? 'byDrivers' :
+                                     collection === 'vehicles' ? 'byVehicles' :
+                                     collection === 'routes' ? 'byRoutes' : 'byMonths'];
+                    
+                    const sorted = [...arr].sort((a, b) => {
+                        const va = a[field];
+                        const vb = b[field];
+                        if (typeof va === 'string') return va.localeCompare(vb);
+                        return (Number(vb) || 0) - (Number(va) || 0);
+                    });
+                    
+                    if (collection === 'drivers') this.byDrivers = sorted;
+                    if (collection === 'vehicles') this.byVehicles = sorted;
+                    if (collection === 'routes') this.byRoutes = sorted;
+                    if (collection === 'months') this.byMonths = sorted;
+                },
+
+                renderCharts() {
+                    // Динамика на дашборде
+                    const ctxMonthly = document.getElementById('chartMonthly');
+                    if (ctxMonthly && this.monthly.length > 0) {
+                        if (this.chartMonthly) this.chartMonthly.destroy();
+                        
+                        const labels = [...this.monthly].reverse().map(m => m.month_label);
+                        const revenue = [...this.monthly].reverse().map(m => m.revenue);
+                        const costs = [...this.monthly].reverse().map(m => m.costs);
+                        const margin = [...this.monthly].reverse().map(m => m.margin);
+
+                        this.chartMonthly = new Chart(ctxMonthly, {
+                            type: 'bar',
+                            data: {
+                                labels: labels,
+                                datasets: [
+                                    { label: 'Выручка', data: revenue, backgroundColor: '#059669' },
+                                    { label: 'Затраты', data: costs, backgroundColor: '#DC2626' },
+                                    { label: 'Маржа', data: margin, backgroundColor: '#2563EB' }
+                                ]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: { position: 'bottom', labels: { font: { size: 11 } } }
+                                },
+                                scales: {
+                                    y: {
+                                        ticks: {
+                                            callback: v => v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? (v/1e3).toFixed(0)+'K' : v
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }
+
+                    // Круговая затрат
+                    const ctxCosts = document.getElementById('chartCosts');
+                    if (ctxCosts && this.costsBreakdown.length > 0) {
+                        if (this.chartCosts) this.chartCosts.destroy();
+                        
+                        const labels = this.costsBreakdown.map(c => this.categoryLabel(c.category));
+                        const data = this.costsBreakdown.map(c => Number(c.total));
+
+                        this.chartCosts = new Chart(ctxCosts, {
+                            type: 'doughnut',
+                            data: {
+                                labels: labels,
+                                datasets: [{
+                                    data: data,
+                                    backgroundColor: ['#3B82F6', '#8B5CF6', '#EF4444', '#F59E0B', '#10B981', '#EC4899', '#6B7280']
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: { position: 'right', labels: { font: { size: 11 } } },
+                                    tooltip: {
+                                        callbacks: {
+                                            label: ctx => ctx.label + ': ' + this.formatMoney(ctx.raw)
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }
+
+                    // График месяцев (полный)
+                    const ctxMonthsFull = document.getElementById('chartMonthsFull');
+                    if (ctxMonthsFull && this.byMonths.length > 0) {
+                        if (this.chartMonthsFull) this.chartMonthsFull.destroy();
+                        
+                        const labels = [...this.byMonths].reverse().map(m => m.month_label);
+                        const revenue = [...this.byMonths].reverse().map(m => m.revenue);
+                        const costs = [...this.byMonths].reverse().map(m => m.costs);
+                        const margin = [...this.byMonths].reverse().map(m => m.margin);
+
+                        this.chartMonthsFull = new Chart(ctxMonthsFull, {
+                            type: 'line',
+                            data: {
+                                labels: labels,
+                                datasets: [
+                                    { label: 'Выручка', data: revenue, borderColor: '#059669', backgroundColor: 'rgba(5, 150, 105, 0.1)', tension: 0.3, fill: true },
+                                    { label: 'Затраты', data: costs, borderColor: '#DC2626', backgroundColor: 'rgba(220, 38, 38, 0.1)', tension: 0.3, fill: true },
+                                    { label: 'Маржа', data: margin, borderColor: '#2563EB', backgroundColor: 'rgba(37, 99, 235, 0.1)', tension: 0.3, fill: true }
+                                ]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: { position: 'bottom', labels: { font: { size: 11 } } }
+                                },
+                                scales: {
+                                    y: {
+                                        ticks: {
+                                            callback: v => v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? (v/1e3).toFixed(0)+'K' : v
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }
+
+                    // График затрат (полный)
+                    const ctxCostsFull = document.getElementById('chartCostsFull');
+                    if (ctxCostsFull && this.costsBreakdown.length > 0) {
+                        if (this.chartCostsFull) this.chartCostsFull.destroy();
+                        
+                        const labels = this.costsBreakdown.map(c => this.categoryLabel(c.category));
+                        const data = this.costsBreakdown.map(c => Number(c.total));
+
+                        this.chartCostsFull = new Chart(ctxCostsFull, {
+                            type: 'doughnut',
+                            data: {
+                                labels: labels,
+                                datasets: [{
+                                    data: data,
+                                    backgroundColor: ['#3B82F6', '#8B5CF6', '#EF4444', '#F59E0B', '#10B981', '#EC4899', '#6B7280']
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: { position: 'right', labels: { font: { size: 11 } } },
+                                    tooltip: {
+                                        callbacks: {
+                                            label: ctx => ctx.label + ': ' + this.formatMoney(ctx.raw)
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }
+                },
+
+                exportCSV() {
+                    let data = [];
+                    let filename = 'report.csv';
+
+                    if (this.tab === 'drivers' && this.byDrivers.length > 0) {
+                        data = this.byDrivers.map(d => ({
+                            'Водитель': d.driver_name,
+                            'Телефон': d.driver_phone || '',
+                            'Рейсов': d.trips_count,
+                            'Завершено': d.trips_done,
+                            'Пробег, км': d.total_km,
+                            'Средняя загрузка, %': d.avg_load_percent,
+                            'Затраты, ₽': d.costs,
+                            'Затрат на рейс, ₽': d.cost_per_trip,
+                            'Выручка, ₽': d.total_revenue
+                        }));
+                        filename = 'drivers-report.csv';
+                    } else if (this.tab === 'vehicles' && this.byVehicles.length > 0) {
+                        data = this.byVehicles.map(v => ({
+                            'Машина': v.vehicle_plate,
+                            'Модель': v.vehicle_model || '',
+                            'Тип': v.vehicle_type === 'own' ? 'Своя' : 'Наёмная',
+                            'Рейсов': v.trips_count,
+                            'Пробег, км': v.total_km,
+                            'Ремонты, ₽': v.repairs,
+                            'Затраты, ₽': v.costs,
+                            'Затрат/км, ₽': v.cost_per_km,
+                            'Маржа, ₽': v.margin
+                        }));
+                        filename = 'vehicles-report.csv';
+                    } else if (this.tab === 'months' && this.byMonths.length > 0) {
+                        data = this.byMonths.map(m => ({
+                            'Месяц': m.month_label,
+                            'Рейсов': m.trips_count,
+                            'Пробег, км': m.total_km,
+                            'Выручка, ₽': m.revenue,
+                            'Затраты, ₽': m.costs,
+                            'Маржа, ₽': m.margin,
+                            'Рентабельность, %': m.margin_percent
+                        }));
+                        filename = 'months-report.csv';
+                    } else if (this.tab === 'routes' && this.byRoutes.length > 0) {
+                        data = this.byRoutes.map(r => ({
+                            'Маршрут': r.route_name,
+                            'Откуда': r.from_point || '',
+                            'Куда': r.to_point || '',
+                            'Рейсов': r.trips_count,
+                            'Пробег, км': r.total_km,
+                            'Средняя загрузка, %': r.avg_load_percent,
+                            'Затраты, ₽': r.costs,
+                            'Выручка, ₽': r.total_revenue,
+                            'Маржа, ₽': r.margin
+                        }));
+                        filename = 'routes-report.csv';
+                    } else {
+                        alert('Нет данных для экспорта. Откройте вкладку с таблицей.');
+                        return;
+                    }
+
+                    // Формируем CSV с BOM для Excel
+                    const headers = Object.keys(data[0]);
+                    const csv = [
+                        headers.join(';'),
+                        ...data.map(row => headers.map(h => {
+                            const v = row[h];
+                            return typeof v === 'string' && (v.includes(';') || v.includes('"')) 
+                                ? '"' + v.replace(/"/g, '""') + '"' 
+                                : v;
+                        }).join(';'))
+                    ].join('\n');
+
+                    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = filename;
+                    link.click();
+                },
+
+                categoryLabel(cat) {
+                    const labels = {
+                        'salary': 'Зарплата', 'amort': 'Амортизация', 'fuel': 'Топливо',
+                        'toll': 'Платные дороги', 'repair': 'Ремонт', 'fine': 'Штрафы', 'other': 'Прочее'
+                    };
+                    return labels[cat] || cat;
+                },
+
+                formatMoney(v) {
+                    return window.HELPERS.formatMoney(v);
+                },
+
+                formatNumber(v) {
+                    if (!v && v !== 0) return '—';
+                    return Number(v).toLocaleString('ru-RU', { maximumFractionDigits: 0 });
+                },
+
+                logout() {
+                    if (!confirm('Выйти из системы?')) return;
+                    window.API.clearAuth();
+                    window.location.href = '/login.html';
+                }
+            };
+        }
+    </script>
+</body>
+</html>
