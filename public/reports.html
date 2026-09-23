@@ -222,16 +222,24 @@
 
             <!-- ============ ПО ВОДИТЕЛЯМ ============ -->
             <div x-show="!loading && tab === 'drivers'" x-cloak>
+                <div style="display:flex;gap:4px;margin-bottom:16px;">
+                    <button class="preset-btn" :class="byDriversFilter === 'all' ? 'active' : ''" @click="byDriversFilter = 'all'">Все</button>
+                    <button class="preset-btn" :class="byDriversFilter === 'own' ? 'active' : ''" @click="byDriversFilter = 'own'">Свои</button>
+                    <button class="preset-btn" :class="byDriversFilter === 'hired' ? 'active' : ''" @click="byDriversFilter = 'hired'">Наёмные</button>
+                </div>
+
                 <div class="report-table-wrapper">
                     <div class="report-table-header">
                         <h3 class="report-table-title">Отчёт по водителям</h3>
+                        <button class="btn btn-secondary btn-sm" @click="exportCSV()">Экспорт CSV</button>
                     </div>
-                    <div x-show="byDrivers.length === 0" style="padding:40px;text-align:center;color:var(--text-secondary);font-size:13px;">Нет данных за выбранный период</div>
-                    <div x-show="byDrivers.length > 0" style="overflow-x:auto;">
+                    <div x-show="filteredDrivers.length === 0" style="padding:40px;text-align:center;color:var(--text-secondary);font-size:13px;">Нет данных за выбранный период</div>
+                    <div x-show="filteredDrivers.length > 0" style="overflow-x:auto;">
                         <table class="report-table">
                             <thead>
                                 <tr>
                                     <th @click="sortBy('drivers', 'driver_name')">Водитель</th>
+                                    <th>Тип</th>
                                     <th @click="sortBy('drivers', 'trips_count')">Рейсов</th>
                                     <th @click="sortBy('drivers', 'total_km')">Пробег, км</th>
                                     <th @click="sortBy('drivers', 'avg_load_percent')">Ср. загрузка</th>
@@ -243,9 +251,13 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <template x-for="d in byDrivers" :key="d.driver_id">
+                                <template x-for="d in filteredDrivers" :key="d.driver_id || d.driver_name">
                                     <tr>
                                         <td class="col-name" x-text="d.driver_name"></td>
+                                        <td>
+                                            <span class="type-chip" :class="d.is_hired ? 'type-chip-hired' : 'type-chip-own'"
+                                                x-text="d.is_hired ? 'Наёмный' : 'Свой'"></span>
+                                        </td>
                                         <td x-text="d.trips_count"></td>
                                         <td x-text="formatNumber(d.total_km)"></td>
                                         <td :class="d.avg_load_percent < 50 ? 'col-negative' : ''" x-text="d.avg_load_percent + '%'"></td>
@@ -264,12 +276,19 @@
 
             <!-- ============ ПО МАШИНАМ ============ -->
             <div x-show="!loading && tab === 'vehicles'" x-cloak>
+                <div style="display:flex;gap:4px;margin-bottom:16px;">
+                    <button class="preset-btn" :class="byVehiclesFilter === 'all' ? 'active' : ''" @click="byVehiclesFilter = 'all'">Все</button>
+                    <button class="preset-btn" :class="byVehiclesFilter === 'own' ? 'active' : ''" @click="byVehiclesFilter = 'own'">Свои</button>
+                    <button class="preset-btn" :class="byVehiclesFilter === 'hired' ? 'active' : ''" @click="byVehiclesFilter = 'hired'">Наёмные</button>
+                </div>
+
                 <div class="report-table-wrapper">
                     <div class="report-table-header">
                         <h3 class="report-table-title">Отчёт по машинам</h3>
+                        <button class="btn btn-secondary btn-sm" @click="exportCSV()">Экспорт CSV</button>
                     </div>
-                    <div x-show="byVehicles.length === 0" style="padding:40px;text-align:center;color:var(--text-secondary);font-size:13px;">Нет данных за выбранный период</div>
-                    <div x-show="byVehicles.length > 0" style="overflow-x:auto;">
+                    <div x-show="filteredVehicles.length === 0" style="padding:40px;text-align:center;color:var(--text-secondary);font-size:13px;">Нет данных за выбранный период</div>
+                    <div x-show="filteredVehicles.length > 0" style="overflow-x:auto;">
                         <table class="report-table">
                             <thead>
                                 <tr>
@@ -286,10 +305,16 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <template x-for="v in byVehicles" :key="v.vehicle_id">
+                                <template x-for="v in filteredVehicles" :key="v.vehicle_id || v.vehicle_plate">
                                     <tr :class="v.cost_per_km > 40 ? 'warning' : ''">
-                                        <td class="col-name" x-text="v.vehicle_plate + (v.vehicle_model ? ' · ' + v.vehicle_model : '')"></td>
-                                        <td x-text="v.vehicle_type === 'own' ? 'Своя' : 'Наёмная'"></td>
+                                        <td class="col-name">
+                                            <span x-text="v.vehicle_plate"></span>
+                                            <span x-show="v.vehicle_model" style="color:var(--text-secondary);font-weight:400;"> · <span x-text="v.vehicle_model"></span></span>
+                                        </td>
+                                        <td>
+                                            <span class="type-chip" :class="v.is_hired ? 'type-chip-hired' : 'type-chip-own'"
+                                                x-text="v.is_hired ? 'Наёмная' : 'Своя'"></span>
+                                        </td>
                                         <td x-text="v.trips_count"></td>
                                         <td x-text="formatNumber(v.total_km)"></td>
                                         <td class="col-money" :class="v.repairs > 20000 ? 'col-negative' : ''" x-text="v.repairs > 0 ? formatMoney(v.repairs) : '—'"></td>
@@ -549,6 +574,8 @@
                 byMonths: [],
                 byRoutes: [],
                 costsBreakdown: [],
+                byVehiclesFilter: 'all', // all | own | hired
+                byDriversFilter: 'all',  // all | own | hired
 
                 // Графики
                 chartMonthly: null,
@@ -591,6 +618,26 @@
                 get hasTableData() {
                     return this.byDrivers.length > 0 || this.byVehicles.length > 0 || 
                            this.byMonths.length > 0 || this.byRoutes.length > 0;
+                },
+
+                get filteredVehicles() {
+                    if (this.byVehiclesFilter === 'own') {
+                        return this.byVehicles.filter(v => !v.is_hired);
+                    }
+                    if (this.byVehiclesFilter === 'hired') {
+                        return this.byVehicles.filter(v => v.is_hired);
+                    }
+                    return this.byVehicles;
+                },
+
+                get filteredDrivers() {
+                    if (this.byDriversFilter === 'own') {
+                        return this.byDrivers.filter(d => !d.is_hired);
+                    }
+                    if (this.byDriversFilter === 'hired') {
+                        return this.byDrivers.filter(d => d.is_hired);
+                    }
+                    return this.byDrivers;
                 },
 
                 async init() {
@@ -907,9 +954,10 @@
                     let data = [];
                     let filename = 'report.csv';
 
-                    if (this.tab === 'drivers' && this.byDrivers.length > 0) {
-                        data = this.byDrivers.map(d => ({
+                    if (this.tab === 'drivers' && this.filteredDrivers.length > 0) {
+                        data = this.filteredDrivers.map(d => ({
                             'Водитель': d.driver_name,
+                            'Тип': d.is_hired ? 'Наёмный' : 'Свой',
                             'Телефон': d.driver_phone || '',
                             'Рейсов': d.trips_count,
                             'Завершено': d.trips_done,
@@ -919,12 +967,12 @@
                             'Затрат на рейс, ₽': d.cost_per_trip,
                             'Выручка, ₽': d.total_revenue
                         }));
-                        filename = 'drivers-report.csv';
-                    } else if (this.tab === 'vehicles' && this.byVehicles.length > 0) {
-                        data = this.byVehicles.map(v => ({
+                        filename = 'drivers-report-' + this.byDriversFilter + '.csv';
+                    } else if (this.tab === 'vehicles' && this.filteredVehicles.length > 0) {
+                        data = this.filteredVehicles.map(v => ({
                             'Машина': v.vehicle_plate,
                             'Модель': v.vehicle_model || '',
-                            'Тип': v.vehicle_type === 'own' ? 'Своя' : 'Наёмная',
+                            'Тип': v.is_hired ? 'Наёмная' : 'Своя',
                             'Рейсов': v.trips_count,
                             'Пробег, км': v.total_km,
                             'Ремонты, ₽': v.repairs,
@@ -932,7 +980,7 @@
                             'Затрат/км, ₽': v.cost_per_km,
                             'Маржа, ₽': v.margin
                         }));
-                        filename = 'vehicles-report.csv';
+                        filename = 'vehicles-report-' + this.byVehiclesFilter + '.csv';
                     } else if (this.tab === 'months' && this.byMonths.length > 0) {
                         data = this.byMonths.map(m => ({
                             'Месяц': m.month_label,
