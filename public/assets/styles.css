@@ -2359,3 +2359,100 @@ body {
     color: var(--text-primary);
     font-family: 'SF Mono', Consolas, monospace;
 }
+/* ============ ПОИСК НА ДОСКЕ ============ */
+
+.board-toolbar {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 12px 16px;
+    background: #fff;
+    border: 1px solid var(--border-light);
+    border-radius: 10px;
+}
+
+.board-search {
+    position: relative;
+    flex: 1;
+    max-width: 500px;
+}
+
+.board-search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    pointer-events: none;
+}
+
+.board-search-input {
+    width: 100%;
+    padding: 9px 36px 9px 38px;
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    background: var(--bg-page);
+}
+
+.board-search-input:focus {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    background: #fff;
+}
+
+.board-search-clear {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.board-search-clear:hover {
+    background: var(--bg-muted);
+    color: var(--text-primary);
+}
+
+.board-search-hint {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+.board-search-hint strong {
+    color: var(--color-accent);
+    font-weight: 600;
+}
+
+.board-search-hint .no-results {
+    color: var(--alert-danger);
+}
+
+.board-search-hint .phone-hint {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 6px;
+    background: #DBEAFE;
+    color: #1E40AF;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
