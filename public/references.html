@@ -94,6 +94,15 @@
                         Интеграции
                     </button>
                 </template>
+                <template x-if="user?.role === 'admin'">
+                    <button 
+                        class="tab-btn"
+                        :class="tab === 'settings' ? 'tab-btn-active' : ''"
+                        @click="switchTab('settings')"
+                    >
+                        Настройки
+                    </button>
+                </template>
             </div>
 
             <!-- ОШИБКА -->
@@ -430,6 +439,74 @@
                 </div>
 
             </div>
+            <!-- ТАБ: НАСТРОЙКИ (только админ) -->
+            <div x-show="tab === 'settings'" x-cloak>
+
+                <div x-show="settingsError" x-cloak class="alert alert-error" x-text="settingsError"></div>
+                <div x-show="settingsSuccess" x-cloak style="padding:12px 14px;background:#D1FAE5;border:1px solid #A7F3D0;border-radius:6px;color:#065F46;font-size:13px;margin-bottom:16px;" x-text="settingsSuccess"></div>
+
+                <!-- Секция: Отображение -->
+                <div class="settings-section">
+                    <h2 class="settings-section-title">Отображение данных</h2>
+                    <p class="settings-section-desc">
+                        Управляйте тем, какие поля показываются в интерфейсе и отчётах.
+                    </p>
+
+                    <div class="settings-row">
+                        <div class="settings-row-info">
+                            <div class="settings-row-label">Показывать выручку и маржу</div>
+                            <div class="settings-row-hint">
+                                Включите, если ведёте учёт выручки по каждому рейсу. 
+                                Поле «Выручка» появится в форме создания рейса и карточке. 
+                                В отчётах появятся колонки «Выручка» и «Маржа».
+                            </div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" 
+                                x-model="settingsForm.show_revenue" 
+                                @change="saveShowRevenue()"
+                                :disabled="savingSettings">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Секция: Компания -->
+                <div class="settings-section">
+                    <h2 class="settings-section-title">Информация о компании</h2>
+                    <p class="settings-section-desc">
+                        Используется в печатных документах.
+                    </p>
+
+                    <div class="form-group">
+                        <label class="form-label">Название компании</label>
+                        <input type="text" 
+                            class="form-input" 
+                            x-model="settingsForm.company_name" 
+                            placeholder="ООО «ТрансЛогистик»"
+                            style="max-width:400px;"
+                            :disabled="savingSettings">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Телефон компании</label>
+                        <input type="text" 
+                            class="form-input" 
+                            x-model="settingsForm.company_phone" 
+                            placeholder="+7 (495) 123-45-67"
+                            style="max-width:400px;"
+                            :disabled="savingSettings">
+                    </div>
+
+                    <div style="margin-top:16px;">
+                        <button class="btn btn-primary" @click="saveCompanyInfo()" :disabled="savingSettings">
+                            <span x-show="!savingSettings">Сохранить</span>
+                            <span x-show="savingSettings" x-cloak>Сохранение...</span>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
         </div>
     </main>
 
@@ -571,6 +648,15 @@
                 testingBitrix: false,
                 generatingSecret: false,
                 bitrixLog: [],
+                // Настройки системы
+                settingsForm: {
+                    show_revenue: false,
+                    company_name: '',
+                    company_phone: ''
+                },
+                settingsError: '',
+                settingsSuccess: '',
+                savingSettings: false,
                 modal: {
                     open: false,
                     type: '',
@@ -609,9 +695,10 @@
                     this.user = window.API.getUser();
                     await this.loadAll();
                     
-                    // Если админ — загружаем интеграции в фоне
+                    // Если админ — загружаем интеграции и настройки в фоне
                     if (this.user.role === 'admin') {
                         this.loadIntegrations();
+                        this.loadSettings();
                     }
                 },
 
@@ -667,10 +754,15 @@
                     this.error = '';
                     this.integrationError = '';
                     this.integrationSuccess = '';
+                    this.settingsError = '';
+                    this.settingsSuccess = '';
                     
                     if (t === 'integrations') {
                         this.loadIntegrations();
                         this.loadBitrixLog();
+                    }
+                    if (t === 'settings') {
+                        this.loadSettings();
                     }
                 },
 
@@ -886,6 +978,77 @@
                     const date = new Date(d);
                     return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) + ' ' + 
                         date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+                },
+
+                // ============ НАСТРОЙКИ СИСТЕМЫ ============
+
+                async loadSettings() {
+                    this.settingsError = '';
+                    try {
+                        const data = await window.API.api('/api/settings');
+                        const settings = {};
+                        (data.settings || []).forEach(s => {
+                            settings[s.key] = s.value;
+                        });
+                        
+                        this.settingsForm.show_revenue = settings['show_revenue'] === 'true';
+                        this.settingsForm.company_name = settings['company_name'] || '';
+                        this.settingsForm.company_phone = settings['company_phone'] || '';
+                    } catch (e) {
+                        this.settingsError = 'Ошибка загрузки настроек: ' + e.message;
+                    }
+                },
+
+                async saveShowRevenue() {
+                    this.settingsError = '';
+                    this.settingsSuccess = '';
+                    this.savingSettings = true;
+
+                    try {
+                        await window.API.api('/api/settings?action=update', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                show_revenue: this.settingsForm.show_revenue ? 'true' : 'false'
+                            })
+                        });
+
+                        this.settingsSuccess = this.settingsForm.show_revenue 
+                            ? 'Выручка включена. Обновите страницу — поле появится в интерфейсе.' 
+                            : 'Выручка выключена.';
+                        
+                        setTimeout(() => this.settingsSuccess = '', 4000);
+
+                    } catch (e) {
+                        this.settingsError = e.message;
+                        // Откатываем значение
+                        this.settingsForm.show_revenue = !this.settingsForm.show_revenue;
+                    } finally {
+                        this.savingSettings = false;
+                    }
+                },
+
+                async saveCompanyInfo() {
+                    this.settingsError = '';
+                    this.settingsSuccess = '';
+                    this.savingSettings = true;
+
+                    try {
+                        await window.API.api('/api/settings?action=update', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                company_name: this.settingsForm.company_name || '',
+                                company_phone: this.settingsForm.company_phone || ''
+                            })
+                        });
+
+                        this.settingsSuccess = 'Настройки сохранены';
+                        setTimeout(() => this.settingsSuccess = '', 3000);
+
+                    } catch (e) {
+                        this.settingsError = e.message;
+                    } finally {
+                        this.savingSettings = false;
+                    }
                 },
 
                 logout() {
