@@ -715,6 +715,22 @@
                         } else if (this.tab === 'costs') {
                             this.renderCostsCharts();
                         }
+                        
+                        // Второй проход — на случай, если DOM ещё не полностью отрисовался
+                        setTimeout(() => {
+                            if (this.tab === 'dashboard' && !this.chartMonthly && this.monthly.length > 0) {
+                                this.renderDashboardCharts();
+                            }
+                            if (this.tab === 'dashboard' && !this.chartCosts && this.costsBreakdown.length > 0) {
+                                this.renderDashboardCharts();
+                            }
+                            if (this.tab === 'months' && !this.chartMonthsFull && this.byMonths.length > 0) {
+                                this.renderMonthsCharts();
+                            }
+                            if (this.tab === 'costs' && !this.chartCostsFull && this.costsBreakdown.length > 0) {
+                                this.renderCostsCharts();
+                            }
+                        }, 400);
                     }, 150);
                 },
 
