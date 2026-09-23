@@ -10,6 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/assets/styles.css">
     <script src="/assets/app.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/mask@3.x.x/dist/cdn.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body x-data="boardPage()" x-init="$nextTick(() => init())">
@@ -383,7 +384,7 @@
                                 <input type="text" x-model="addr.external_id" placeholder="#12345" :disabled="tripModal.saving">
                                 <input type="text" x-model="addr.address" placeholder="ул. Ленина, 15" :disabled="tripModal.saving">
                                 <input type="text" x-model="addr.contact_name" placeholder="Иванов И.И." :disabled="tripModal.saving">
-                                <input type="text" x-model="addr.phone" placeholder="+79001234567" :disabled="tripModal.saving">
+                                <input type="text" x-model="addr.phone" placeholder="+7 (___) ___-__-__" x-mask="+7 (999) 999-99-99" :disabled="tripModal.saving">
                                 <input type="number" x-model.number="addr.volume" step="0.1" min="0" :disabled="tripModal.saving">
                                 <textarea x-model="addr.note" placeholder="Примечание" :disabled="tripModal.saving"></textarea>
                                 <button class="btn-remove" @click="removeAddress(index)" :disabled="tripModal.saving" title="Удалить">
