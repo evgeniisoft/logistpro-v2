@@ -10,6 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/assets/styles.css">
     <script src="/assets/app.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/mask@3.x.x/dist/cdn.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body x-data="incomingPage()" x-init="$nextTick(() => init())">
@@ -216,7 +217,7 @@
                     </div>
                     <div class="form-group">
                         <label class="form-label">Телефон</label>
-                        <input type="text" class="form-input" x-model="createModal.form.phone" placeholder="+79001234567" :disabled="createModal.saving">
+                        <input type="text" class="form-input" x-model="createModal.form.phone" x-mask="+7 (999) 999-99-99" placeholder="+7 (___) ___-__-__" :disabled="createModal.saving">
                     </div>
                 </div>
                 <div class="form-row">
