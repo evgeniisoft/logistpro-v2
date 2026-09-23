@@ -10,6 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/assets/styles.css">
     <script src="/assets/app.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/mask@3.x.x/dist/cdn.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body x-data="tripPage()" x-init="$nextTick(() => init())">
@@ -421,7 +422,7 @@
                                         </template>
                                         <template x-if="editingOrderId === order.id">
                                             <td class="col-phone">
-                                                <input type="text" x-model="editForm.phone" placeholder="+79001234567">
+                                                <input type="text" class="addr-phone" x-model="editForm.phone" x-mask="+7 (999) 999-99-99">
                                             </td>
                                         </template>
                 
