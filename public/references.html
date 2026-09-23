@@ -85,6 +85,15 @@
                     Маршруты
                     <span class="tab-count" x-text="routes.length"></span>
                 </button>
+                <template x-if="user?.role === 'admin'">
+                    <button 
+                        class="tab-btn"
+                        :class="tab === 'integrations' ? 'tab-btn-active' : ''"
+                        @click="switchTab('integrations')"
+                    >
+                        Интеграции
+                    </button>
+                </template>
             </div>
 
             <!-- ОШИБКА -->
@@ -300,7 +309,127 @@
                     </table>
                 </div>
             </div>
+            <!-- ТАБ: ИНТЕГРАЦИИ -->
+            <div x-show="tab === 'integrations'" x-cloak>
+                
+                <div x-show="integrationError" x-cloak class="alert alert-error" x-text="integrationError"></div>
+                <div x-show="integrationSuccess" x-cloak style="padding:12px 14px;background:#D1FAE5;border:1px solid #A7F3D0;border-radius:6px;color:#065F46;font-size:13px;margin-bottom:16px;" x-text="integrationSuccess"></div>
 
+                <!-- Битрикс24 -->
+                <div class="section-card" style="margin-bottom:20px;">
+                    <div class="section-card-header">
+                        <h2 class="section-card-title">Интеграция с Битрикс24</h2>
+                        <div style="display:flex;align-items:center;gap:12px;">
+                            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+                                <input type="checkbox" x-model="integrationForm.bitrix_active_value">
+                                Активна
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div style="padding:20px 24px;">
+                        
+                        <div class="form-section-title" style="margin-bottom:16px;">Входящие заказы из Битрикс24</div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">URL для webhook (передайте в Битрикс24)</label>
+                            <div style="display:flex;gap:8px;">
+                                <input type="text" class="form-input" :value="webhookUrl" readonly style="font-family:monospace;font-size:12px;background:var(--bg-muted);">
+                                <button class="btn btn-secondary btn-sm" @click="copyWebhookUrl()" style="white-space:nowrap;">
+                                    Скопировать
+                                </button>
+                            </div>
+                            <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">
+                                Настройте исходящий webhook в Битрикс24 на этот URL
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Секретный ключ</label>
+                            <div style="display:flex;gap:8px;">
+                                <input type="text" class="form-input" :value="integrationForm.bitrix_secret_key" readonly style="font-family:monospace;font-size:12px;background:var(--bg-muted);">
+                                <button class="btn btn-secondary btn-sm" @click="regenerateSecret()" :disabled="generatingSecret" style="white-space:nowrap;">
+                                    <span x-show="!generatingSecret">Сгенерировать новый</span>
+                                    <span x-show="generatingSecret" x-cloak>Генерация...</span>
+                                </button>
+                            </div>
+                            <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">
+                                Передайте этот ключ в Битрикс24 в заголовке X-Bitrix-Secret
+                            </div>
+                        </div>
+
+                        <div style="border-top:1px solid var(--border-light);padding-top:20px;margin-top:20px;">
+                            
+                            <div class="form-section-title" style="margin-bottom:16px;">Исходящие уведомления в Битрикс24</div>
+
+                            <div class="form-group">
+                                <label class="form-label">URL webhook Битрикс24</label>
+                                <input type="text" class="form-input" x-model="integrationForm.bitrix_webhook_url" placeholder="https://company.bitrix24.ru/rest/1/xxxxx/" style="font-family:monospace;font-size:12px;">
+                                <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">
+                                    REST URL из Битрикс24 для отправки уведомлений о статусах
+                                </div>
+                            </div>
+
+                            <div style="display:flex;gap:8px;margin-top:16px;">
+                                <button class="btn btn-primary" @click="saveIntegration()" :disabled="savingIntegration">
+                                    <span x-show="!savingIntegration">Сохранить настройки</span>
+                                    <span x-show="savingIntegration" x-cloak>Сохранение...</span>
+                                </button>
+                                <button class="btn btn-secondary" @click="testBitrix()" :disabled="testingBitrix">
+                                    <span x-show="!testingBitrix">Проверить соединение</span>
+                                    <span x-show="testingBitrix" x-cloak>Проверка...</span>
+                                </button>
+                            </div>
+
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Журнал событий -->
+                <div class="section-card">
+                    <div class="section-card-header">
+                        <h2 class="section-card-title">Журнал событий</h2>
+                        <button class="btn btn-secondary btn-sm" @click="loadBitrixLog()">
+                            Обновить
+                        </button>
+                    </div>
+                    
+                    <div x-show="bitrixLog.length === 0" style="padding:40px;text-align:center;color:var(--text-secondary);font-size:13px;">
+                        Событий пока нет
+                    </div>
+
+                    <div x-show="bitrixLog.length > 0" style="overflow-x:auto;">
+                        <table class="incoming-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:100px;">Направление</th>
+                                    <th style="width:150px;">ID сделки</th>
+                                    <th style="width:130px;">Статус</th>
+                                    <th>Ошибка</th>
+                                    <th style="width:150px;">Дата</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="log in bitrixLog" :key="log.id">
+                                    <tr>
+                                        <td>
+                                            <span class="source-badge" :class="log.direction === 'in' ? 'source-bitrix' : 'source-manual'" x-text="log.direction === 'in' ? 'Входящий' : 'Исходящий'"></span>
+                                        </td>
+                                        <td style="font-family:monospace;font-size:12px;" x-text="log.external_id || '—'"></td>
+                                        <td>
+                                            <span :style="log.status === 'success' || log.status === 'processed' ? 'color:#059669;' : log.status === 'failed' ? 'color:#DC2626;' : 'color:#D97706;'" x-text="log.status"></span>
+                                        </td>
+                                        <td style="font-size:12px;color:var(--text-secondary);" x-text="log.error_message || '—'"></td>
+                                        <td style="font-size:12px;color:var(--text-secondary);" x-text="formatDateTime(log.created_at)"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
         </div>
     </main>
 
@@ -429,6 +558,19 @@
                 showArchived: false,
                 loading: { vehicles: true, drivers: true, routes: true },
                 error: '',
+                // Интеграции
+                integrationForm: {
+                    bitrix_secret_key: '',
+                    bitrix_webhook_url: '',
+                    bitrix_active: 'false',
+                    bitrix_active_value: false
+                },
+                integrationError: '',
+                integrationSuccess: '',
+                savingIntegration: false,
+                testingBitrix: false,
+                generatingSecret: false,
+                bitrixLog: [],
                 modal: {
                     open: false,
                     type: '',
@@ -444,6 +586,10 @@
                     return this.user.full_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
                 },
 
+                get webhookUrl() {
+                    return window.location.origin + '/api/incoming?action=webhook';
+                },
+
                 get roleLabel() {
                     const roles = { 'admin': 'Администратор', 'senior_logist': 'Ст. логист', 'logist': 'Логист', 'manager': 'Руководитель', 'viewer': 'Наблюдатель' };
                     return roles[this.user?.role] || this.user?.role || '';
@@ -455,9 +601,18 @@
                 },
 
                 async init() {
+                    if (!window.AUTH) {
+                        setTimeout(() => this.init(), 50);
+                        return;
+                    }
                     if (!window.AUTH.requireLogin()) return;
                     this.user = window.API.getUser();
                     await this.loadAll();
+                    
+                    // Если админ — загружаем интеграции в фоне
+                    if (this.user.role === 'admin') {
+                        this.loadIntegrations();
+                    }
                 },
 
                 async loadAll() {
@@ -510,6 +665,13 @@
                 switchTab(t) {
                     this.tab = t;
                     this.error = '';
+                    this.integrationError = '';
+                    this.integrationSuccess = '';
+                    
+                    if (t === 'integrations') {
+                        this.loadIntegrations();
+                        this.loadBitrixLog();
+                    }
                 },
 
                 openModal(type, item) {
@@ -600,6 +762,130 @@
                     } catch (e) {
                         this.error = e.message;
                     }
+                },
+
+                // ============ ИНТЕГРАЦИИ ============
+
+                async loadIntegrations() {
+                    try {
+                        const data = await window.API.api('/api/settings');
+                        const settings = {};
+                        (data.settings || []).forEach(s => {
+                            settings[s.key] = s;
+                        });
+
+                        this.integrationForm.bitrix_secret_key = settings['bitrix_secret_key']?.has_value 
+                            ? '•••••••••' 
+                            : '';
+                        this.integrationForm.bitrix_webhook_url = settings['bitrix_webhook_url']?.value || '';
+                        this.integrationForm.bitrix_active = settings['bitrix_active']?.value || 'false';
+                        this.integrationForm.bitrix_active_value = this.integrationForm.bitrix_active === 'true';
+                    } catch (e) {
+                        this.integrationError = 'Ошибка загрузки настроек: ' + e.message;
+                    }
+                },
+
+                async saveIntegration() {
+                    this.integrationError = '';
+                    this.integrationSuccess = '';
+                    this.savingIntegration = true;
+
+                    try {
+                        const updates = {
+                            bitrix_webhook_url: this.integrationForm.bitrix_webhook_url || '',
+                            bitrix_active: this.integrationForm.bitrix_active_value ? 'true' : 'false'
+                        };
+
+                        await window.API.api('/api/settings?action=update', {
+                            method: 'POST',
+                            body: JSON.stringify(updates)
+                        });
+
+                        this.integrationSuccess = 'Настройки сохранены';
+                        setTimeout(() => this.integrationSuccess = '', 3000);
+
+                    } catch (e) {
+                        this.integrationError = e.message;
+                    } finally {
+                        this.savingIntegration = false;
+                    }
+                },
+
+                async regenerateSecret() {
+                    if (!confirm('Сгенерировать новый секретный ключ?\n\nВнимание: старый ключ перестанет работать. Не забудьте обновить его в Битрикс24.')) return;
+
+                    this.generatingSecret = true;
+                    this.integrationError = '';
+
+                    try {
+                        const data = await window.API.api('/api/settings?action=generate-secret', {
+                            method: 'POST',
+                            body: JSON.stringify({})
+                        });
+
+                        // Показываем секрет ОДИН РАЗ
+                        this.integrationForm.bitrix_secret_key = data.secret;
+                        
+                        this.integrationSuccess = 'Секретный ключ сгенерирован. Скопируйте его сейчас — больше не будет показан.';
+                        
+                        // Через 30 секунд маскируем
+                        setTimeout(() => {
+                            this.integrationForm.bitrix_secret_key = '•••••••••';
+                        }, 30000);
+
+                    } catch (e) {
+                        this.integrationError = e.message;
+                    } finally {
+                        this.generatingSecret = false;
+                    }
+                },
+
+                async testBitrix() {
+                    this.integrationError = '';
+                    this.integrationSuccess = '';
+                    this.testingBitrix = true;
+
+                    try {
+                        const data = await window.API.api('/api/settings?action=test-bitrix', {
+                            method: 'POST',
+                            body: JSON.stringify({})
+                        });
+
+                        this.integrationSuccess = data.message || 'Соединение установлено';
+                        setTimeout(() => this.integrationSuccess = '', 5000);
+
+                        await this.loadBitrixLog();
+
+                    } catch (e) {
+                        this.integrationError = e.message;
+                    } finally {
+                        this.testingBitrix = false;
+                    }
+                },
+
+                async loadBitrixLog() {
+                    try {
+                        const data = await window.API.api('/api/settings?action=bitrix-log&limit=50');
+                        this.bitrixLog = data.log || [];
+                    } catch (e) {
+                        console.error('Ошибка загрузки журнала:', e);
+                    }
+                },
+
+                copyWebhookUrl() {
+                    navigator.clipboard.writeText(this.webhookUrl).then(() => {
+                        this.integrationSuccess = 'URL скопирован в буфер обмена';
+                        setTimeout(() => this.integrationSuccess = '', 2000);
+                    }).catch(() => {
+                        alert('Не удалось скопировать. URL: ' + this.webhookUrl);
+                    });
+                },
+
+                formatDateTime(d) {
+                    if (!d) return '—';
+                    const date = new Date(d);
+                    return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) + ' ' + 
+                        date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
                 },
 
                 logout() {
