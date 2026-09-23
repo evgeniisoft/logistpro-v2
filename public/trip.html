@@ -224,6 +224,11 @@
                             <button class="btn btn-secondary btn-sm" disabled title="Будет добавлено на следующем этапе">
                                 + Из входящих
                             </button>
+                            <template x-if="orders.length > 0 && trip.status !== 'done' && trip.status !== 'cancelled'">
+                                <button class="btn btn-secondary btn-sm" @click="openMoveAllModal()" :disabled="reorderSaving">
+                                    Перенести все
+                                </button>
+                            </template>
                         </div>
                     </div>
                 
@@ -364,6 +369,15 @@
                                                             stroke-linejoin="round">
                                                             <line x1="12" y1="5" x2="12" y2="19"></line>
                                                             <polyline points="19 12 12 19 5 12"></polyline>
+                                                        </svg>
+                                                    </button>
+                                                    <button class="btn-action" @click="openMoveOrderModal(order)" title="Перенести в другой рейс">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                            <polyline points="5 9 2 12 5 15"></polyline>
+                                                            <polyline points="9 5 12 2 15 5"></polyline>
+                                                            <line x1="2" y1="12" x2="22" y2="12"></line>
+                                                            <polyline points="15 19 12 22 9 19"></polyline>
+                                                            <polyline points="19 15 22 12 19 9"></polyline>
                                                         </svg>
                                                     </button>
                                                     <button class="btn-action" @click="startEdit(order)" title="Редактировать">
@@ -720,6 +734,129 @@
                         </div>
                     </div>
                 </div>
+                <!-- МОДАЛКА: ПЕРЕНОС ОДНОГО ЗАКАЗА -->
+                <div x-show="moveOrderModal.open" x-cloak class="modal-backdrop" @click.self="closeMoveOrderModal()">
+                    <div class="modal-window" @click.stop>
+                        <div class="modal-header">
+                            <h2 class="modal-title">Перенести заказ</h2>
+                            <button class="modal-close" @click="closeMoveOrderModal()">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            <div x-show="moveOrderModal.error" class="alert alert-error" x-text="moveOrderModal.error"></div>
+
+                            <div x-show="moveOrderModal.order" style="padding:12px 14px;background:var(--bg-muted);border-radius:6px;margin-bottom:16px;">
+                                <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Переносимый заказ</div>
+                                <div style="font-size:13px;font-weight:500;" x-text="moveOrderModal.order?.address"></div>
+                                <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;" x-text="(moveOrderModal.order?.volume || 0) + ' м³ · ' + (moveOrderModal.order?.contact_name || '—')"></div>
+                            </div>
+
+                            <div x-show="moveOrderModal.overloadWarning" class="overload-warning" style="margin-bottom:16px;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px;">
+                                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                    <line x1="12" y1="9" x2="12" y2="13"></line>
+                                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                </svg>
+                                <div x-text="moveOrderModal.overloadWarning"></div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Куда перенести? *</label>
+                            </div>
+
+                            <div x-show="availableTrips.length === 0" class="trip-select-empty">
+                                Нет доступных рейсов для переноса
+                            </div>
+
+                            <div x-show="availableTrips.length > 0" class="trip-select-list">
+                                <template x-for="t in availableTrips" :key="t.id">
+                                    <div class="trip-select-item" :class="moveOrderModal.toTripId === t.id ? 'selected' : ''" @click="selectTargetTrip(t)">
+                                        <div class="trip-select-item-info">
+                                            <div class="trip-select-item-title" x-text="'Рейс ' + t.trip_number"></div>
+                                            <div class="trip-select-item-sub" x-text="formatDate(t.trip_date) + ' · ' + (t.vehicle_plate || '—') + ' · ' + (t.driver_name || '—')"></div>
+                                        </div>
+                                        <div class="trip-select-item-load">
+                                            <div x-text="(Number(t.total_volume) || 0) + ' / ' + (Number(t.vehicle_volume_at_time) || Number(t.vehicle_volume) || '?') + ' м³'"></div>
+                                            <div x-text="t.orders_count + ' адресов'"></div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-secondary" @click="closeMoveOrderModal()" :disabled="moveOrderModal.saving">Отмена</button>
+                            <button class="btn btn-primary" @click="submitMoveOrder()" :disabled="moveOrderModal.saving || !moveOrderModal.toTripId">
+                                <span x-show="!moveOrderModal.saving">Перенести</span>
+                                <span x-show="moveOrderModal.saving" x-cloak>Перенос...</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- МОДАЛКА: ПЕРЕНОС ВСЕХ ЗАКАЗОВ -->
+                <div x-show="moveAllModal.open" x-cloak class="modal-backdrop" @click.self="closeMoveAllModal()">
+                    <div class="modal-window" @click.stop>
+                        <div class="modal-header">
+                            <h2 class="modal-title">Перенести все заказы</h2>
+                            <button class="modal-close" @click="closeMoveAllModal()">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            <div x-show="moveAllModal.error" class="alert alert-error" x-text="moveAllModal.error"></div>
+
+                            <div style="padding:12px 14px;background:var(--bg-muted);border-radius:6px;margin-bottom:16px;">
+                                <div style="font-size:13px;">
+                                    Будет перенесено <strong x-text="orders.length"></strong> заказов 
+                                    (<strong x-text="totalVolume + ' м³'"></strong>) 
+                                    из рейса <strong x-text="trip.trip_number"></strong>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Причина переноса (необязательно)</label>
+                                <input type="text" class="form-input" x-model="moveAllModal.reason" placeholder="Например: поломка машины" :disabled="moveAllModal.saving">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Куда перенести? *</label>
+                            </div>
+
+                            <div x-show="availableTrips.length === 0" class="trip-select-empty">
+                                Нет доступных рейсов для переноса
+                            </div>
+
+                            <div x-show="availableTrips.length > 0" class="trip-select-list">
+                                <template x-for="t in availableTrips" :key="t.id">
+                                    <div class="trip-select-item" :class="moveAllModal.toTripId === t.id ? 'selected' : ''" @click="selectTargetTripAll(t)">
+                                        <div class="trip-select-item-info">
+                                            <div class="trip-select-item-title" x-text="'Рейс ' + t.trip_number"></div>
+                                            <div class="trip-select-item-sub" x-text="formatDate(t.trip_date) + ' · ' + (t.vehicle_plate || '—') + ' · ' + (t.driver_name || '—')"></div>
+                                        </div>
+                                        <div class="trip-select-item-load">
+                                            <div x-text="(Number(t.total_volume) || 0) + ' / ' + (Number(t.vehicle_volume_at_time) || Number(t.vehicle_volume) || '?') + ' м³'"></div>
+                                            <div x-text="t.orders_count + ' адресов'"></div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-secondary" @click="closeMoveAllModal()" :disabled="moveAllModal.saving">Отмена</button>
+                            <button class="btn btn-primary" @click="submitMoveAll()" :disabled="moveAllModal.saving || !moveAllModal.toTripId">
+                                <span x-show="!moveAllModal.saving">Перенести все</span>
+                                <span x-show="moveAllModal.saving" x-cloak>Перенос...</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
 
                 
             </div>
@@ -797,6 +934,12 @@
                 // Модалки
                 problemModal: { open: false, comment: '', saving: false, error: '' },
                 cancelModal: { open: false, reason: '', orders_action: 'return_to_incoming', saving: false, error: '' },
+                // Модалки переноса
+                moveOrderModal: { open: false, order: null, toTripId: null, saving: false, error: '', overloadWarning: '' },
+                moveAllModal: { open: false, toTripId: null, reason: '', saving: false, error: '' },
+
+                // Кеш списка рейсов для выбора
+                availableTrips: [],
 
                 // Затраты — inline редактирование
                 editingCostId: null,
@@ -872,6 +1015,10 @@
 
                 get totalCostsAll() {
                     return this.totalCostsManual + this.totalCostsAuto;
+                },
+
+                get otherTrips() {
+                    return this.availableTrips;
                 },
 
                 async init() {
@@ -1406,6 +1553,151 @@
 
                 printWaybill() {
                     window.print();
+                },
+
+                // ============ ПЕРЕНОС ОДНОГО ЗАКАЗА ============
+
+                async openMoveOrderModal(order) {
+                    this.moveOrderModal = {
+                        open: true,
+                        order: order,
+                        toTripId: null,
+                        saving: false,
+                        error: '',
+                        overloadWarning: ''
+                    };
+
+                    await this.loadAvailableTrips();
+                },
+
+                closeMoveOrderModal() {
+                    if (this.moveOrderModal.saving) return;
+                    this.moveOrderModal.open = false;
+                    this.moveOrderModal.order = null;
+                },
+
+                selectTargetTrip(trip) {
+                    this.moveOrderModal.toTripId = trip.id;
+                    
+                    // Проверка на перегруз
+                    const orderVolume = Number(this.moveOrderModal.order?.volume) || 0;
+                    const currentVolume = Number(trip.total_volume) || 0;
+                    const capacity = Number(trip.vehicle_volume_at_time) || Number(trip.vehicle_volume) || 0;
+                    const newVolume = currentVolume + orderVolume;
+                    
+                    if (capacity > 0 && newVolume > capacity) {
+                        this.moveOrderModal.overloadWarning = 
+                            'Превышение объёма: ' + newVolume.toFixed(1) + ' м³ из ' + capacity + ' м³. ' +
+                            'Рейс будет перегружен на ' + (newVolume - capacity).toFixed(1) + ' м³.';
+                    } else {
+                        this.moveOrderModal.overloadWarning = '';
+                    }
+                },
+
+                async submitMoveOrder() {
+                    if (!this.moveOrderModal.toTripId) {
+                        this.moveOrderModal.error = 'Выберите рейс';
+                        return;
+                    }
+
+                    this.moveOrderModal.saving = true;
+                    this.moveOrderModal.error = '';
+
+                    try {
+                        const result = await window.API.api('/api/orders?action=move&id=' + this.moveOrderModal.order.id, {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                to_trip_id: this.moveOrderModal.toTripId,
+                                reason: 'Перенос из карточки рейса'
+                            })
+                        });
+
+                        // Удаляем заказ из текущего списка
+                        this.orders = this.orders.filter(o => o.id !== this.moveOrderModal.order.id);
+
+                        // Закрываем модалку
+                        this.moveOrderModal.open = false;
+                        this.moveOrderModal.order = null;
+
+                    } catch (e) {
+                        this.moveOrderModal.error = e.message;
+                    } finally {
+                        this.moveOrderModal.saving = false;
+                    }
+                },
+
+                // ============ ПЕРЕНОС ВСЕХ ЗАКАЗОВ ============
+
+                async openMoveAllModal() {
+                    if (this.orders.length === 0) return;
+
+                    this.moveAllModal = {
+                        open: true,
+                        toTripId: null,
+                        reason: '',
+                        saving: false,
+                        error: ''
+                    };
+
+                    await this.loadAvailableTrips();
+                },
+
+                closeMoveAllModal() {
+                    if (this.moveAllModal.saving) return;
+                    this.moveAllModal.open = false;
+                },
+
+                selectTargetTripAll(trip) {
+                    this.moveAllModal.toTripId = trip.id;
+                },
+
+                async submitMoveAll() {
+                    if (!this.moveAllModal.toTripId) {
+                        this.moveAllModal.error = 'Выберите рейс';
+                        return;
+                    }
+
+                    if (!confirm('Перенести ВСЕ заказы (' + this.orders.length + ') в выбранный рейс?')) return;
+
+                    this.moveAllModal.saving = true;
+                    this.moveAllModal.error = '';
+
+                    try {
+                        const result = await window.API.api('/api/trips?action=move-all-orders&id=' + this.trip.id, {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                to_trip_id: this.moveAllModal.toTripId,
+                                reason: this.moveAllModal.reason || null
+                            })
+                        });
+
+                        this.orders = [];
+                        this.moveAllModal.open = false;
+
+                        alert(result.message || 'Заказы перенесены');
+
+                    } catch (e) {
+                        this.moveAllModal.error = e.message;
+                    } finally {
+                        this.moveAllModal.saving = false;
+                    }
+                },
+
+                // ============ ЗАГРУЗКА СПИСКА РЕЙСОВ ДЛЯ ПЕРЕНОСА ============
+
+                async loadAvailableTrips() {
+                    try {
+                        const data = await window.API.api('/api/trips');
+                        // Исключаем текущий рейс, завершённые и отменённые
+                        this.availableTrips = (data.trips || []).filter(t => 
+                            t.id !== this.trip.id && 
+                            t.status !== 'done' && 
+                            t.status !== 'cancelled'
+                        );
+                    } catch (e) {
+                        console.error('Ошибка загрузки рейсов:', e);
+                        this.availableTrips = [];
+                    }
                 },
 
                 goBack() {
