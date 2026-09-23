@@ -140,9 +140,21 @@
                         </div>
                     </div>
 
-                    <div class="form-row">
+                    <!-- Машина: свои / наёмная -->
+                    <div class="form-group">
+                        <label class="form-label">Машина *</label>
+                        <div class="type-switch">
+                            <button type="button" class="type-switch-btn" :class="tripModal.form.vehicle_mode === 'own' ? 'active' : ''" @click="setVehicleMode('own')">
+                                Своя (из справочника)
+                            </button>
+                            <button type="button" class="type-switch-btn" :class="tripModal.form.vehicle_mode === 'hired' ? 'active' : ''" @click="setVehicleMode('hired')">
+                                Наёмная
+                            </button>
+                        </div>
+                    </div>
+
+                    <template x-if="tripModal.form.vehicle_mode === 'own'">
                         <div class="form-group">
-                            <label class="form-label">Машина *</label>
                             <select class="form-input" x-model.number="tripModal.form.vehicle_id" @change="onVehicleChange()" :disabled="tripModal.saving">
                                 <option :value="null">— Выберите машину —</option>
                                 <template x-for="v in vehicles" :key="v.id">
@@ -150,8 +162,36 @@
                                 </template>
                             </select>
                         </div>
+                    </template>
+
+                    <template x-if="tripModal.form.vehicle_mode === 'hired'">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Марка / госномер *</label>
+                                <input type="text" class="form-input" x-model="tripModal.form.hired_vehicle_info" placeholder="Газель А123ВС" :disabled="tripModal.saving">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Объём, м³ *</label>
+                                <input type="number" class="form-input" x-model.number="tripModal.form.vehicle_volume" step="0.1" min="0" :disabled="tripModal.saving">
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- Водитель: свои / наёмный -->
+                    <div class="form-group">
+                        <label class="form-label">Водитель *</label>
+                        <div class="type-switch">
+                            <button type="button" class="type-switch-btn" :class="tripModal.form.driver_mode === 'own' ? 'active' : ''" @click="setDriverMode('own')">
+                                Свой (из справочника)
+                            </button>
+                            <button type="button" class="type-switch-btn" :class="tripModal.form.driver_mode === 'hired' ? 'active' : ''" @click="setDriverMode('hired')">
+                                Наёмный
+                            </button>
+                        </div>
+                    </div>
+
+                    <template x-if="tripModal.form.driver_mode === 'own'">
                         <div class="form-group">
-                            <label class="form-label">Водитель *</label>
                             <select class="form-input" x-model.number="tripModal.form.driver_id" @change="onDriverChange()" :disabled="tripModal.saving">
                                 <option :value="null">— Выберите водителя —</option>
                                 <template x-for="d in drivers" :key="d.id">
@@ -159,7 +199,20 @@
                                 </template>
                             </select>
                         </div>
-                    </div>
+                    </template>
+
+                    <template x-if="tripModal.form.driver_mode === 'hired'">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">ФИО водителя *</label>
+                                <input type="text" class="form-input" x-model="tripModal.form.hired_driver_info" placeholder="Петров П.П." :disabled="tripModal.saving">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Ставка за рейс, ₽</label>
+                                <input type="number" class="form-input" x-model.number="tripModal.form.driver_rate" min="0" :disabled="tripModal.saving">
+                            </div>
+                        </div>
+                    </template>
 
                     <div class="form-row">
                         <div class="form-group">
@@ -180,6 +233,13 @@
                             <input type="text" class="form-input" x-model="tripModal.form.comment" placeholder="Необязательно" :disabled="tripModal.saving">
                         </div>
                     </div>
+
+                    <template x-if="showRevenue">
+                        <div class="form-group">
+                            <label class="form-label">Выручка за рейс, ₽</label>
+                            <input type="number" class="form-input" x-model.number="tripModal.form.revenue" min="0" placeholder="Сколько клиент платит за рейс" :disabled="tripModal.saving">
+                        </div>
+                    </template>
                 </div>
 
                 <!-- Секция 2: Адреса доставки -->
@@ -277,6 +337,7 @@
                     error: '',
                     form: {}
                 },
+                showRevenue: false,
 
                 get userInitials() {
                     if (!this.user?.full_name) return '?';
@@ -289,6 +350,9 @@
                 },
 
                 get selectedVehicleVolume() {
+                    if (this.tripModal.form.vehicle_mode === 'hired') {
+                        return Number(this.tripModal.form.vehicle_volume) || 0;
+                    }
                     const v = this.vehicles.find(x => x.id === this.tripModal.form.vehicle_id);
                     return v ? Number(v.volume) : 0;
                 },
@@ -319,6 +383,17 @@
                     }
                     if (!window.AUTH.requireLogin()) return;
                     this.user = window.API.getUser();
+                    
+                    // Загружаем настройки (для show_revenue)
+                    try {
+                        const settings = await window.API.api('/api/settings');
+                        const showRevenueSetting = (settings.settings || []).find(s => s.key === 'show_revenue');
+                        this.showRevenue = showRevenueSetting?.value === 'true';
+                    } catch (e) {
+                        console.error('Ошибка загрузки настроек:', e);
+                        this.showRevenue = false;
+                    }
+                    
                     await this.loadData();
                 },
 
@@ -407,15 +482,6 @@
                 // ============ МОДАЛКА СОЗДАНИЯ ============
 
                 openTripModal() {
-                    if (this.vehicles.length === 0) {
-                        alert('Сначала добавьте машину в справочниках');
-                        return;
-                    }
-                    if (this.drivers.length === 0) {
-                        alert('Сначала добавьте водителя в справочниках');
-                        return;
-                    }
-
                     this.tripModal = {
                         open: true,
                         saving: false,
@@ -423,10 +489,22 @@
                         form: {
                             trip_date: new Date().toISOString().slice(0, 10),
                             trip_type: 'city',
+                            
+                            // Режим машины: own / hired
+                            vehicle_mode: 'own',
                             vehicle_id: null,
+                            hired_vehicle_info: '',
+                            vehicle_volume: 0,
+                            
+                            // Режим водителя: own / hired
+                            driver_mode: 'own',
                             driver_id: null,
+                            hired_driver_info: '',
+                            driver_rate: 0,
+                            
                             route_id: null,
                             plan_km: 100,
+                            revenue: 0,
                             comment: '',
                             addresses: [this.emptyAddress()]
                         }
@@ -457,12 +535,33 @@
                     this.tripModal.form.addresses.splice(index, 1);
                 },
 
+                setVehicleMode(mode) {
+                    this.tripModal.form.vehicle_mode = mode;
+                    // Сбрасываем противоположное
+                    if (mode === 'own') {
+                        this.tripModal.form.hired_vehicle_info = '';
+                        this.tripModal.form.vehicle_volume = 0;
+                    } else {
+                        this.tripModal.form.vehicle_id = null;
+                    }
+                },
+
+                setDriverMode(mode) {
+                    this.tripModal.form.driver_mode = mode;
+                    if (mode === 'own') {
+                        this.tripModal.form.hired_driver_info = '';
+                        this.tripModal.form.driver_rate = 0;
+                    } else {
+                        this.tripModal.form.driver_id = null;
+                    }
+                },
+
                 onVehicleChange() {
-                    // Можно добавить логику при смене машины
+                    // Ничего — геттер selectedVehicleVolume сам подтянет объём
                 },
 
                 onDriverChange() {
-                    // Можно добавить логику при смене водителя
+                    // Ничего
                 },
 
                 async saveTrip() {
@@ -471,8 +570,30 @@
 
                     // Валидация
                     if (!form.trip_date) { this.tripModal.error = 'Укажите дату рейса'; return; }
-                    if (!form.vehicle_id) { this.tripModal.error = 'Выберите машину'; return; }
-                    if (!form.driver_id) { this.tripModal.error = 'Выберите водителя'; return; }
+                    
+                    // Машина
+                    if (form.vehicle_mode === 'own' && !form.vehicle_id) {
+                        this.tripModal.error = 'Выберите машину';
+                        return;
+                    }
+                    if (form.vehicle_mode === 'hired' && (!form.hired_vehicle_info || !form.hired_vehicle_info.trim())) {
+                        this.tripModal.error = 'Укажите марку/госномер наёмной машины';
+                        return;
+                    }
+                    if (form.vehicle_mode === 'hired' && !form.vehicle_volume) {
+                        this.tripModal.error = 'Укажите объём наёмной машины';
+                        return;
+                    }
+
+                    // Водитель
+                    if (form.driver_mode === 'own' && !form.driver_id) {
+                        this.tripModal.error = 'Выберите водителя';
+                        return;
+                    }
+                    if (form.driver_mode === 'hired' && (!form.hired_driver_info || !form.hired_driver_info.trim())) {
+                        this.tripModal.error = 'Укажите ФИО наёмного водителя';
+                        return;
+                    }
 
                     const validAddresses = form.addresses.filter(a => a.address && a.address.trim());
                     if (validAddresses.length === 0) {
@@ -483,25 +604,42 @@
                     this.tripModal.saving = true;
 
                     try {
+                        const payload = {
+                            trip_date: form.trip_date,
+                            trip_type: form.trip_type,
+                            route_id: form.route_id || null,
+                            plan_km: form.plan_km || 0,
+                            revenue: form.revenue || 0,
+                            comment: form.comment || null,
+                            addresses: validAddresses.map(a => ({
+                                external_id: a.external_id || null,
+                                address: a.address,
+                                contact_name: a.contact_name || null,
+                                phone: a.phone || null,
+                                volume: Number(a.volume) || 0,
+                                note: a.note || null
+                            }))
+                        };
+
+                        // Машина
+                        if (form.vehicle_mode === 'own') {
+                            payload.vehicle_id = form.vehicle_id;
+                        } else {
+                            payload.hired_vehicle_info = form.hired_vehicle_info.trim();
+                            payload.vehicle_volume = form.vehicle_volume;
+                        }
+
+                        // Водитель
+                        if (form.driver_mode === 'own') {
+                            payload.driver_id = form.driver_id;
+                        } else {
+                            payload.hired_driver_info = form.hired_driver_info.trim();
+                            payload.driver_rate = form.driver_rate || 0;
+                        }
+
                         await window.API.api('/api/trips', {
                             method: 'POST',
-                            body: JSON.stringify({
-                                trip_date: form.trip_date,
-                                trip_type: form.trip_type,
-                                vehicle_id: form.vehicle_id,
-                                driver_id: form.driver_id,
-                                route_id: form.route_id || null,
-                                plan_km: form.plan_km || 0,
-                                comment: form.comment || null,
-                                addresses: validAddresses.map(a => ({
-                                    external_id: a.external_id || null,
-                                    address: a.address,
-                                    contact_name: a.contact_name || null,
-                                    phone: a.phone || null,
-                                    volume: Number(a.volume) || 0,
-                                    note: a.note || null
-                                }))
-                            })
+                            body: JSON.stringify(payload)
                         });
 
                         this.tripModal.open = false;
