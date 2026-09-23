@@ -492,6 +492,8 @@
                 chartCosts: null,
                 chartMonthsFull: null,
                 chartCostsFull: null,
+                _chartsRendering: false,
+                _chartsRenderTimer: null,
 
                 get userInitials() {
                     if (!this.user?.full_name) return '?';
@@ -643,11 +645,8 @@
                         this.byRoutes = byRoutes.data || [];
                         this.costsBreakdown = costsBreakdown.data || [];
 
-                        // Уничтожаем старые диаграммы
-                        this.destroyCharts();
-
-                        // Рисуем новые после того, как данные отрендерены
-                        setTimeout(() => this.renderCharts(), 300);
+                        // Рисуем графики (дебаунс внутри метода)
+                        this.$nextTick(() => this.renderCharts());
 
                     } catch (e) {
                         this.error = e.message;
@@ -657,11 +656,9 @@
                 },
 
                 switchTab(tab) {
-                    // Уничтожаем все диаграммы при переключении
                     this.destroyCharts();
                     this.tab = tab;
-                    // Рисуем новые только после того, как DOM обновится
-                    setTimeout(() => this.renderCharts(), 300);
+                    this.$nextTick(() => this.renderCharts());
                 },
 
                 destroyCharts() {
@@ -690,20 +687,35 @@
                 },
 
                 renderCharts() {
-                    // Сначала уничтожаем ВСЕ старые диаграммы
-                    if (this.chartMonthly) { try { this.chartMonthly.destroy(); } catch(e) {} this.chartMonthly = null; }
-                    if (this.chartCosts) { try { this.chartCosts.destroy(); } catch(e) {} this.chartCosts = null; }
-                    if (this.chartMonthsFull) { try { this.chartMonthsFull.destroy(); } catch(e) {} this.chartMonthsFull = null; }
-                    if (this.chartCostsFull) { try { this.chartCostsFull.destroy(); } catch(e) {} this.chartCostsFull = null; }
-
-                    // Рисуем ТОЛЬКО для активной вкладки
-                    if (this.tab === 'dashboard') {
-                        this.renderDashboardCharts();
-                    } else if (this.tab === 'months') {
-                        this.renderMonthsCharts();
-                    } else if (this.tab === 'costs') {
-                        this.renderCostsCharts();
+                    // Отменяем предыдущий таймер, если был
+                    if (this._chartsRenderTimer) {
+                        clearTimeout(this._chartsRenderTimer);
+                        this._chartsRenderTimer = null;
                     }
+
+                    // Защита от двойного вызова
+                    if (this._chartsRendering) {
+                        return;
+                    }
+
+                    this._chartsRendering = true;
+                    
+                    this._chartsRenderTimer = setTimeout(() => {
+                        this._chartsRendering = false;
+                        this._chartsRenderTimer = null;
+                        
+                        // Уничтожаем ВСЕ старые диаграммы
+                        this.destroyCharts();
+                        
+                        // Рисуем только для активной вкладки
+                        if (this.tab === 'dashboard') {
+                            this.renderDashboardCharts();
+                        } else if (this.tab === 'months') {
+                            this.renderMonthsCharts();
+                        } else if (this.tab === 'costs') {
+                            this.renderCostsCharts();
+                        }
+                    }, 150);
                 },
 
                 renderDashboardCharts() {
