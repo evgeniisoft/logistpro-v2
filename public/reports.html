@@ -768,8 +768,13 @@
                         this.loading = false;
                     }
 
-                    // Рисуем графики после того, как DOM отрисовался (loading = false)
-                    setTimeout(() => this.renderCharts(), 300);
+                    // Рисуем графики после того, как контейнер стал видимым
+                    // Ждём 2 кадра анимации + запас
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            setTimeout(() => this.renderCharts(), 100);
+                        });
+                    });
                 },
 
                 switchTab(tab) {
@@ -815,6 +820,24 @@
                         this._chartsRenderTimer = null;
                         this.destroyCharts();
 
+                        // Проверяем, что целевой canvas виден и имеет размер
+                        const targetCanvas = this.tab === 'dashboard' 
+                            ? document.getElementById('chartMonthly')
+                            : this.tab === 'months'
+                            ? document.getElementById('chartMonthsFull')
+                            : this.tab === 'costs'
+                            ? document.getElementById('chartCostsFull')
+                            : null;
+
+                        if (!targetCanvas) return;
+                        
+                        const rect = targetCanvas.getBoundingClientRect();
+                        if (rect.width === 0 || rect.height === 0) {
+                            // Контейнер ещё не отрисован — ждём ещё
+                            setTimeout(() => this.renderCharts(), 200);
+                            return;
+                        }
+
                         if (this.tab === 'dashboard') {
                             this.renderDashboardCharts();
                         } else if (this.tab === 'months') {
@@ -822,7 +845,7 @@
                         } else if (this.tab === 'costs') {
                             this.renderCostsCharts();
                         }
-                    }, 100);
+                    }, 150);
                 },
 
                 renderDashboardCharts() {
