@@ -76,7 +76,6 @@
 
                 <!-- Информация о рейсе -->
                 <div class="info-card">
-                    <!-- Режим просмотра / редактирования -->
                     <template x-if="!editingTrip">
                         <div>
                             <div class="info-grid">
@@ -88,16 +87,53 @@
                                     <div class="info-item-label">Тип рейса</div>
                                     <div class="info-item-value" x-text="trip.trip_type === 'city' ? 'Городской' : 'Междугородний'"></div>
                                 </div>
+                                
+                                <!-- Машина -->
                                 <div class="info-item">
                                     <div class="info-item-label">Машина</div>
-                                    <div class="info-item-value" x-text="trip.vehicle_plate || '—'"></div>
-                                    <div class="info-item-sub" x-text="trip.vehicle_model || ''"></div>
+                                    <template x-if="trip.hired_vehicle_info">
+                                        <div>
+                                            <div class="info-item-value">
+                                                <span x-text="trip.hired_vehicle_info"></span>
+                                                <span class="type-badge type-badge-hired">Наёмная</span>
+                                            </div>
+                                            <div class="info-item-sub" x-text="(trip.vehicle_volume_at_time || '?') + ' м³'"></div>
+                                        </div>
+                                    </template>
+                                    <template x-if="!trip.hired_vehicle_info">
+                                        <div>
+                                            <div class="info-item-value">
+                                                <span x-text="trip.vehicle_plate || '—'"></span>
+                                                <span class="type-badge type-badge-own">Своя</span>
+                                            </div>
+                                            <div class="info-item-sub" x-text="trip.vehicle_model || ''"></div>
+                                        </div>
+                                    </template>
                                 </div>
+                                
+                                <!-- Водитель -->
                                 <div class="info-item">
                                     <div class="info-item-label">Водитель</div>
-                                    <div class="info-item-value" x-text="trip.driver_name || '—'"></div>
-                                    <div class="info-item-sub" x-text="trip.driver_rate_at_time ? formatMoney(trip.driver_rate_at_time) : ''"></div>
+                                    <template x-if="trip.hired_driver_info">
+                                        <div>
+                                            <div class="info-item-value">
+                                                <span x-text="trip.hired_driver_info"></span>
+                                                <span class="type-badge type-badge-hired">Наёмный</span>
+                                            </div>
+                                            <div class="info-item-sub" x-text="trip.driver_rate_at_time ? formatMoney(trip.driver_rate_at_time) : ''"></div>
+                                        </div>
+                                    </template>
+                                    <template x-if="!trip.hired_driver_info">
+                                        <div>
+                                            <div class="info-item-value">
+                                                <span x-text="trip.driver_name || '—'"></span>
+                                                <span class="type-badge type-badge-own">Свой</span>
+                                            </div>
+                                            <div class="info-item-sub" x-text="trip.driver_rate_at_time ? formatMoney(trip.driver_rate_at_time) : ''"></div>
+                                        </div>
+                                    </template>
                                 </div>
+
                                 <div class="info-item">
                                     <div class="info-item-label">Пробег план</div>
                                     <div class="info-item-value" x-text="(trip.plan_km || 0) + ' км'"></div>
@@ -110,11 +146,14 @@
                                     <div class="info-item-label">Ставка за рейс</div>
                                     <div class="info-item-value" x-text="formatMoney(trip.driver_rate_at_time)"></div>
                                 </div>
-                                <div class="info-item">
+                                
+                                <!-- Выручка — только если включена -->
+                                <div class="info-item" x-show="showRevenue">
                                     <div class="info-item-label">Выручка</div>
                                     <div class="info-item-value" x-text="formatMoney(trip.revenue)"></div>
                                 </div>
                             </div>
+
                             <div x-show="trip.comment" style="margin-top:20px;padding-top:20px;border-top:1px solid var(--border-light);">
                                 <div class="info-item-label">Комментарий</div>
                                 <div style="font-size:13px;color:var(--text-primary);margin-top:4px;" x-text="trip.comment"></div>
@@ -146,24 +185,81 @@
                                     </select>
                                 </div>
                             </div>
-                            <div class="form-row">
+
+                            <!-- Машина -->
+                            <div class="form-group">
+                                <label class="form-label">Машина</label>
+                                <div class="type-switch">
+                                    <button type="button" class="type-switch-btn" :class="editTripForm.vehicle_mode === 'own' ? 'active' : ''" @click="setEditVehicleMode('own')">
+                                        Своя
+                                    </button>
+                                    <button type="button" class="type-switch-btn" :class="editTripForm.vehicle_mode === 'hired' ? 'active' : ''" @click="setEditVehicleMode('hired')">
+                                        Наёмная
+                                    </button>
+                                </div>
+                            </div>
+
+                            <template x-if="editTripForm.vehicle_mode === 'own'">
                                 <div class="form-group">
-                                    <label class="form-label">Машина</label>
                                     <select class="form-input" x-model.number="editTripForm.vehicle_id">
+                                        <option :value="null">— Выберите машину —</option>
                                         <template x-for="v in vehicles" :key="v.id">
                                             <option :value="v.id" x-text="v.plate + ' · ' + (v.model || '') + ' · ' + (v.volume || '?') + ' м³'"></option>
                                         </template>
                                     </select>
                                 </div>
+                            </template>
+
+                            <template x-if="editTripForm.vehicle_mode === 'hired'">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label class="form-label">Марка / госномер</label>
+                                        <input type="text" class="form-input" x-model="editTripForm.hired_vehicle_info" placeholder="Газель А123ВС">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Объём, м³</label>
+                                        <input type="number" class="form-input" x-model.number="editTripForm.vehicle_volume" step="0.1" min="0">
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- Водитель -->
+                            <div class="form-group">
+                                <label class="form-label">Водитель</label>
+                                <div class="type-switch">
+                                    <button type="button" class="type-switch-btn" :class="editTripForm.driver_mode === 'own' ? 'active' : ''" @click="setEditDriverMode('own')">
+                                        Свой
+                                    </button>
+                                    <button type="button" class="type-switch-btn" :class="editTripForm.driver_mode === 'hired' ? 'active' : ''" @click="setEditDriverMode('hired')">
+                                        Наёмный
+                                    </button>
+                                </div>
+                            </div>
+
+                            <template x-if="editTripForm.driver_mode === 'own'">
                                 <div class="form-group">
-                                    <label class="form-label">Водитель</label>
                                     <select class="form-input" x-model.number="editTripForm.driver_id">
+                                        <option :value="null">— Выберите водителя —</option>
                                         <template x-for="d in drivers" :key="d.id">
                                             <option :value="d.id" x-text="d.full_name + ' · ' + (d.default_rate || 0) + ' ₽'"></option>
                                         </template>
                                     </select>
                                 </div>
-                            </div>
+                            </template>
+
+                            <template x-if="editTripForm.driver_mode === 'hired'">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label class="form-label">ФИО водителя</label>
+                                        <input type="text" class="form-input" x-model="editTripForm.hired_driver_info" placeholder="Петров П.П.">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Ставка, ₽</label>
+                                        <input type="number" class="form-input" x-model.number="editTripForm.driver_rate_at_time" min="0">
+                                    </div>
+                                </div>
+                            </template>
+
                             <div class="form-row">
                                 <div class="form-group">
                                     <label class="form-label">Пробег план, км</label>
@@ -173,15 +269,20 @@
                                     <label class="form-label">Пробег факт, км</label>
                                     <input type="number" class="form-input" x-model.number="editTripForm.fact_km" min="0">
                                 </div>
-                                <div class="form-group">
-                                    <label class="form-label">Ставка за рейс, ₽</label>
-                                    <input type="number" class="form-input" x-model.number="editTripForm.driver_rate_at_time" min="0">
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Выручка, ₽</label>
-                                    <input type="number" class="form-input" x-model.number="editTripForm.revenue" min="0">
-                                </div>
+                                <template x-if="editTripForm.driver_mode === 'own'">
+                                    <div class="form-group">
+                                        <label class="form-label">Ставка за рейс, ₽</label>
+                                        <input type="number" class="form-input" x-model.number="editTripForm.driver_rate_at_time" min="0">
+                                    </div>
+                                </template>
+                                <template x-if="showRevenue">
+                                    <div class="form-group">
+                                        <label class="form-label">Выручка, ₽</label>
+                                        <input type="number" class="form-input" x-model.number="editTripForm.revenue" min="0">
+                                    </div>
+                                </template>
                             </div>
+
                             <div class="form-group">
                                 <label class="form-label">Комментарий</label>
                                 <input type="text" class="form-input" x-model="editTripForm.comment" placeholder="Необязательно">
@@ -930,6 +1031,7 @@
                 editingTrip: false,
                 editTripForm: {},
                 savingTrip: false,
+                showRevenue: false,
 
                 // Модалки
                 problemModal: { open: false, comment: '', saving: false, error: '' },
@@ -1028,6 +1130,15 @@
                     }
                     if (!window.AUTH.requireLogin()) return;
                     this.user = window.API.getUser();
+
+                    // Загружаем настройки
+                    try {
+                        const settings = await window.API.api('/api/settings');
+                        const setting = (settings.settings || []).find(s => s.key === 'show_revenue');
+                        this.showRevenue = setting?.value === 'true';
+                    } catch (e) {
+                        this.showRevenue = false;
+                    }
 
                     const params = new URLSearchParams(window.location.search);
                     const tripId = params.get('id');
@@ -1404,8 +1515,16 @@
                     this.editTripForm = {
                         trip_date: this.trip.trip_date ? this.trip.trip_date.substring(0, 10) : '',
                         trip_type: this.trip.trip_type,
+                        
+                        vehicle_mode: this.trip.hired_vehicle_info ? 'hired' : 'own',
                         vehicle_id: this.trip.vehicle_id,
+                        hired_vehicle_info: this.trip.hired_vehicle_info || '',
+                        vehicle_volume: Number(this.trip.vehicle_volume_at_time) || 0,
+                        
+                        driver_mode: this.trip.hired_driver_info ? 'hired' : 'own',
                         driver_id: this.trip.driver_id,
+                        hired_driver_info: this.trip.hired_driver_info || '',
+                        
                         route_id: this.trip.route_id || null,
                         plan_km: Number(this.trip.plan_km) || 0,
                         fact_km: Number(this.trip.fact_km) || 0,
@@ -1413,6 +1532,24 @@
                         revenue: Number(this.trip.revenue) || 0,
                         comment: this.trip.comment || ''
                     };
+                },
+
+                setEditVehicleMode(mode) {
+                    this.editTripForm.vehicle_mode = mode;
+                    if (mode === 'own') {
+                        this.editTripForm.hired_vehicle_info = '';
+                    } else {
+                        this.editTripForm.vehicle_id = null;
+                    }
+                },
+
+                setEditDriverMode(mode) {
+                    this.editTripForm.driver_mode = mode;
+                    if (mode === 'own') {
+                        this.editTripForm.hired_driver_info = '';
+                    } else {
+                        this.editTripForm.driver_id = null;
+                    }
                 },
 
                 cancelEditTrip() {
@@ -1426,25 +1563,42 @@
                         return;
                     }
 
+                    const form = this.editTripForm;
+                    const payload = {
+                        trip_date: form.trip_date,
+                        trip_type: form.trip_type,
+                        route_id: form.route_id,
+                        plan_km: form.plan_km,
+                        fact_km: form.fact_km,
+                        driver_rate_at_time: form.driver_rate_at_time,
+                        revenue: form.revenue,
+                        comment: form.comment || null
+                    };
+
+                    // Машина
+                    if (form.vehicle_mode === 'own') {
+                        payload.vehicle_id = form.vehicle_id;
+                    } else {
+                        payload.vehicle_id = null;
+                        payload.hired_vehicle_info = form.hired_vehicle_info;
+                        payload.vehicle_volume_at_time = form.vehicle_volume;
+                    }
+
+                    // Водитель
+                    if (form.driver_mode === 'own') {
+                        payload.driver_id = form.driver_id;
+                    } else {
+                        payload.driver_id = null;
+                        payload.hired_driver_info = form.hired_driver_info;
+                    }
+
                     this.savingTrip = true;
                     try {
-                        const data = await window.API.api('/api/trips?action=update&id=' + this.trip.id, {
+                        await window.API.api('/api/trips?action=update&id=' + this.trip.id, {
                             method: 'PUT',
-                            body: JSON.stringify({
-                                trip_date: this.editTripForm.trip_date,
-                                trip_type: this.editTripForm.trip_type,
-                                vehicle_id: this.editTripForm.vehicle_id,
-                                driver_id: this.editTripForm.driver_id,
-                                route_id: this.editTripForm.route_id,
-                                plan_km: this.editTripForm.plan_km,
-                                fact_km: this.editTripForm.fact_km,
-                                driver_rate_at_time: this.editTripForm.driver_rate_at_time,
-                                revenue: this.editTripForm.revenue,
-                                comment: this.editTripForm.comment || null
-                            })
+                            body: JSON.stringify(payload)
                         });
 
-                        // Перезагружаем данные рейса
                         await this.loadTrip(this.trip.id);
                         this.editingTrip = false;
                         this.editTripForm = {};
