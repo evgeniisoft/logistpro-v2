@@ -434,8 +434,11 @@
                                 </thead>
                                 <tbody>
                                     <template x-for="c in costsBreakdown" :key="c.category">
-                                        <tr>
-                                            <td class="col-name" x-text="categoryLabel(c.category)"></td>
+                                        <tr class="costs-breakdown-row" @click="openCostDetail(c)">
+                                            <td class="col-name">
+                                                <span x-text="categoryLabel(c.category)"></span>
+                                                <span class="expand-icon">▸</span>
+                                            </td>
                                             <td x-text="c.count"></td>
                                             <td class="col-money" x-text="formatMoney(c.total)"></td>
                                         </tr>
@@ -453,6 +456,66 @@
                 </div>
             </div>
 
+        </div>
+        <!-- МОДАЛКА: ДЕТАЛИЗАЦИЯ ЗАТРАТ -->
+        <div x-show="costDetailModal.open" x-cloak class="modal-backdrop" @click.self="closeCostDetail()">
+            <div class="modal-window modal-window-wide" @click.stop>
+                <div class="modal-header">
+                    <h2 class="modal-title">
+                        <span x-text="costDetailModal.category ? categoryLabel(costDetailModal.category) : ''"></span>
+                        <span style="font-weight:400;color:var(--text-secondary);font-size:13px;margin-left:8px;" 
+                            x-text="costDetailModal.items ? '(' + costDetailModal.items.length + ' записей)' : ''"></span>
+                    </h2>
+                    <button class="modal-close" @click="closeCostDetail()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="modal-body">
+                    <template x-if="costDetailModal.items && costDetailModal.items.length > 0">
+                        <div>
+                            <div class="costs-detail-list">
+                                <div class="costs-detail-header">
+                                    <div>Рейс</div>
+                                    <div>Дата</div>
+                                    <div>Машина</div>
+                                    <div>Водитель</div>
+                                    <div style="text-align:right;">Сумма</div>
+                                </div>
+                                <template x-for="(item, idx) in costDetailModal.items" :key="idx">
+                                    <div class="costs-detail-row">
+                                        <div class="costs-detail-trip" @click="goToTrip(item.trip_id)" x-text="item.trip_number"></div>
+                                        <div class="costs-detail-date" x-text="formatShortDate(item.trip_date)"></div>
+                                        <div class="costs-detail-vehicle" :title="item.vehicle_label" x-text="item.vehicle_label"></div>
+                                        <div class="costs-detail-driver" :title="item.driver_label" x-text="item.driver_label"></div>
+                                        <div class="costs-detail-amount" x-text="formatMoney(item.amount)"></div>
+                                        <template x-if="item.note">
+                                            <div class="costs-detail-note" x-text="item.note"></div>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <div class="costs-detail-summary">
+                                <div class="costs-detail-summary-label">Итого по статье</div>
+                                <div class="costs-detail-summary-total" x-text="formatMoney(costDetailModal.total)"></div>
+                            </div>
+                        </div>
+                    </template>
+
+                    <div x-show="!costDetailModal.items || costDetailModal.items.length === 0" 
+                        style="padding:40px;text-align:center;color:var(--text-secondary);font-size:13px;">
+                        Нет данных
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @click="closeCostDetail()">Закрыть</button>
+                </div>
+            </div>
         </div>
     </main>
 
@@ -494,6 +557,12 @@
                 chartCostsFull: null,
                 _chartsRendering: false,
                 _chartsRenderTimer: null,
+                costDetailModal: {
+                    open: false,
+                    category: '',
+                    items: [],
+                    total: 0
+                },
 
                 get userInitials() {
                     if (!this.user?.full_name) return '?';
@@ -927,6 +996,32 @@
                 formatNumber(v) {
                     if (!v && v !== 0) return '—';
                     return Number(v).toLocaleString('ru-RU', { maximumFractionDigits: 0 });
+                },
+
+
+                openCostDetail(categoryData) {
+                    this.costDetailModal = {
+                        open: true,
+                        category: categoryData.category,
+                        items: categoryData.items || [],
+                        total: categoryData.total || 0
+                    };
+                },
+
+                closeCostDetail() {
+                    this.costDetailModal.open = false;
+                    this.costDetailModal.items = [];
+                },
+
+                goToTrip(tripId) {
+                    if (!tripId) return;
+                    window.open('/trip.html?id=' + tripId, '_blank');
+                },
+
+                formatShortDate(d) {
+                    if (!d) return '—';
+                    const date = new Date(d);
+                    return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' });
                 },
 
                 logout() {
