@@ -131,7 +131,7 @@
             <div x-show="loading" class="skeleton" style="height:400px;"></div>
 
             <!-- ============ ДАШБОРД ============ -->
-            <div x-show="!loading && tab === 'dashboard'" x-cloak>
+            <div x-show="tab === 'dashboard'" x-cloak>
                 <!-- KPI -->
                 <div class="kpi-grid" :class="!showRevenue ? 'kpi-grid-2' : ''">
                     <div class="kpi-card">
@@ -643,8 +643,11 @@
                         this.byRoutes = byRoutes.data || [];
                         this.costsBreakdown = costsBreakdown.data || [];
 
-                        // Рисуем графики с небольшой задержкой, чтобы DOM успел обновиться
-                        setTimeout(() => this.renderCharts(), 50);
+                        // Уничтожаем старые диаграммы
+                        this.destroyCharts();
+
+                        // Рисуем новые после того, как данные отрендерены
+                        setTimeout(() => this.renderCharts(), 300);
 
                     } catch (e) {
                         this.error = e.message;
@@ -654,8 +657,18 @@
                 },
 
                 switchTab(tab) {
+                    // Уничтожаем все диаграммы при переключении
+                    this.destroyCharts();
                     this.tab = tab;
-                    setTimeout(() => this.renderCharts(), 50);
+                    // Рисуем новые только после того, как DOM обновится
+                    setTimeout(() => this.renderCharts(), 300);
+                },
+
+                destroyCharts() {
+                    if (this.chartMonthly) { try { this.chartMonthly.destroy(); } catch(e) {} this.chartMonthly = null; }
+                    if (this.chartCosts) { try { this.chartCosts.destroy(); } catch(e) {} this.chartCosts = null; }
+                    if (this.chartMonthsFull) { try { this.chartMonthsFull.destroy(); } catch(e) {} this.chartMonthsFull = null; }
+                    if (this.chartCostsFull) { try { this.chartCostsFull.destroy(); } catch(e) {} this.chartCostsFull = null; }
                 },
 
                 sortBy(collection, field) {
