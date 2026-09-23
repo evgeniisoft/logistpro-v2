@@ -70,6 +70,52 @@
 
             <div x-show="loading" class="skeleton" style="height:400px;"></div>
 
+            <!-- Панель поиска -->
+            <div x-show="!loading" class="board-toolbar">
+                <div class="board-search">
+                    <svg class="board-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input 
+                        type="text" 
+                        class="board-search-input" 
+                        placeholder="Поиск: рейс, заказ, адрес, телефон, контакт, машина, водитель..."
+                        x-model="searchQuery"
+                        @keydown.escape="searchQuery = ''"
+                    >
+                    <button 
+                        x-show="searchQuery.length > 0" 
+                        class="board-search-clear" 
+                        @click="searchQuery = ''"
+                        title="Очистить поиск"
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="board-search-hint">
+                    <template x-if="searchQuery.trim().length < 2">
+                        <span>Всего рейсов: <strong x-text="trips.length"></strong></span>
+                    </template>
+                    <template x-if="searchQuery.trim().length >= 2">
+                        <span>
+                            <template x-if="filteredTrips.length > 0">
+                                <span>Найдено: <strong x-text="filteredTrips.length"></strong> из <span x-text="trips.length"></span></span>
+                            </template>
+                            <template x-if="filteredTrips.length === 0">
+                                <span class="no-results">Ничего не найдено</span>
+                            </template>
+                            <template x-if="isPhoneSearch">
+                                <span class="phone-hint">тел.</span>
+                            </template>
+                        </span>
+                    </template>
+                </div>
+            </div>
+
             <div x-show="!loading" class="board">
                 <template x-for="col in columns" :key="col.status">
                     <div class="board-column" :class="dragOverStatus === col.status ? 'drag-over' : ''"
@@ -80,7 +126,7 @@
                             <span x-text="col.title"></span>
                             <span class="board-column-count" x-text="tripsByStatus(col.status).length"></span>
                         </div>
-                        <template x-for="t in tripsByStatus(col.status)" :key="t.id">
+                        <template x-for="t in filteredTripsByStatus(col.status)" :key="t.id">
                             <div class="trip-card"
                                 :class="draggedTripId === t.id ? 'dragging' : ''"
                                 draggable="true"
@@ -125,7 +171,7 @@
                                     <span x-text="tripDriverLabel(t)"></span>
                                 </div>
 
-                                <!-- Маршрут с точками -->
+                                <!-- Маршрут из адресов -->
                                 <template x-if="tripRoutePreview(t)">
                                     <div class="trip-card-route" x-text="tripRoutePreview(t)"></div>
                                 </template>
@@ -148,8 +194,9 @@
                                 </div>
                             </div>
                         </template>
-                        <div x-show="tripsByStatus(col.status).length === 0" style="padding:20px;text-align:center;font-size:12px;color:var(--text-muted);">
-                            Нет рейсов
+                        <div x-show="filteredTripsByStatus(col.status).length === 0" style="padding:20px;text-align:center;font-size:12px;color:var(--text-muted);">
+                            <span x-show="searchQuery.trim().length >= 2">Нет совпадений</span>
+                            <span x-show="searchQuery.trim().length < 2">Нет рейсов</span>
                         </div>
                     </div>
                 </template>
@@ -372,6 +419,8 @@
                 loading: true,
                 error: '',
                 showRevenue: false,
+                orders: [],          // ← все заказы для поиска
+                searchQuery: '',     // ← поисковый запрос
 
                 draggedTripId: null,
                 dragOverStatus: null,
@@ -451,16 +500,18 @@
                     this.loading = true;
                     this.error = '';
                     try {
-                        const [trips, vehicles, drivers, routes] = await Promise.all([
+                        const [trips, vehicles, drivers, routes, orders] = await Promise.all([
                             window.API.api('/api/trips'),
                             window.API.api('/api/vehicles'),
                             window.API.api('/api/drivers'),
-                            window.API.api('/api/routes')
+                            window.API.api('/api/routes'),
+                            window.API.api('/api/orders?action=all')
                         ]);
                         this.trips = trips.trips || [];
                         this.vehicles = vehicles.vehicles || [];
                         this.drivers = drivers.drivers || [];
                         this.routes = routes.routes || [];
+                        this.orders = orders.orders || [];
                     } catch (e) {
                         this.error = e.message;
                     } finally {
@@ -497,21 +548,35 @@
                 },
 
                 tripRoutePreview(t) {
-                    // Формируем краткий маршрут из адресов заказов
-                    // Но у нас на доске нет заказов. Показываем route_text (сохранённый маршрут)
-                    if (t.route_text) {
-                        // Обрезаем если длинный
-                        const text = t.route_text;
-                        if (text.length > 60) {
-                            return text.substring(0, 60) + '...';
+                    // Строим маршрут из адресов заказов
+                    const tripOrders = this.ordersByTrip(t.id)
+                        .sort((a, b) => (a.sequence_num || 99) - (b.sequence_num || 99));
+                    
+                    const addresses = tripOrders.map(o => o.address).filter(Boolean);
+                    
+                    if (addresses.length === 0) {
+                        // Если заказов нет — показываем route_text
+                        return t.route_text || '';
+                    }
+                    
+                    // Для городского — показываем все адреса, обрезаем если длинный
+                    // Для междугороднего — из точки А в точку Б
+                    let text;
+                    if (t.trip_type === 'intercity' && t.route_name) {
+                        text = t.route_name;
+                    } else {
+                        // До 3 адресов в полном виде, остальные — «+N»
+                        const shown = addresses.slice(0, 3);
+                        text = shown.join(' → ');
+                        if (addresses.length > 3) {
+                            text += ' +' + (addresses.length - 3);
                         }
-                        return text;
                     }
-                    // Если междугородний с маршрутом из справочника
-                    if (t.route_name) {
-                        return t.route_name;
+                    
+                    if (text.length > 70) {
+                        return text.substring(0, 70) + '...';
                     }
-                    return '';
+                    return text;
                 },
 
                 tripLoadInfo(t) {
@@ -545,6 +610,74 @@
 
                 openTrip(tripId) {
                     window.location.href = '/trip.html?id=' + tripId;
+                },
+                
+
+                // ============ ЗАКАЗЫ И ПОИСК ============
+
+                ordersByTrip(tripId) {
+                    return this.orders.filter(o => o.trip_id === tripId);
+                },
+
+                get filteredTrips() {
+                    const q = (this.searchQuery || '').trim();
+                    if (q.length < 2) return this.trips;
+
+                    const qLower = q.toLowerCase();
+                    const qDigits = q.replace(/\D/g, '');
+
+                    return this.trips.filter(t => {
+                        // === Поиск по рейсу ===
+                        if (String(t.trip_number || '').toLowerCase().includes(qLower)) return true;
+                        if (String(t.trip_date || '').includes(q)) return true;
+                        if (String(t.comment || '').toLowerCase().includes(qLower)) return true;
+                        if (String(t.route_text || '').toLowerCase().includes(qLower)) return true;
+
+                        // === Поиск по машине ===
+                        const vehicle = t.hired_vehicle_info || t.vehicle_plate || '';
+                        if (String(vehicle).toLowerCase().includes(qLower)) return true;
+
+                        // === Поиск по водителю ===
+                        const driver = t.hired_driver_info || t.driver_name || '';
+                        if (String(driver).toLowerCase().includes(qLower)) return true;
+
+                        // === Поиск по заказам рейса ===
+                        const tripOrders = this.ordersByTrip(t.id);
+                        return tripOrders.some(o => {
+                            // ID заказа
+                            if (String(o.external_id || '').toLowerCase().includes(qLower)) return true;
+                            if (String(o.id).includes(q)) return true;
+                            
+                            // Адрес
+                            if (String(o.address || '').toLowerCase().includes(qLower)) return true;
+                            
+                            // Имя контакта
+                            if (String(o.contact_name || '').toLowerCase().includes(qLower)) return true;
+                            
+                            // Телефон — нормализуем оба (минимум 3 цифры)
+                            if (qDigits.length >= 3) {
+                                const phoneDigits = String(o.phone || '').replace(/\D/g, '');
+                                if (phoneDigits.includes(qDigits)) return true;
+                            }
+                            
+                            // Примечание
+                            if (String(o.note || '').toLowerCase().includes(qLower)) return true;
+                            
+                            return false;
+                        });
+                    });
+                },
+
+                get filteredTripsByStatus() {
+                    return (status) => this.filteredTrips.filter(t => t.status === status);
+                },
+
+                get isPhoneSearch() {
+                    const q = (this.searchQuery || '').trim();
+                    if (q.length < 2) return false;
+                    const qDigits = q.replace(/\D/g, '');
+                    // Если запрос содержит в основном цифры — это поиск по телефону
+                    return qDigits.length >= 3 && qDigits.length >= q.length * 0.6;
                 },
 
                 // ============ DRAG & DROP ============
