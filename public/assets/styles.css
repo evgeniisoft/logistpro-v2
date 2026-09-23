@@ -2227,3 +2227,6 @@ body {
     opacity: 0.5;
     cursor: not-allowed;
 }
+.kpi-grid-2 {
+    grid-template-columns: repeat(2, 1fr) !important;
+}
