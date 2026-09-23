@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Входящие заказы · ЛогистПро</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/styles.css">
+    <script src="/assets/app.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body x-data="incomingPage()" x-init="$nextTick(() => init())">
+
+    <header class="app-header">
+        <div class="app-header-left">
+            <a href="/" class="app-logo">
+                <span class="app-logo-mark">LP</span>
+                <span>ЛогистПро</span>
+            </a>
+            <nav class="app-nav">
+                <a href="/" class="app-nav-link">Рейсы</a>
+                <a href="/incoming.html" class="app-nav-link active">Входящие</a>
+                <a href="/reports.html" class="app-nav-link">Отчёты</a>
+                <a href="/references.html" class="app-nav-link">Справочники</a>
+                <a href="/journal.html" class="app-nav-link">Журнал</a>
+            </nav>
+        </div>
+        <div class="app-header-right">
+            <div class="user-badge">
+                <div class="user-avatar" x-text="userInitials"></div>
+                <div>
+                    <div x-text="user?.full_name || ''" style="font-weight:500;"></div>
+                    <div x-text="roleLabel" style="font-size:11px;opacity:0.7;"></div>
+                </div>
+            </div>
+            <button class="btn btn-ghost btn-sm" @click="logout()" style="color:rgba(255,255,255,0.85);" title="Выйти">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <main class="app-main">
+        <div class="container">
+
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+                <div>
+                    <h1 style="font-size:24px;font-weight:600;margin:0 0 4px 0;">Входящие заказы</h1>
+                    <p style="font-size:13px;color:var(--text-secondary);margin:0;">
+                        Заказы из Битрикс24 и добавленные вручную
+                    </p>
+                </div>
+                <div style="display:flex;gap:8px;">
+                    <button class="btn btn-secondary" @click="loadData()" :disabled="loading">
+                        Обновить
+                    </button>
+                    <button class="btn btn-primary" @click="openCreateModal()">
+                        + Добавить вручную
+                    </button>
+                </div>
+            </div>
+
+            <!-- Статистика -->
+            <div class="stats-grid">
+                <div class="stat-card stat-card-pending">
+                    <div class="stat-card-label">Ожидают распределения</div>
+                    <div class="stat-card-value" x-text="stats.pending || 0"></div>
+                </div>
+                <div class="stat-card stat-card-assigned">
+                    <div class="stat-card-label">Назначены на рейсы</div>
+                    <div class="stat-card-value" x-text="stats.assigned || 0"></div>
+                </div>
+                <div class="stat-card stat-card-rejected">
+                    <div class="stat-card-label">Отклонены</div>
+                    <div class="stat-card-value" x-text="stats.rejected || 0"></div>
+                </div>
+            </div>
+
+            <!-- Табы -->
+            <div class="incoming-tabs">
+                <button class="incoming-tab" :class="tab === 'pending' ? 'active' : ''" @click="switchTab('pending')">
+                    Ожидают
+                    <span class="count" x-text="stats.pending || 0"></span>
+                </button>
+                <button class="incoming-tab" :class="tab === 'assigned' ? 'active' : ''" @click="switchTab('assigned')">
+                    Назначены
+                    <span class="count" x-text="stats.assigned || 0"></span>
+                </button>
+                <button class="incoming-tab" :class="tab === 'rejected' ? 'active' : ''" @click="switchTab('rejected')">
+                    Отклонены
+                    <span class="count" x-text="stats.rejected || 0"></span>
+                </button>
+                <button class="incoming-tab" :class="tab === 'all' ? 'active' : ''" @click="switchTab('all')">
+                    Все
+                </button>
+            </div>
+
+            <!-- Ошибка -->
+            <div x-show="error" x-cloak class="alert alert-error" x-text="error"></div>
+
+            <!-- Загрузка -->
+            <div x-show="loading" class="skeleton" style="height:300px;"></div>
+
+            <!-- Пустое состояние -->
+            <div x-show="!loading && !error && incoming.length === 0" class="empty-state">
+                <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 12h-6l-2 3h-4l-2-3H2"></path>
+                    <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
+                </svg>
+                <h3 class="empty-title">Нет входящих заказов</h3>
+                <p class="empty-description">
+                    <template x-if="tab === 'pending'">Заказы из Битрикс24 появятся здесь автоматически</template>
+                    <template x-if="tab === 'assigned'">Здесь будут заказы, назначенные на рейсы</template>
+                    <template x-if="tab === 'rejected'">Здесь будут отклонённые заказы</template>
+                    <template x-if="tab === 'all'">Пока нет ни одного входящего заказа</template>
+                </p>
+            </div>
+
+            <!-- Таблица -->
+            <div x-show="!loading && incoming.length > 0" style="background:#fff;border:1px solid var(--border-light);border-radius:12px;overflow:hidden;">
+                <div style="overflow-x:auto;">
+                    <table class="incoming-table">
+                        <thead>
+                            <tr>
+                                <th class="col-source">Источник</th>
+                                <th class="col-external-id">ID заказа</th>
+                                <th class="col-address">Адрес</th>
+                                <th class="col-contact">Контакт</th>
+                                <th class="col-phone">Телефон</th>
+                                <th class="col-volume text-right">м³</th>
+                                <th class="col-date">Получен</th>
+                                <th class="col-actions"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="item in incoming" :key="item.id">
+                                <tr>
+                                    <td class="col-source">
+                                        <span class="source-badge" :class="'source-' + (item.source || 'manual')" x-text="sourceLabel(item.source)"></span>
+                                    </td>
+                                    <td class="col-external-id" x-text="item.external_id || '—'"></td>
+                                    <td class="col-address" x-text="item.address || '—'"></td>
+                                    <td class="col-contact" x-text="item.contact_name || '—'"></td>
+                                    <td class="col-phone" x-text="item.phone || '—'"></td>
+                                    <td class="col-volume" x-text="item.volume || '—'"></td>
+                                    <td class="col-date" x-text="formatDateTime(item.created_at)"></td>
+                                    <td class="col-actions">
+                                        <!-- Для pending: назначить / отклонить -->
+                                        <template x-if="item.status === 'pending'">
+                                            <div style="display:flex;gap:6px;justify-content:flex-end;">
+                                                <button class="btn-assign" @click="openAssignModal(item)">На рейс</button>
+                                                <button class="btn-action danger" @click="rejectItem(item)" title="Отклонить">
+                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        </template>
+                                        <!-- Для assigned/rejected: только удалить -->
+                                        <template x-if="item.status !== 'pending'">
+                                            <div style="display:flex;gap:6px;justify-content:flex-end;">
+                                                <span class="status-badge" :class="'status-' + item.status" x-text="statusLabel(item.status)"></span>
+                                                <button class="btn-action danger" @click="deleteItem(item)" title="Удалить">
+                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        </template>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- МОДАЛКА: ДОБАВИТЬ ВРУЧНУЮ -->
+    <div x-show="createModal.open" x-cloak class="modal-backdrop" @click.self="closeCreateModal()">
+        <div class="modal-window" @click.stop>
+            <div class="modal-header">
+                <h2 class="modal-title">Новый входящий заказ</h2>
+                <button class="modal-close" @click="closeCreateModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div x-show="createModal.error" class="alert alert-error" x-text="createModal.error"></div>
+
+                <div class="form-group">
+                    <label class="form-label">ID заказа (внешний)</label>
+                    <input type="text" class="form-input" x-model="createModal.form.external_id" placeholder="#12345" :disabled="createModal.saving">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Адрес *</label>
+                    <input type="text" class="form-input" x-model="createModal.form.address" placeholder="ул. Ленина, 15" :disabled="createModal.saving">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Контакт</label>
+                        <input type="text" class="form-input" x-model="createModal.form.contact_name" placeholder="Иванов И.И." :disabled="createModal.saving">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Телефон</label>
+                        <input type="text" class="form-input" x-model="createModal.form.phone" placeholder="+79001234567" :disabled="createModal.saving">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Объём, м³</label>
+                        <input type="number" class="form-input" x-model.number="createModal.form.volume" step="0.1" min="0" :disabled="createModal.saving">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Примечание</label>
+                        <input type="text" class="form-input" x-model="createModal.form.note" placeholder="Необязательно" :disabled="createModal.saving">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @click="closeCreateModal()" :disabled="createModal.saving">Отмена</button>
+                <button class="btn btn-primary" @click="saveCreate()" :disabled="createModal.saving">
+                    <span x-show="!createModal.saving">Добавить</span>
+                    <span x-show="createModal.saving" x-cloak>Сохранение...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- МОДАЛКА: НАЗНАЧИТЬ НА РЕЙС -->
+    <div x-show="assignModal.open" x-cloak class="modal-backdrop" @click.self="closeAssignModal()">
+        <div class="modal-window" @click.stop>
+            <div class="modal-header">
+                <h2 class="modal-title">Назначить на рейс</h2>
+                <button class="modal-close" @click="closeAssignModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div x-show="assignModal.error" class="alert alert-error" x-text="assignModal.error"></div>
+
+                <div x-show="assignModal.item" style="padding:12px 14px;background:var(--bg-muted);border-radius:6px;margin-bottom:16px;">
+                    <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Заказ</div>
+                    <div style="font-size:13px;font-weight:500;" x-text="assignModal.item?.address"></div>
+                    <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;" x-text="(assignModal.item?.volume || 0) + ' м³ · ' + (assignModal.item?.contact_name || '—')"></div>
+                </div>
+
+                <div x-show="assignModal.overloadWarning" class="overload-warning" style="margin-bottom:16px;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px;">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                        <line x1="12" y1="9" x2="12" y2="13"></line>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                    <div x-text="assignModal.overloadWarning"></div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Выберите рейс *</label>
+                </div>
+
+                <div x-show="availableTrips.length === 0" class="trip-select-empty">
+                    Нет доступных рейсов
+                </div>
+
+                <div x-show="availableTrips.length > 0" class="assign-trip-list">
+                    <template x-for="t in availableTrips" :key="t.id">
+                        <div class="assign-trip-item" :class="assignModal.tripId === t.id ? 'selected' : ''" @click="selectAssignTrip(t)">
+                            <div class="assign-trip-info">
+                                <div class="assign-trip-title" x-text="'Рейс ' + t.trip_number"></div>
+                                <div class="assign-trip-sub" x-text="formatDate(t.trip_date) + ' · ' + (t.vehicle_plate || '—') + ' · ' + (t.driver_name || '—')"></div>
+                            </div>
+                            <div class="assign-trip-load">
+                                <div x-text="(Number(t.total_volume) || 0) + ' / ' + (Number(t.vehicle_volume_at_time) || Number(t.vehicle_volume) || '?') + ' м³'"></div>
+                                <div x-text="t.orders_count + ' адресов'"></div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @click="closeAssignModal()" :disabled="assignModal.saving">Отмена</button>
+                <button class="btn btn-primary" @click="submitAssign()" :disabled="assignModal.saving || !assignModal.tripId">
+                    <span x-show="!assignModal.saving">Назначить</span>
+                    <span x-show="assignModal.saving" x-cloak>Назначение...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function incomingPage() {
+            return {
+                user: null,
+                incoming: [],
+                stats: { pending: 0, assigned: 0, rejected: 0 },
+                availableTrips: [],
+                tab: 'pending',
+                loading: true,
+                error: '',
+
+                createModal: {
+                    open: false,
+                    saving: false,
+                    error: '',
+                    form: {}
+                },
+
+                assignModal: {
+                    open: false,
+                    saving: false,
+                    error: '',
+                    item: null,
+                    tripId: null,
+                    overloadWarning: ''
+                },
+
+                get userInitials() {
+                    if (!this.user?.full_name) return '?';
+                    return this.user.full_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+                },
+
+                get roleLabel() {
+                    const roles = { 'admin': 'Администратор', 'senior_logist': 'Ст. логист', 'logist': 'Логист', 'manager': 'Руководитель', 'viewer': 'Наблюдатель' };
+                    return roles[this.user?.role] || this.user?.role || '';
+                },
+
+                async init() {
+                    if (!window.AUTH) {
+                        setTimeout(() => this.init(), 50);
+                        return;
+                    }
+                    if (!window.AUTH.requireLogin()) return;
+                    this.user = window.API.getUser();
+                    await this.loadData();
+                },
+
+                async loadData() {
+                    this.loading = true;
+                    this.error = '';
+                    try {
+                        const status = this.tab === 'all' ? 'all' : this.tab;
+                        const data = await window.API.api('/api/incoming?status=' + status);
+                        this.incoming = data.incoming || [];
+                        this.stats = data.stats || { pending: 0, assigned: 0, rejected: 0 };
+                    } catch (e) {
+                        this.error = e.message;
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async switchTab(tab) {
+                    this.tab = tab;
+                    await this.loadData();
+                },
+
+                sourceLabel(source) {
+                    const labels = { 'bitrix': 'Битрикс', 'manual': 'Вручную' };
+                    return labels[source] || source || 'Вручную';
+                },
+
+                statusLabel(status) {
+                    const labels = { 'pending': 'Ожидает', 'assigned': 'Назначен', 'rejected': 'Отклонён' };
+                    return labels[status] || status;
+                },
+
+                formatDate(d) {
+                    if (!d) return '—';
+                    return window.HELPERS.formatDate(d);
+                },
+
+                formatDateTime(d) {
+                    if (!d) return '—';
+                    const date = new Date(d);
+                    return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) + ' ' + 
+                           date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+                },
+
+                // ============ СОЗДАНИЕ ВРУЧНУЮ ============
+
+                openCreateModal() {
+                    this.createModal = {
+                        open: true,
+                        saving: false,
+                        error: '',
+                        form: {
+                            external_id: '',
+                            address: '',
+                            contact_name: '',
+                            phone: '',
+                            volume: 0,
+                            note: ''
+                        }
+                    };
+                },
+
+                closeCreateModal() {
+                    if (this.createModal.saving) return;
+                    this.createModal.open = false;
+                },
+
+                async saveCreate() {
+                    if (!this.createModal.form.address || !this.createModal.form.address.trim()) {
+                        this.createModal.error = 'Укажите адрес';
+                        return;
+                    }
+
+                    this.createModal.saving = true;
+                    this.createModal.error = '';
+
+                    try {
+                        await window.API.api('/api/incoming?action=create', {
+                            method: 'POST',
+                            body: JSON.stringify(this.createModal.form)
+                        });
+
+                        this.createModal.open = false;
+                        await this.loadData();
+
+                    } catch (e) {
+                        this.createModal.error = e.message;
+                    } finally {
+                        this.createModal.saving = false;
+                    }
+                },
+
+                // ============ НАЗНАЧЕНИЕ ============
+
+                async openAssignModal(item) {
+                    this.assignModal = {
+                        open: true,
+                        saving: false,
+                        error: '',
+                        item: item,
+                        tripId: null,
+                        overloadWarning: ''
+                    };
+
+                    await this.loadAvailableTrips();
+                },
+
+                closeAssignModal() {
+                    if (this.assignModal.saving) return;
+                    this.assignModal.open = false;
+                    this.assignModal.item = null;
+                },
+
+                async loadAvailableTrips() {
+                    try {
+                        const data = await window.API.api('/api/trips');
+                        this.availableTrips = (data.trips || []).filter(t => 
+                            t.status !== 'done' && t.status !== 'cancelled'
+                        );
+                    } catch (e) {
+                        console.error(e);
+                        this.availableTrips = [];
+                    }
+                },
+
+                selectAssignTrip(trip) {
+                    this.assignModal.tripId = trip.id;
+
+                    const orderVolume = Number(this.assignModal.item?.volume) || 0;
+                    const currentVolume = Number(trip.total_volume) || 0;
+                    const capacity = Number(trip.vehicle_volume_at_time) || Number(trip.vehicle_volume) || 0;
+                    const newVolume = currentVolume + orderVolume;
+
+                    if (capacity > 0 && newVolume > capacity) {
+                        this.assignModal.overloadWarning = 
+                            'Превышение объёма: ' + newVolume.toFixed(1) + ' м³ из ' + capacity + ' м³';
+                    } else {
+                        this.assignModal.overloadWarning = '';
+                    }
+                },
+
+                async submitAssign() {
+                    if (!this.assignModal.tripId) {
+                        this.assignModal.error = 'Выберите рейс';
+                        return;
+                    }
+
+                    this.assignModal.saving = true;
+                    this.assignModal.error = '';
+
+                    try {
+                        await window.API.api('/api/incoming?action=assign&id=' + this.assignModal.item.id, {
+                            method: 'POST',
+                            body: JSON.stringify({ trip_id: this.assignModal.tripId })
+                        });
+
+                        this.assignModal.open = false;
+                        await this.loadData();
+
+                    } catch (e) {
+                        this.assignModal.error = e.message;
+                    } finally {
+                        this.assignModal.saving = false;
+                    }
+                },
+
+                // ============ ОТКЛОНЕНИЕ ============
+
+                async rejectItem(item) {
+                    if (!confirm('Отклонить заказ "' + (item.address || 'без адреса') + '"?')) return;
+
+                    try {
+                        await window.API.api('/api/incoming?action=reject&id=' + item.id, {
+                            method: 'POST',
+                            body: JSON.stringify({})
+                        });
+                        await this.loadData();
+                    } catch (e) {
+                        alert('Ошибка: ' + e.message);
+                    }
+                },
+
+                // ============ УДАЛЕНИЕ ============
+
+                async deleteItem(item) {
+                    if (!confirm('Удалить заказ "' + (item.address || 'без адреса') + '" из истории?')) return;
+
+                    try {
+                        await window.API.api('/api/incoming?action=delete&id=' + item.id, {
+                            method: 'DELETE'
+                        });
+                        await this.loadData();
+                    } catch (e) {
+                        alert('Ошибка: ' + e.message);
+                    }
+                },
+
+                logout() {
+                    if (!confirm('Выйти из системы?')) return;
+                    window.API.clearAuth();
+                    window.location.href = '/login.html';
+                }
+            };
+        }
+    </script>
+</body>
+</html>
