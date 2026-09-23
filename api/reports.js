@@ -208,21 +208,20 @@ async function handler(req, res) {
 
     // ============ BY DRIVERS ============
     if (action === "by-drivers") {
-      // Получаем все рейсы с данными водителей
       const tripsResult = await query(
         `SELECT 
-                    t.id AS trip_id,
-                    t.driver_id,
-                    t.fact_km,
-                    t.revenue,
-                    t.load_volume,
-                    t.vehicle_volume_at_time,
-                    t.status,
-                    d.full_name AS driver_name,
-                    d.phone AS driver_phone
-                 FROM trips t
-                 JOIN drivers d ON d.id = t.driver_id
-                 ${whereClause}`,
+            t.id AS trip_id,
+            t.driver_id,
+            t.fact_km,
+            t.revenue,
+            t.vehicle_volume_at_time,
+            t.status,
+            d.full_name AS driver_name,
+            d.phone AS driver_phone,
+            (SELECT COALESCE(SUM(o.volume), 0) FROM orders o WHERE o.trip_id = t.id) AS load_volume
+         FROM trips t
+         JOIN drivers d ON d.id = t.driver_id
+         ${whereClause}`,
         periodParams,
       );
 
@@ -454,18 +453,18 @@ async function handler(req, res) {
     if (action === "by-routes") {
       const tripsResult = await query(
         `SELECT 
-                    t.id AS trip_id,
-                    t.route_id,
-                    t.fact_km,
-                    t.revenue,
-                    t.load_volume,
-                    t.vehicle_volume_at_time,
-                    r.name AS route_name,
-                    r.from_point,
-                    r.to_point
-                 FROM trips t
-                 JOIN routes r ON r.id = t.route_id
-                 ${whereClause}`,
+            t.id AS trip_id,
+            t.route_id,
+            t.fact_km,
+            t.revenue,
+            t.vehicle_volume_at_time,
+            r.name AS route_name,
+            r.from_point,
+            r.to_point,
+            (SELECT COALESCE(SUM(o.volume), 0) FROM orders o WHERE o.trip_id = t.id) AS load_volume
+         FROM trips t
+         JOIN routes r ON r.id = t.route_id
+         ${whereClause}`,
         periodParams,
       );
 
