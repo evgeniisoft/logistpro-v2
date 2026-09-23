@@ -7,6 +7,29 @@ async function handler(req, res) {
   const action = req.query.action || "get";
   const id = req.query.id;
 
+  // ============ ALL: список всех заказов (для поиска на доске) ============
+  if (action === "all") {
+    if (req.method !== "GET")
+      return res.status(405).json({ error: "Method not allowed" });
+
+    try {
+      const result = await query(
+        `SELECT 
+                    o.id, o.trip_id, o.external_id, o.address, 
+                    o.contact_name, o.phone, o.volume, o.sequence_num, 
+                    o.note, o.status
+                 FROM orders o
+                 WHERE o.trip_id IS NOT NULL
+                 ORDER BY o.trip_id, o.sequence_num ASC NULLS LAST, o.id ASC`,
+      );
+
+      return res.json({ orders: result.rows });
+    } catch (e) {
+      console.error("GET /api/orders?action=all error:", e);
+      return res.status(500).json({ error: "Ошибка сервера" });
+    }
+  }
+
   // ============ CREATE (добавить заказ в рейс) ============
   if (action === "create") {
     if (req.method !== "POST")
