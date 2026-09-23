@@ -772,16 +772,19 @@
                     // Ждём 2 кадра анимации + запас
                     requestAnimationFrame(() => {
                         requestAnimationFrame(() => {
-                            setTimeout(() => this.renderCharts(), 100);
+                            setTimeout(() => this.renderCharts(), 150);
                         });
                     });
                 },
 
                 switchTab(tab) {
-                    this.destroyCharts();
                     this.tab = tab;
-                    // Небольшая пауза, чтобы Alpine отрисовал таб
-                    setTimeout(() => this.renderCharts(), 50);
+                    // Ждём, пока Alpine отрисует таб и рендерим
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            setTimeout(() => this.renderCharts(), 100);
+                        });
+                    });
                 },
 
                 destroyCharts() {
@@ -818,22 +821,26 @@
 
                     this._chartsRenderTimer = setTimeout(() => {
                         this._chartsRenderTimer = null;
+
+                        // Проверяем, что canvas виден и имеет правильные размеры
+                        const needChart = this.tab === 'dashboard' || this.tab === 'months' || this.tab === 'costs';
+                        if (!needChart) return;
+
+                        // Уничтожаем старые диаграммы
                         this.destroyCharts();
 
-                        // Проверяем, что целевой canvas виден и имеет размер
-                        const targetCanvas = this.tab === 'dashboard' 
+                        // Проверяем размер canvas
+                        const testCanvas = this.tab === 'dashboard' 
                             ? document.getElementById('chartMonthly')
                             : this.tab === 'months'
                             ? document.getElementById('chartMonthsFull')
-                            : this.tab === 'costs'
-                            ? document.getElementById('chartCostsFull')
-                            : null;
+                            : document.getElementById('chartCostsFull');
 
-                        if (!targetCanvas) return;
-                        
-                        const rect = targetCanvas.getBoundingClientRect();
-                        if (rect.width === 0 || rect.height === 0) {
-                            // Контейнер ещё не отрисован — ждём ещё
+                        if (!testCanvas) return;
+
+                        const rect = testCanvas.getBoundingClientRect();
+                        if (rect.width < 50 || rect.height < 50) {
+                            // Контейнер ещё не получил размеры — ждём ещё
                             setTimeout(() => this.renderCharts(), 200);
                             return;
                         }
@@ -845,7 +852,7 @@
                         } else if (this.tab === 'costs') {
                             this.renderCostsCharts();
                         }
-                    }, 150);
+                    }, 100);
                 },
 
                 renderDashboardCharts() {
