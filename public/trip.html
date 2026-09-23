@@ -721,59 +721,59 @@
                     </div>
                 </div>
 
-                <!-- ПУТЕВОЙ ЛИСТ (для печати) -->
-                <div id="waybillPrint" class="waybill-print">
-                    <h1>ПУТЕВОЙ ЛИСТ № <span x-text="trip?.trip_number || '—'"></span></h1>
-                    <div class="subtitle">Дата рейса: <span x-text="formatDate(trip?.trip_date)"></span></div>
-                    <div class="info-row"><span>Машина:</span> <span x-text="(trip?.vehicle_plate || '—') + ' (' + (vehicleVolume || '?') + ' м³)'"></span></div>
-                    <div class="info-row"><span>Водитель:</span> <span x-text="trip?.driver_name || '—'"></span></div>
-                    <div class="info-row"><span>Пробег план:</span> <span x-text="(trip?.plan_km || '—') + ' км'"></span></div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>№</th>
-                                <th>ID заказа</th>
-                                <th>Адрес</th>
-                                <th>Примечание</th>
-                                <th>Контакт</th>
-                                <th>Телефон</th>
-                                <th>м³</th>
-                                <th>Статус</th>
-                                <th>Подпись</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <template x-for="(o, i) in orders" :key="o.id">
-                                <tr>
-                                    <td x-text="i + 1"></td>
-                                    <td x-text="o.external_id || ('#' + o.id)"></td>
-                                    <td x-text="o.address"></td>
-                                    <td x-text="o.note || '—'"></td>
-                                    <td x-text="o.contact_name || '—'"></td>
-                                    <td x-text="o.phone || '—'"></td>
-                                    <td x-text="o.volume || '—'"></td>
-                                    <td style="width:100px;">[  ] Доставлено</td>
-                                    <td style="width:120px;"></td>
-                                </tr>
-                            </template>
-                            <tr style="font-weight:600;">
-                                <td colspan="6">ИТОГО: <span x-text="orders.length"></span> адресов, <span x-text="totalVolume"></span> м³</td>
-                                <td colspan="3"></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    <div class="signatures">
-                        <div><div class="line"></div>Водитель (подпись)</div>
-                        <div><div class="line"></div>Диспетчер (подпись)</div>
-                        <div>Дата: ____ ________ 202_ г.</div>
-                    </div>
-                </div>
-
+                
             </div>
             </div>
         </template>
         </div>
     </main>
+    <!-- ПУТЕВОЙ ЛИСТ (для печати) -->
+    <div id="waybillPrint" class="waybill-print">
+        <h1>ПУТЕВОЙ ЛИСТ № <span x-text="trip?.trip_number || '—'"></span></h1>
+        <div class="subtitle">Дата рейса: <span x-text="formatDate(trip?.trip_date)"></span></div>
+        <div class="info-row"><span>Машина:</span> <span x-text="(trip?.vehicle_plate || '—') + ' (' + (vehicleVolume || '?') + ' м³)'"></span></div>
+        <div class="info-row"><span>Водитель:</span> <span x-text="trip?.driver_name || '—'"></span></div>
+        <div class="info-row"><span>Пробег план:</span> <span x-text="(trip?.plan_km || '—') + ' км'"></span></div>
+        <table>
+            <thead>
+                <tr>
+                    <th>№</th>
+                    <th>ID заказа</th>
+                    <th>Адрес</th>
+                    <th>Примечание</th>
+                    <th>Контакт</th>
+                    <th>Телефон</th>
+                    <th>м³</th>
+                    <th>Статус</th>
+                    <th>Подпись</th>
+                </tr>
+            </thead>
+            <tbody>
+                <template x-for="(o, i) in orders" :key="o.id">
+                    <tr>
+                        <td x-text="i + 1"></td>
+                        <td x-text="o.external_id || ('#' + o.id)"></td>
+                        <td x-text="o.address"></td>
+                        <td x-text="o.note || '—'"></td>
+                        <td x-text="o.contact_name || '—'"></td>
+                        <td x-text="o.phone || '—'"></td>
+                        <td x-text="o.volume || '—'"></td>
+                        <td style="width:100px;">[  ] Доставлено</td>
+                        <td style="width:120px;"></td>
+                    </tr>
+                </template>
+                <tr style="font-weight:600;">
+                    <td colspan="6">ИТОГО: <span x-text="orders.length"></span> адресов, <span x-text="totalVolume"></span> м³</td>
+                    <td colspan="3"></td>
+                </tr>
+            </tbody>
+        </table>
+        <div class="signatures">
+            <div><div class="line"></div>Водитель (подпись)</div>
+            <div><div class="line"></div>Диспетчер (подпись)</div>
+            <div>Дата: ____ ________ 202_ г.</div>
+        </div>
+    </div>
 
     <script>
         function tripPage() {
