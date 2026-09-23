@@ -210,34 +210,40 @@ async function handler(req, res) {
     if (action === "by-drivers") {
       const tripsResult = await query(
         `SELECT 
-            t.id AS trip_id,
-            t.driver_id,
-            t.fact_km,
-            t.revenue,
-            t.vehicle_volume_at_time,
-            t.status,
-            d.full_name AS driver_name,
-            d.phone AS driver_phone,
-            (SELECT COALESCE(SUM(o.volume), 0) FROM orders o WHERE o.trip_id = t.id) AS load_volume
-         FROM trips t
-         JOIN drivers d ON d.id = t.driver_id
-         ${whereClause}`,
+                    t.id AS trip_id,
+                    t.driver_id,
+                    t.fact_km,
+                    t.revenue,
+                    t.vehicle_volume_at_time,
+                    t.status,
+                    t.driver_rate_at_time,
+                    t.vehicle_id,
+                    d.full_name AS driver_name,
+                    d.phone AS driver_phone,
+                    v.type AS vehicle_type,
+                    v.amort_rate AS vehicle_amort_rate,
+                    (SELECT COALESCE(SUM(o.volume), 0) FROM orders o WHERE o.trip_id = t.id) AS load_volume
+                 FROM trips t
+                 JOIN drivers d ON d.id = t.driver_id
+                 LEFT JOIN vehicles v ON v.id = t.vehicle_id
+                 ${whereClause}`,
         periodParams,
       );
 
-      // Затраты по рейсам
+      // Только ручные затраты (без salary/amort, они считаются отдельно)
       const costsResult = await query(
         `SELECT 
                     t.id AS trip_id,
+                    t.driver_id,
+                    c.category,
                     COALESCE(SUM(c.amount), 0) AS costs
                  FROM costs c
                  JOIN trips t ON t.id = c.trip_id
                  ${whereClause}
-                 GROUP BY t.id`,
+                 GROUP BY t.id, t.driver_id, c.category`,
         periodParams,
       );
 
-      // Собираем по водителям
       const driversMap = {};
 
       tripsResult.rows.forEach((t) => {
@@ -271,8 +277,41 @@ async function handler(req, res) {
           d.load_count++;
         }
 
-        const costRow = costsResult.rows.find((c) => c.trip_id === t.trip_id);
-        if (costRow) d.total_costs += Number(costRow.costs);
+        // Зарплата (автоматически, если не в costs)
+        const salaryInCosts = costsResult.rows.find(
+          (c) => c.trip_id === t.trip_id && c.category === "salary",
+        );
+        if (salaryInCosts) {
+          d.total_costs += Number(salaryInCosts.costs);
+        } else if (Number(t.driver_rate_at_time) > 0) {
+          d.total_costs += Number(t.driver_rate_at_time);
+        }
+
+        // Амортизация (автоматически, если не в costs)
+        const amortInCosts = costsResult.rows.find(
+          (c) => c.trip_id === t.trip_id && c.category === "amort",
+        );
+        if (amortInCosts) {
+          d.total_costs += Number(amortInCosts.costs);
+        } else if (
+          t.vehicle_type === "own" &&
+          Number(t.vehicle_amort_rate) > 0 &&
+          Number(t.fact_km) > 0
+        ) {
+          d.total_costs += Math.round(
+            Number(t.fact_km) * Number(t.vehicle_amort_rate),
+          );
+        }
+
+        // Остальные ручные затраты
+        const otherCosts = costsResult.rows.filter(
+          (c) =>
+            c.trip_id === t.trip_id &&
+            !["salary", "amort"].includes(c.category),
+        );
+        otherCosts.forEach((c) => {
+          d.total_costs += Number(c.costs);
+        });
       });
 
       const data = Object.values(driversMap)
@@ -304,10 +343,11 @@ async function handler(req, res) {
                     t.vehicle_id,
                     t.fact_km,
                     t.revenue,
-                    t.status,
+                    t.driver_rate_at_time,
                     v.plate AS vehicle_plate,
                     v.model AS vehicle_model,
-                    v.type AS vehicle_type
+                    v.type AS vehicle_type,
+                    v.amort_rate AS vehicle_amort_rate
                  FROM trips t
                  JOIN vehicles v ON v.id = t.vehicle_id
                  ${whereClause}`,
@@ -318,12 +358,12 @@ async function handler(req, res) {
         `SELECT 
                     t.id AS trip_id,
                     t.vehicle_id,
-                    COALESCE(SUM(c.amount), 0) AS costs,
-                    COALESCE(SUM(CASE WHEN c.category = 'repair' THEN c.amount ELSE 0 END), 0) AS repairs
+                    c.category,
+                    COALESCE(SUM(c.amount), 0) AS costs
                  FROM costs c
                  JOIN trips t ON t.id = c.trip_id
                  ${whereClause}
-                 GROUP BY t.id, t.vehicle_id`,
+                 GROUP BY t.id, t.vehicle_id, c.category`,
         periodParams,
       );
 
@@ -349,11 +389,42 @@ async function handler(req, res) {
         v.total_km += Number(t.fact_km) || 0;
         v.total_revenue += Number(t.revenue) || 0;
 
-        const costRow = costsResult.rows.find((c) => c.trip_id === t.trip_id);
-        if (costRow) {
-          v.total_costs += Number(costRow.costs);
-          v.total_repairs += Number(costRow.repairs);
+        // Зарплата
+        const salaryInCosts = costsResult.rows.find(
+          (c) => c.trip_id === t.trip_id && c.category === "salary",
+        );
+        if (salaryInCosts) {
+          v.total_costs += Number(salaryInCosts.costs);
+        } else if (Number(t.driver_rate_at_time) > 0) {
+          v.total_costs += Number(t.driver_rate_at_time);
         }
+
+        // Амортизация
+        const amortInCosts = costsResult.rows.find(
+          (c) => c.trip_id === t.trip_id && c.category === "amort",
+        );
+        if (amortInCosts) {
+          v.total_costs += Number(amortInCosts.costs);
+        } else if (
+          t.vehicle_type === "own" &&
+          Number(t.vehicle_amort_rate) > 0 &&
+          Number(t.fact_km) > 0
+        ) {
+          v.total_costs += Math.round(
+            Number(t.fact_km) * Number(t.vehicle_amort_rate),
+          );
+        }
+
+        // Остальные
+        const otherCosts = costsResult.rows.filter(
+          (c) =>
+            c.trip_id === t.trip_id &&
+            !["salary", "amort"].includes(c.category),
+        );
+        otherCosts.forEach((c) => {
+          v.total_costs += Number(c.costs);
+          if (c.category === "repair") v.total_repairs += Number(c.costs);
+        });
       });
 
       const data = Object.values(vehiclesMap)
@@ -534,6 +605,7 @@ async function handler(req, res) {
 
     // ============ COSTS BREAKDOWN ============
     if (action === "costs-breakdown") {
+      // Ручные затраты из таблицы costs
       const result = await query(
         `SELECT 
                     c.category,
@@ -547,7 +619,61 @@ async function handler(req, res) {
         periodParams,
       );
 
-      return res.json({ data: result.rows });
+      const data = result.rows.map((r) => ({
+        category: r.category,
+        count: Number(r.count),
+        total: Number(r.total),
+      }));
+
+      // Автоматическая зарплата — если её ещё нет в costs
+      const salaryInCosts = data.find((d) => d.category === "salary");
+      if (!salaryInCosts) {
+        const salaryResult = await query(
+          `SELECT 
+                        COUNT(*) AS count,
+                        COALESCE(SUM(t.driver_rate_at_time), 0) AS total
+                     FROM trips t
+                     ${whereClause}`,
+          periodParams,
+        );
+        const salaryTotal = Number(salaryResult.rows[0].total);
+        if (salaryTotal > 0) {
+          data.push({
+            category: "salary",
+            count: Number(salaryResult.rows[0].count),
+            total: salaryTotal,
+            auto: true,
+          });
+        }
+      }
+
+      // Автоматическая амортизация — только для своих машин
+      const amortInCosts = data.find((d) => d.category === "amort");
+      if (!amortInCosts) {
+        const amortResult = await query(
+          `SELECT 
+                        COUNT(*) AS count,
+                        COALESCE(SUM(t.fact_km * v.amort_rate), 0) AS total
+                     FROM trips t
+                     JOIN vehicles v ON v.id = t.vehicle_id
+                     ${whereClause ? whereClause + " AND" : "WHERE"} v.type = 'own' AND v.amort_rate > 0 AND t.fact_km > 0`,
+          periodParams,
+        );
+        const amortTotal = Number(amortResult.rows[0].total);
+        if (amortTotal > 0) {
+          data.push({
+            category: "amort",
+            count: Number(amortResult.rows[0].count),
+            total: Math.round(amortTotal),
+            auto: true,
+          });
+        }
+      }
+
+      // Сортируем по убыванию
+      data.sort((a, b) => b.total - a.total);
+
+      return res.json({ data });
     }
 
     return res.status(400).json({ error: "Unknown action: " + action });
