@@ -658,7 +658,8 @@
                 switchTab(tab) {
                     this.destroyCharts();
                     this.tab = tab;
-                    this.$nextTick(() => this.renderCharts());
+                    // Небольшая пауза, чтобы Alpine отрисовал таб
+                    setTimeout(() => this.renderCharts(), 50);
                 },
 
                 destroyCharts() {
@@ -687,27 +688,16 @@
                 },
 
                 renderCharts() {
-                    // Отменяем предыдущий таймер, если был
+                    // Отменяем предыдущий таймер
                     if (this._chartsRenderTimer) {
                         clearTimeout(this._chartsRenderTimer);
                         this._chartsRenderTimer = null;
                     }
 
-                    // Защита от двойного вызова
-                    if (this._chartsRendering) {
-                        return;
-                    }
-
-                    this._chartsRendering = true;
-                    
                     this._chartsRenderTimer = setTimeout(() => {
-                        this._chartsRendering = false;
                         this._chartsRenderTimer = null;
-                        
-                        // Уничтожаем ВСЕ старые диаграммы
                         this.destroyCharts();
-                        
-                        // Рисуем только для активной вкладки
+
                         if (this.tab === 'dashboard') {
                             this.renderDashboardCharts();
                         } else if (this.tab === 'months') {
@@ -715,23 +705,7 @@
                         } else if (this.tab === 'costs') {
                             this.renderCostsCharts();
                         }
-                        
-                        // Второй проход — на случай, если DOM ещё не полностью отрисовался
-                        setTimeout(() => {
-                            if (this.tab === 'dashboard' && !this.chartMonthly && this.monthly.length > 0) {
-                                this.renderDashboardCharts();
-                            }
-                            if (this.tab === 'dashboard' && !this.chartCosts && this.costsBreakdown.length > 0) {
-                                this.renderDashboardCharts();
-                            }
-                            if (this.tab === 'months' && !this.chartMonthsFull && this.byMonths.length > 0) {
-                                this.renderMonthsCharts();
-                            }
-                            if (this.tab === 'costs' && !this.chartCostsFull && this.costsBreakdown.length > 0) {
-                                this.renderCostsCharts();
-                            }
-                        }, 400);
-                    }, 150);
+                    }, 100);
                 },
 
                 renderDashboardCharts() {
