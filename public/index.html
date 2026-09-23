@@ -82,14 +82,14 @@
                         </div>
                         <template x-for="t in tripsByStatus(col.status)" :key="t.id">
                             <div class="trip-card"
-                                 :class="draggedTripId === t.id ? 'dragging' : ''"
-                                 draggable="true"
-                                 @dragstart="dragStart(t.id)"
-                                 @dragend="dragEnd()"
-                                 @click="openTrip(t.id)">
+                                :class="draggedTripId === t.id ? 'dragging' : ''"
+                                draggable="true"
+                                @dragstart="dragStart(t.id)"
+                                @dragend="dragEnd()"
+                                @click="openTrip(t.id)">
 
-                                <!-- Шапка карточки -->
-                                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+                                <!-- Шапка: номер + дата + выручка -->
+                                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
                                     <div>
                                         <div class="trip-card-number" x-text="t.trip_number"></div>
                                         <div class="trip-card-date" x-text="formatTripDate(t.trip_date)"></div>
@@ -112,8 +112,8 @@
                                         <circle cx="7" cy="18" r="2"></circle>
                                     </svg>
                                     <span x-text="tripVehicleLabel(t)"></span>
-                                    <span class="type-chip" :class="t.hired_vehicle_info ? 'type-chip-hired' : 'type-chip-own'"
-                                          x-text="t.hired_vehicle_info ? 'наём' : 'своя'"></span>
+                                    <span class="type-chip" :class="isHired(t) ? 'type-chip-hired' : 'type-chip-own'"
+                                        x-text="isHired(t) ? 'наём' : 'своя'"></span>
                                 </div>
 
                                 <!-- Водитель -->
@@ -125,15 +125,21 @@
                                     <span x-text="tripDriverLabel(t)"></span>
                                 </div>
 
-                                <!-- Маршрут -->
+                                <!-- Маршрут с точками -->
                                 <template x-if="tripRoutePreview(t)">
                                     <div class="trip-card-route" x-text="tripRoutePreview(t)"></div>
                                 </template>
 
-                                <!-- Шкала загрузки -->
+                                <!-- Загрузка + адреса -->
                                 <div class="trip-card-load-block">
                                     <div class="trip-card-load-label">
-                                        <span x-text="tripLoadInfo(t)"></span>
+                                        <span>
+                                            <strong x-text="(t.total_volume || 0) + ' м³'"></strong>
+                                            <span style="color:var(--text-muted);"> / </span>
+                                            <span x-text="(t.vehicle_volume_at_time || 0) + ' м³'"></span>
+                                            <span style="color:var(--text-muted);"> · </span>
+                                            <span x-text="(t.orders_count || 0) + ' адр.'"></span>
+                                        </span>
                                         <span x-text="tripLoadPercent(t) + '%'"></span>
                                     </div>
                                     <div class="trip-card-load-bar">
@@ -472,6 +478,9 @@
                 },
 
                 // ============ ХЕЛПЕРЫ ДЛЯ КАРТОЧКИ ============
+                isHired(t) {
+                    return !!t.hired_vehicle_info;
+                },
 
                 tripVehicleLabel(t) {
                     if (t.hired_vehicle_info) {
