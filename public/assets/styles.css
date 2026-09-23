@@ -527,6 +527,11 @@ body {
 .load-bar-fill.load-green { background: #059669; }
 .load-bar-fill.load-orange { background: #EA580C; }
 
+.trip-card-load-fill.load-red { background: #DC2626; }
+.trip-card-load-fill.load-yellow { background: #D97706; }
+.trip-card-load-fill.load-green { background: #059669; }
+.trip-card-load-fill.load-orange { background: #EA580C; }
+
 .load-info {
     display: flex;
     justify-content: space-between;
