@@ -1940,3 +1940,37 @@ body {
 .col-positive { color: #059669; }
 .col-negative { color: #DC2626; }
 .col-muted { color: var(--text-secondary); }
+
+/* ============ ПЕРЕКЛЮЧАТЕЛЬ ТИПА (Своя/Наёмная) ============ */
+
+.type-switch {
+    display: inline-flex;
+    padding: 3px;
+    background: var(--bg-muted);
+    border-radius: 6px;
+    gap: 3px;
+    margin-bottom: 8px;
+}
+
+.type-switch-btn {
+    padding: 6px 14px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s, color 0.15s;
+}
+
+.type-switch-btn:hover {
+    color: var(--text-primary);
+}
+
+.type-switch-btn.active {
+    background: #fff;
+    color: var(--text-primary);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
