@@ -2230,3 +2230,132 @@ body {
 .kpi-grid-2 {
     grid-template-columns: repeat(2, 1fr) !important;
 }
+/* ============ ДЕТАЛИЗАЦИЯ ЗАТРАТ ============ */
+
+.costs-breakdown-row {
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.costs-breakdown-row:hover {
+    background: var(--bg-muted) !important;
+}
+
+.costs-breakdown-row td {
+    position: relative;
+}
+
+.costs-breakdown-row .expand-icon {
+    display: inline-block;
+    margin-left: 6px;
+    color: var(--text-muted);
+    font-size: 10px;
+    transition: transform 0.15s;
+}
+
+.costs-detail-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    max-height: 500px;
+    overflow-y: auto;
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+}
+
+.costs-detail-header {
+    display: grid;
+    grid-template-columns: 90px 90px 1fr 1fr 130px;
+    gap: 12px;
+    padding: 10px 14px;
+    background: var(--bg-muted);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border-light);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.costs-detail-row {
+    display: grid;
+    grid-template-columns: 90px 90px 1fr 1fr 130px;
+    gap: 12px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-light);
+    font-size: 12px;
+    align-items: center;
+}
+
+.costs-detail-row:last-child {
+    border-bottom: none;
+}
+
+.costs-detail-row:hover {
+    background: var(--bg-muted);
+}
+
+.costs-detail-trip {
+    font-weight: 600;
+    color: var(--color-accent);
+    cursor: pointer;
+}
+
+.costs-detail-trip:hover {
+    text-decoration: underline;
+}
+
+.costs-detail-date {
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+.costs-detail-vehicle,
+.costs-detail-driver {
+    color: var(--text-primary);
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.costs-detail-amount {
+    text-align: right;
+    font-family: 'SF Mono', Consolas, monospace;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.costs-detail-note {
+    grid-column: 3 / 5;
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-style: italic;
+    padding-top: 2px;
+}
+
+.costs-detail-summary {
+    padding: 14px 20px;
+    background: var(--bg-muted);
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 16px;
+}
+
+.costs-detail-summary-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.costs-detail-summary-total {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-family: 'SF Mono', Consolas, monospace;
+}
