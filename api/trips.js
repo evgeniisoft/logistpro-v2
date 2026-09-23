@@ -113,16 +113,10 @@ async function handler(req, res) {
 
     const { version, ...fields } = req.body;
 
-    const errors = validateTrip(fields, true);
-    if (errors.length > 0) {
-      return res.status(400).json({ error: errors.join(", ") });
-    }
-
     try {
       const current = await query("SELECT * FROM trips WHERE id = $1", [id]);
-      if (current.rows.length === 0) {
+      if (current.rows.length === 0)
         return res.status(404).json({ error: "Рейс не найден" });
-      }
 
       const trip = current.rows[0];
 
@@ -136,8 +130,6 @@ async function handler(req, res) {
       const allowedFields = [
         "trip_date",
         "trip_type",
-        "vehicle_id",
-        "driver_id",
         "route_id",
         "route_text",
         "plan_km",
@@ -147,37 +139,119 @@ async function handler(req, res) {
         "comment",
         "cancel_reason",
         "problem_comment",
+        "vehicle_id",
         "vehicle_volume_at_time",
+        "hired_vehicle_info",
+        "driver_id",
         "driver_rate_at_time",
+        "hired_driver_info",
       ];
 
       const updates = [];
       const params = [];
       let paramIndex = 1;
 
-      for (const field of allowedFields) {
-        if (fields[field] !== undefined) {
-          if (field === "driver_id" && fields[field] !== trip.driver_id) {
-            const newDriver = await query(
-              "SELECT default_rate FROM drivers WHERE id = $1",
-              [fields[field]],
-            );
-            if (newDriver.rows.length > 0) {
-              updates.push(`driver_rate_at_time = $${paramIndex++}`);
-              params.push(newDriver.rows[0].default_rate);
+      // Специальная обработка смены машины
+      if (fields.vehicle_id !== undefined) {
+        if (fields.vehicle_id === null) {
+          // Меняем на наёмную — обнуляем vehicle_id
+          updates.push(`vehicle_id = NULL`);
+          updates.push(`hired_vehicle_info = $${paramIndex++}`);
+          params.push(fields.hired_vehicle_info || "Наёмная");
+          if (fields.vehicle_volume_at_time !== undefined) {
+            updates.push(`vehicle_volume_at_time = $${paramIndex++}`);
+            params.push(fields.vehicle_volume_at_time);
+          } else {
+            updates.push(`vehicle_volume_at_time = 0`);
+          }
+          await logChange(
+            req.user.id,
+            "trips",
+            id,
+            "vehicle_id",
+            trip.vehicle_id || "наёмная",
+            "наёмная",
+            ip,
+          );
+        } else {
+          const v = await query("SELECT volume FROM vehicles WHERE id = $1", [
+            fields.vehicle_id,
+          ]);
+          if (v.rows.length > 0) {
+            updates.push(`vehicle_id = $${paramIndex++}`);
+            params.push(fields.vehicle_id);
+            updates.push(`vehicle_volume_at_time = $${paramIndex++}`);
+            params.push(Number(v.rows[0].volume) || 0);
+            updates.push(`hired_vehicle_info = NULL`);
+            if (String(trip.vehicle_id) !== String(fields.vehicle_id)) {
+              await logChange(
+                req.user.id,
+                "trips",
+                id,
+                "vehicle_id",
+                trip.vehicle_id,
+                fields.vehicle_id,
+                ip,
+              );
             }
           }
-          if (field === "vehicle_id" && fields[field] !== trip.vehicle_id) {
-            const newVehicle = await query(
-              "SELECT volume FROM vehicles WHERE id = $1",
-              [fields[field]],
-            );
-            if (newVehicle.rows.length > 0) {
-              updates.push(`vehicle_volume_at_time = $${paramIndex++}`);
-              params.push(newVehicle.rows[0].volume);
-            }
-          }
+        }
+      }
 
+      // Специальная обработка смены водителя
+      if (fields.driver_id !== undefined) {
+        if (fields.driver_id === null) {
+          updates.push(`driver_id = NULL`);
+          updates.push(`hired_driver_info = $${paramIndex++}`);
+          params.push(fields.hired_driver_info || "Наёмный");
+          if (fields.driver_rate_at_time !== undefined) {
+            updates.push(`driver_rate_at_time = $${paramIndex++}`);
+            params.push(fields.driver_rate_at_time);
+          }
+          await logChange(
+            req.user.id,
+            "trips",
+            id,
+            "driver_id",
+            trip.driver_id || "наёмный",
+            "наёмный",
+            ip,
+          );
+        } else {
+          const d = await query(
+            "SELECT default_rate FROM drivers WHERE id = $1",
+            [fields.driver_id],
+          );
+          if (d.rows.length > 0) {
+            updates.push(`driver_id = $${paramIndex++}`);
+            params.push(fields.driver_id);
+            updates.push(`driver_rate_at_time = $${paramIndex++}`);
+            params.push(Number(d.rows[0].default_rate) || 0);
+            updates.push(`hired_driver_info = NULL`);
+            if (String(trip.driver_id) !== String(fields.driver_id)) {
+              await logChange(
+                req.user.id,
+                "trips",
+                id,
+                "driver_id",
+                trip.driver_id,
+                fields.driver_id,
+                ip,
+              );
+            }
+          }
+        }
+      }
+
+      // Остальные поля
+      for (const field of allowedFields) {
+        if (field === "vehicle_id" || field === "driver_id") continue;
+        if (field === "hired_vehicle_info" && fields.vehicle_id !== undefined)
+          continue;
+        if (field === "hired_driver_info" && fields.driver_id !== undefined)
+          continue;
+
+        if (fields[field] !== undefined) {
           updates.push(`${field} = $${paramIndex++}`);
           params.push(fields[field]);
 
@@ -586,51 +660,88 @@ async function handler(req, res) {
       revenue,
       comment,
       addresses,
+      hired_vehicle_info,
+      hired_driver_info,
+      vehicle_volume,
     } = req.body;
 
-    const errors = validateTrip(req.body, false);
-    if (errors.length > 0)
-      return res.status(400).json({ error: errors.join(", ") });
+    // Валидация: либо своя машина, либо наёмная
+    if (!trip_date)
+      return res.status(400).json({ error: "Укажите дату рейса" });
+    if (!vehicle_id && !hired_vehicle_info) {
+      return res
+        .status(400)
+        .json({ error: "Укажите машину (свою или наёмную)" });
+    }
+    if (!driver_id && !hired_driver_info) {
+      return res
+        .status(400)
+        .json({ error: "Укажите водителя (своего или наёмного)" });
+    }
 
     try {
-      const vehicleRes = await query(
-        "SELECT volume FROM vehicles WHERE id = $1 AND is_archived = false",
-        [vehicle_id],
-      );
-      if (vehicleRes.rows.length === 0)
-        return res
-          .status(400)
-          .json({ error: "Машина не найдена или архивирована" });
+      let finalVehicleId = null;
+      let finalVehicleVolume = 0;
+      let finalHiredVehicleInfo = null;
 
-      const driverRes = await query(
-        "SELECT default_rate FROM drivers WHERE id = $1 AND is_archived = false",
-        [driver_id],
-      );
-      if (driverRes.rows.length === 0)
-        return res
-          .status(400)
-          .json({ error: "Водитель не найден или архивирован" });
+      if (vehicle_id) {
+        const v = await query(
+          "SELECT volume FROM vehicles WHERE id = $1 AND is_archived = false",
+          [vehicle_id],
+        );
+        if (v.rows.length === 0)
+          return res
+            .status(400)
+            .json({ error: "Машина не найдена или архивирована" });
+        finalVehicleId = vehicle_id;
+        finalVehicleVolume = Number(v.rows[0].volume) || 0;
+      } else if (hired_vehicle_info && hired_vehicle_info.trim()) {
+        finalHiredVehicleInfo = hired_vehicle_info.trim();
+        finalVehicleVolume = Number(vehicle_volume) || 0;
+      }
 
-      const vehicleVolume = vehicleRes.rows[0].volume;
-      const driverRate = driverRes.rows[0].default_rate;
+      let finalDriverId = null;
+      let finalDriverRate = 0;
+      let finalHiredDriverInfo = null;
+
+      if (driver_id) {
+        const d = await query(
+          "SELECT default_rate FROM drivers WHERE id = $1 AND is_archived = false",
+          [driver_id],
+        );
+        if (d.rows.length === 0)
+          return res
+            .status(400)
+            .json({ error: "Водитель не найден или архивирован" });
+        finalDriverId = driver_id;
+        finalDriverRate = Number(d.rows[0].default_rate) || 0;
+      } else if (hired_driver_info && hired_driver_info.trim()) {
+        finalHiredDriverInfo = hired_driver_info.trim();
+        // Для наёмного водителя ставка вводится вручную
+        finalDriverRate = Number(req.body.driver_rate) || 0;
+      }
 
       const tripNumber = await generateTripNumber();
 
       const tripResult = await query(
         `INSERT INTO trips (
-                    trip_number, trip_date, trip_type, vehicle_id, vehicle_volume_at_time,
-                    driver_id, driver_rate_at_time, route_id, route_text, plan_km, fact_km,
+                    trip_number, trip_date, trip_type, 
+                    vehicle_id, vehicle_volume_at_time, hired_vehicle_info,
+                    driver_id, driver_rate_at_time, hired_driver_info,
+                    route_id, route_text, plan_km, fact_km,
                     revenue, comment, created_by
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
                 RETURNING id, trip_number`,
         [
           tripNumber,
           trip_date,
           trip_type || "city",
-          vehicle_id,
-          vehicleVolume,
-          driver_id,
-          driverRate,
+          finalVehicleId,
+          finalVehicleVolume,
+          finalHiredVehicleInfo,
+          finalDriverId,
+          finalDriverRate,
+          finalHiredDriverInfo,
           route_id || null,
           route_text || null,
           plan_km || 0,
@@ -650,7 +761,7 @@ async function handler(req, res) {
 
           await query(
             `INSERT INTO orders (trip_id, external_id, address, contact_name, phone, volume, sequence_num, note, source)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'manual')`,
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'manual')`,
             [
               tripId,
               addr.external_id || null,
