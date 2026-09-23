@@ -588,8 +588,7 @@
 
                     if (reload) {
                         await this.loadAll();
-                        // После загрузки данных — перерисовываем графики
-                        this.$nextTick(() => this.renderCharts());
+                        // Графики нарисуются в loadAll
                     }
                 },
 
@@ -644,8 +643,8 @@
                         this.byRoutes = byRoutes.data || [];
                         this.costsBreakdown = costsBreakdown.data || [];
 
-                        // Рисуем графики
-                        this.$nextTick(() => this.renderCharts());
+                        // Рисуем графики с небольшой задержкой, чтобы DOM успел обновиться
+                        setTimeout(() => this.renderCharts(), 50);
 
                     } catch (e) {
                         this.error = e.message;
@@ -656,7 +655,7 @@
 
                 switchTab(tab) {
                     this.tab = tab;
-                    this.$nextTick(() => this.renderCharts());
+                    setTimeout(() => this.renderCharts(), 50);
                 },
 
                 sortBy(collection, field) {
@@ -678,12 +677,25 @@
                 },
 
                 renderCharts() {
-                    // === Динамика на дашборде ===
-                    const ctxMonthly = document.getElementById('chartMonthly');
-                    if (this.chartMonthly) {
-                        this.chartMonthly.destroy();
-                        this.chartMonthly = null;
+                    // Сначала уничтожаем ВСЕ старые диаграммы
+                    if (this.chartMonthly) { try { this.chartMonthly.destroy(); } catch(e) {} this.chartMonthly = null; }
+                    if (this.chartCosts) { try { this.chartCosts.destroy(); } catch(e) {} this.chartCosts = null; }
+                    if (this.chartMonthsFull) { try { this.chartMonthsFull.destroy(); } catch(e) {} this.chartMonthsFull = null; }
+                    if (this.chartCostsFull) { try { this.chartCostsFull.destroy(); } catch(e) {} this.chartCostsFull = null; }
+
+                    // Рисуем ТОЛЬКО для активной вкладки
+                    if (this.tab === 'dashboard') {
+                        this.renderDashboardCharts();
+                    } else if (this.tab === 'months') {
+                        this.renderMonthsCharts();
+                    } else if (this.tab === 'costs') {
+                        this.renderCostsCharts();
                     }
+                },
+
+                renderDashboardCharts() {
+                    // Динамика по месяцам
+                    const ctxMonthly = document.getElementById('chartMonthly');
                     if (ctxMonthly && this.monthly.length > 0) {
                         const labels = [...this.monthly].reverse().map(m => m.month_label);
                         const costs = [...this.monthly].reverse().map(m => m.costs);
@@ -701,16 +713,11 @@
 
                         this.chartMonthly = new Chart(ctxMonthly, {
                             type: 'bar',
-                            data: {
-                                labels: labels,
-                                datasets: datasets
-                            },
+                            data: { labels: labels, datasets: datasets },
                             options: {
                                 responsive: true,
                                 maintainAspectRatio: false,
-                                plugins: {
-                                    legend: { position: 'bottom', labels: { font: { size: 11 } } }
-                                },
+                                plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } },
                                 scales: {
                                     y: {
                                         ticks: {
@@ -722,12 +729,8 @@
                         });
                     }
 
-                    // === Круговая затрат (дашборд) ===
+                    // Круговая затрат
                     const ctxCosts = document.getElementById('chartCosts');
-                    if (this.chartCosts) {
-                        this.chartCosts.destroy();
-                        this.chartCosts = null;
-                    }
                     if (ctxCosts && this.costsBreakdown.length > 0) {
                         const labels = this.costsBreakdown.map(c => this.categoryLabel(c.category));
                         const data = this.costsBreakdown.map(c => Number(c.total));
@@ -746,49 +749,37 @@
                                 maintainAspectRatio: false,
                                 plugins: {
                                     legend: { position: 'right', labels: { font: { size: 11 } } },
-                                    tooltip: {
-                                        callbacks: {
-                                            label: ctx => ctx.label + ': ' + this.formatMoney(ctx.raw)
-                                        }
-                                    }
+                                    tooltip: { callbacks: { label: ctx => ctx.label + ': ' + this.formatMoney(ctx.raw) } }
                                 }
                             }
                         });
                     }
+                },
 
-                    // === График месяцев (полный) ===
+                renderMonthsCharts() {
                     const ctxMonthsFull = document.getElementById('chartMonthsFull');
-                    if (this.chartMonthsFull) {
-                        this.chartMonthsFull.destroy();
-                        this.chartMonthsFull = null;
-                    }
-                    if (ctxMonthly && this.monthly.length > 0) {
-                        const labels = [...this.monthly].reverse().map(m => m.month_label);
-                        const costs = [...this.monthly].reverse().map(m => m.costs);
+                    if (ctxMonthsFull && this.byMonths.length > 0) {
+                        const labels = [...this.byMonths].reverse().map(m => m.month_label);
+                        const costs = [...this.byMonths].reverse().map(m => m.costs);
                         
                         const datasets = [
-                            { label: 'Затраты', data: costs, backgroundColor: '#DC2626' }
+                            { label: 'Затраты', data: costs, borderColor: '#DC2626', backgroundColor: 'rgba(220, 38, 38, 0.1)', tension: 0.3, fill: true }
                         ];
                         
                         if (this.showRevenue) {
-                            const revenue = [...this.monthly].reverse().map(m => m.revenue);
-                            const margin = [...this.monthly].reverse().map(m => m.margin);
-                            datasets.unshift({ label: 'Выручка', data: revenue, backgroundColor: '#059669' });
-                            datasets.push({ label: 'Маржа', data: margin, backgroundColor: '#2563EB' });
+                            const revenue = [...this.byMonths].reverse().map(m => m.revenue);
+                            const margin = [...this.byMonths].reverse().map(m => m.margin);
+                            datasets.unshift({ label: 'Выручка', data: revenue, borderColor: '#059669', backgroundColor: 'rgba(5, 150, 105, 0.1)', tension: 0.3, fill: true });
+                            datasets.push({ label: 'Маржа', data: margin, borderColor: '#2563EB', backgroundColor: 'rgba(37, 99, 235, 0.1)', tension: 0.3, fill: true });
                         }
 
-                        this.chartMonthly = new Chart(ctxMonthly, {
-                            type: 'bar',
-                            data: {
-                                labels: labels,
-                                datasets: datasets
-                            },
+                        this.chartMonthsFull = new Chart(ctxMonthsFull, {
+                            type: 'line',
+                            data: { labels: labels, datasets: datasets },
                             options: {
                                 responsive: true,
                                 maintainAspectRatio: false,
-                                plugins: {
-                                    legend: { position: 'bottom', labels: { font: { size: 11 } } }
-                                },
+                                plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } },
                                 scales: {
                                     y: {
                                         ticks: {
@@ -799,13 +790,10 @@
                             }
                         });
                     }
+                },
 
-                    // === График затрат (полный) ===
+                renderCostsCharts() {
                     const ctxCostsFull = document.getElementById('chartCostsFull');
-                    if (this.chartCostsFull) {
-                        this.chartCostsFull.destroy();
-                        this.chartCostsFull = null;
-                    }
                     if (ctxCostsFull && this.costsBreakdown.length > 0) {
                         const labels = this.costsBreakdown.map(c => this.categoryLabel(c.category));
                         const data = this.costsBreakdown.map(c => Number(c.total));
@@ -824,11 +812,7 @@
                                 maintainAspectRatio: false,
                                 plugins: {
                                     legend: { position: 'right', labels: { font: { size: 11 } } },
-                                    tooltip: {
-                                        callbacks: {
-                                            label: ctx => ctx.label + ': ' + this.formatMoney(ctx.raw)
-                                        }
-                                    }
+                                    tooltip: { callbacks: { label: ctx => ctx.label + ': ' + this.formatMoney(ctx.raw) } }
                                 }
                             }
                         });
