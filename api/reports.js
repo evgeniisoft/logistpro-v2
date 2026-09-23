@@ -458,20 +458,27 @@ async function handler(req, res) {
                     TO_CHAR(t.trip_date, 'TMMonth YYYY') AS month_label,
                     t.fact_km,
                     t.revenue,
-                    t.status
+                    t.status,
+                    t.driver_rate_at_time,
+                    v.type AS vehicle_type,
+                    v.amort_rate AS vehicle_amort_rate
                  FROM trips t
+                 LEFT JOIN vehicles v ON v.id = t.vehicle_id
                  ${whereClause}`,
         periodParams,
       );
 
+      // Ручные затраты по рейсам
       const costsResult = await query(
         `SELECT 
-                    TO_CHAR(t.trip_date, 'YYYY-MM') AS month,
+                    t.id AS trip_id,
+                    t.trip_date,
+                    c.category,
                     COALESCE(SUM(c.amount), 0) AS costs
                  FROM costs c
                  JOIN trips t ON t.id = c.trip_id
                  ${whereClause}
-                 GROUP BY TO_CHAR(t.trip_date, 'YYYY-MM')`,
+                 GROUP BY t.id, t.trip_date, c.category`,
         periodParams,
       );
 
@@ -487,6 +494,7 @@ async function handler(req, res) {
             trips_done: 0,
             total_km: 0,
             revenue: 0,
+            costs: 0,
           };
         }
         const row = monthsMap[m];
@@ -494,27 +502,59 @@ async function handler(req, res) {
         if (t.status === "done") row.trips_done++;
         row.total_km += Number(t.fact_km) || 0;
         row.revenue += Number(t.revenue) || 0;
+
+        // Зарплата водителя
+        const salaryInCosts = costsResult.rows.find(
+          (c) => c.trip_id === t.trip_id && c.category === "salary",
+        );
+        if (salaryInCosts) {
+          row.costs += Number(salaryInCosts.costs);
+        } else if (Number(t.driver_rate_at_time) > 0) {
+          row.costs += Number(t.driver_rate_at_time);
+        }
+
+        // Амортизация (только для своих машин)
+        const amortInCosts = costsResult.rows.find(
+          (c) => c.trip_id === t.trip_id && c.category === "amort",
+        );
+        if (amortInCosts) {
+          row.costs += Number(amortInCosts.costs);
+        } else if (
+          t.vehicle_type === "own" &&
+          Number(t.vehicle_amort_rate) > 0 &&
+          Number(t.fact_km) > 0
+        ) {
+          row.costs += Math.round(
+            Number(t.fact_km) * Number(t.vehicle_amort_rate),
+          );
+        }
+
+        // Остальные ручные затраты
+        const otherCosts = costsResult.rows.filter(
+          (c) =>
+            c.trip_id === t.trip_id &&
+            !["salary", "amort"].includes(c.category),
+        );
+        otherCosts.forEach((c) => {
+          row.costs += Number(c.costs);
+        });
       });
 
       const data = Object.values(monthsMap)
-        .map((row) => {
-          const costRow = costsResult.rows.find((c) => c.month === row.month);
-          const costs = costRow ? Number(costRow.costs) : 0;
-          return {
-            month: row.month,
-            month_label: row.month_label,
-            trips_count: row.trips_count,
-            trips_done: row.trips_done,
-            total_km: row.total_km,
-            revenue: row.revenue,
-            costs: costs,
-            margin: row.revenue - costs,
-            margin_percent:
-              row.revenue > 0
-                ? Math.round(((row.revenue - costs) / row.revenue) * 100)
-                : 0,
-          };
-        })
+        .map((row) => ({
+          month: row.month,
+          month_label: row.month_label,
+          trips_count: row.trips_count,
+          trips_done: row.trips_done,
+          total_km: row.total_km,
+          revenue: row.revenue,
+          costs: row.costs,
+          margin: row.revenue - row.costs,
+          margin_percent:
+            row.revenue > 0
+              ? Math.round(((row.revenue - row.costs) / row.revenue) * 100)
+              : 0,
+        }))
         .sort((a, b) => b.month.localeCompare(a.month));
 
       return res.json({ data });
