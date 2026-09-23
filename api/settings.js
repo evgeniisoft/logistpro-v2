@@ -7,6 +7,7 @@ const ALLOWED_KEYS = [
     'bitrix_secret_key',
     'bitrix_webhook_url',
     'bitrix_active',
+    'show_revenue',
     'company_name',
     'company_phone'
 ];
