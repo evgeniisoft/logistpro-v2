@@ -87,12 +87,58 @@
                                  @dragstart="dragStart(t.id)"
                                  @dragend="dragEnd()"
                                  @click="openTrip(t.id)">
-                                <div class="trip-card-number" x-text="t.trip_number"></div>
-                                <div class="trip-card-date" x-text="formatTripDate(t.trip_date)"></div>
-                                <div class="trip-card-row" x-text="t.vehicle_plate || '—'"></div>
-                                <div class="trip-card-row" x-text="t.driver_name || '—'"></div>
-                                <div class="trip-card-load">
-                                    <div x-text="t.orders_count + ' адресов · ' + (t.fact_km || 0) + ' км'"></div>
+
+                                <!-- Шапка карточки -->
+                                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+                                    <div>
+                                        <div class="trip-card-number" x-text="t.trip_number"></div>
+                                        <div class="trip-card-date" x-text="formatTripDate(t.trip_date)"></div>
+                                    </div>
+                                    <template x-if="showRevenue && t.revenue > 0">
+                                        <div style="font-size:11px;font-weight:600;color:#059669;text-align:right;">
+                                            <div x-text="formatMoney(t.revenue)"></div>
+                                            <div style="font-size:9px;color:var(--text-secondary);font-weight:500;text-transform:uppercase;">выручка</div>
+                                        </div>
+                                    </template>
+                                </div>
+
+                                <!-- Машина -->
+                                <div class="trip-card-line">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--text-secondary);">
+                                        <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"></path>
+                                        <path d="M15 18H9"></path>
+                                        <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"></path>
+                                        <circle cx="17" cy="18" r="2"></circle>
+                                        <circle cx="7" cy="18" r="2"></circle>
+                                    </svg>
+                                    <span x-text="tripVehicleLabel(t)"></span>
+                                    <span class="type-chip" :class="t.hired_vehicle_info ? 'type-chip-hired' : 'type-chip-own'"
+                                          x-text="t.hired_vehicle_info ? 'наём' : 'своя'"></span>
+                                </div>
+
+                                <!-- Водитель -->
+                                <div class="trip-card-line">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--text-secondary);">
+                                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                        <circle cx="12" cy="7" r="4"></circle>
+                                    </svg>
+                                    <span x-text="tripDriverLabel(t)"></span>
+                                </div>
+
+                                <!-- Маршрут -->
+                                <template x-if="tripRoutePreview(t)">
+                                    <div class="trip-card-route" x-text="tripRoutePreview(t)"></div>
+                                </template>
+
+                                <!-- Шкала загрузки -->
+                                <div class="trip-card-load-block">
+                                    <div class="trip-card-load-label">
+                                        <span x-text="tripLoadInfo(t)"></span>
+                                        <span x-text="tripLoadPercent(t) + '%'"></span>
+                                    </div>
+                                    <div class="trip-card-load-bar">
+                                        <div class="trip-card-load-fill" :class="loadColor(t)" :style="'width:' + loadWidth(t) + '%'"></div>
+                                    </div>
                                 </div>
                             </div>
                         </template>
@@ -155,7 +201,7 @@
 
                     <template x-if="tripModal.form.vehicle_mode === 'own'">
                         <div class="form-group">
-                            <select class="form-input" x-model.number="tripModal.form.vehicle_id" @change="onVehicleChange()" :disabled="tripModal.saving">
+                            <select class="form-input" x-model.number="tripModal.form.vehicle_id" :disabled="tripModal.saving">
                                 <option :value="null">— Выберите машину —</option>
                                 <template x-for="v in vehicles" :key="v.id">
                                     <option :value="v.id" x-text="v.plate + ' · ' + (v.model || '') + ' · ' + (v.volume || '?') + ' м³'"></option>
@@ -192,7 +238,7 @@
 
                     <template x-if="tripModal.form.driver_mode === 'own'">
                         <div class="form-group">
-                            <select class="form-input" x-model.number="tripModal.form.driver_id" @change="onDriverChange()" :disabled="tripModal.saving">
+                            <select class="form-input" x-model.number="tripModal.form.driver_id" :disabled="tripModal.saving">
                                 <option :value="null">— Выберите водителя —</option>
                                 <template x-for="d in drivers" :key="d.id">
                                     <option :value="d.id" x-text="d.full_name + ' · ' + (d.default_rate || 0) + ' ₽'"></option>
@@ -251,14 +297,13 @@
                         </button>
                     </div>
 
-                    <!-- Индикатор загрузки -->
-                    <div x-show="tripModal.form.vehicle_id" style="margin-bottom:16px;">
+                    <div x-show="selectedVehicleVolume > 0" style="margin-bottom:16px;">
                         <div class="load-info">
                             <span>Загрузка: <strong x-text="totalVolume + ' м³'"></strong> из <strong x-text="selectedVehicleVolume + ' м³'"></strong></span>
                             <span><strong x-text="loadPercent + '%'"></strong></span>
                         </div>
                         <div class="load-bar">
-                            <div class="load-bar-fill" :class="loadColor" :style="'width:' + Math.min(loadPercent, 100) + '%'"></div>
+                            <div class="load-bar-fill" :class="loadColorTripModal" :style="'width:' + Math.min(loadPercent, 100) + '%'"></div>
                         </div>
                     </div>
 
@@ -320,6 +365,7 @@
                 routes: [],
                 loading: true,
                 error: '',
+                showRevenue: false,
 
                 draggedTripId: null,
                 dragOverStatus: null,
@@ -337,7 +383,6 @@
                     error: '',
                     form: {}
                 },
-                showRevenue: false,
 
                 get userInitials() {
                     if (!this.user?.full_name) return '?';
@@ -358,7 +403,7 @@
                 },
 
                 get totalVolume() {
-                    const total = this.tripModal.form.addresses.reduce((sum, a) => sum + (Number(a.volume) || 0), 0);
+                    const total = (this.tripModal.form.addresses || []).reduce((sum, a) => sum + (Number(a.volume) || 0), 0);
                     return Math.round(total * 100) / 100;
                 },
 
@@ -368,7 +413,7 @@
                     return Math.round(this.totalVolume / cap * 100);
                 },
 
-                get loadColor() {
+                get loadColorTripModal() {
                     const p = this.loadPercent;
                     if (p > 100) return 'load-orange';
                     if (p >= 81) return 'load-green';
@@ -383,17 +428,16 @@
                     }
                     if (!window.AUTH.requireLogin()) return;
                     this.user = window.API.getUser();
-                    
-                    // Загружаем настройки (для show_revenue)
+
+                    // Загружаем настройки
                     try {
                         const settings = await window.API.api('/api/settings');
-                        const showRevenueSetting = (settings.settings || []).find(s => s.key === 'show_revenue');
-                        this.showRevenue = showRevenueSetting?.value === 'true';
+                        const setting = (settings.settings || []).find(s => s.key === 'show_revenue');
+                        this.showRevenue = setting?.value === 'true';
                     } catch (e) {
-                        console.error('Ошибка загрузки настроек:', e);
                         this.showRevenue = false;
                     }
-                    
+
                     await this.loadData();
                 },
 
@@ -421,6 +465,69 @@
                 formatTripDate(d) {
                     if (!d) return '—';
                     return window.HELPERS.formatDate(d);
+                },
+
+                formatMoney(v) {
+                    return window.HELPERS.formatMoney(v);
+                },
+
+                // ============ ХЕЛПЕРЫ ДЛЯ КАРТОЧКИ ============
+
+                tripVehicleLabel(t) {
+                    if (t.hired_vehicle_info) {
+                        return t.hired_vehicle_info;
+                    }
+                    return t.vehicle_plate || '—';
+                },
+
+                tripDriverLabel(t) {
+                    if (t.hired_driver_info) {
+                        return t.hired_driver_info;
+                    }
+                    return t.driver_name || '—';
+                },
+
+                tripRoutePreview(t) {
+                    // Формируем краткий маршрут из адресов заказов
+                    // Но у нас на доске нет заказов. Показываем route_text (сохранённый маршрут)
+                    if (t.route_text) {
+                        // Обрезаем если длинный
+                        const text = t.route_text;
+                        if (text.length > 60) {
+                            return text.substring(0, 60) + '...';
+                        }
+                        return text;
+                    }
+                    // Если междугородний с маршрутом из справочника
+                    if (t.route_name) {
+                        return t.route_name;
+                    }
+                    return '';
+                },
+
+                tripLoadInfo(t) {
+                    const vol = Number(t.total_volume) || 0;
+                    const cap = Number(t.vehicle_volume_at_time) || 0;
+                    return vol + ' / ' + (cap || '?') + ' м³';
+                },
+
+                tripLoadPercent(t) {
+                    const vol = Number(t.total_volume) || 0;
+                    const cap = Number(t.vehicle_volume_at_time) || 0;
+                    if (!cap) return 0;
+                    return Math.round(vol / cap * 100);
+                },
+
+                loadWidth(t) {
+                    return Math.min(this.tripLoadPercent(t), 100);
+                },
+
+                loadColor(t) {
+                    const p = this.tripLoadPercent(t);
+                    if (p > 100) return 'load-orange';
+                    if (p >= 81) return 'load-green';
+                    if (p >= 51) return 'load-yellow';
+                    return 'load-red';
                 },
 
                 tripsByStatus(status) {
@@ -452,7 +559,6 @@
                     const trip = this.trips.find(t => t.id === tripId);
                     if (!trip || trip.status === newStatus) return;
 
-                    // Проверка перехода в "Завершён"
                     if (newStatus === 'done') {
                         const detail = await window.API.api('/api/trips?action=get&id=' + tripId);
                         if (!detail.trip.fact_km || Number(detail.trip.fact_km) <= 0) {
@@ -489,19 +595,14 @@
                         form: {
                             trip_date: new Date().toISOString().slice(0, 10),
                             trip_type: 'city',
-                            
-                            // Режим машины: own / hired
                             vehicle_mode: 'own',
                             vehicle_id: null,
                             hired_vehicle_info: '',
                             vehicle_volume: 0,
-                            
-                            // Режим водителя: own / hired
                             driver_mode: 'own',
                             driver_id: null,
                             hired_driver_info: '',
                             driver_rate: 0,
-                            
                             route_id: null,
                             plan_km: 100,
                             revenue: 0,
@@ -537,7 +638,6 @@
 
                 setVehicleMode(mode) {
                     this.tripModal.form.vehicle_mode = mode;
-                    // Сбрасываем противоположное
                     if (mode === 'own') {
                         this.tripModal.form.hired_vehicle_info = '';
                         this.tripModal.form.vehicle_volume = 0;
@@ -556,14 +656,6 @@
                     }
                 },
 
-                onVehicleChange() {
-                    // Ничего — геттер selectedVehicleVolume сам подтянет объём
-                },
-
-                onDriverChange() {
-                    // Ничего
-                },
-
                 async saveTrip() {
                     this.tripModal.error = '';
                     const form = this.tripModal.form;
@@ -571,7 +663,6 @@
                     // Валидация
                     if (!form.trip_date) { this.tripModal.error = 'Укажите дату рейса'; return; }
                     
-                    // Машина
                     if (form.vehicle_mode === 'own' && !form.vehicle_id) {
                         this.tripModal.error = 'Выберите машину';
                         return;
@@ -585,7 +676,6 @@
                         return;
                     }
 
-                    // Водитель
                     if (form.driver_mode === 'own' && !form.driver_id) {
                         this.tripModal.error = 'Выберите водителя';
                         return;
@@ -621,7 +711,6 @@
                             }))
                         };
 
-                        // Машина
                         if (form.vehicle_mode === 'own') {
                             payload.vehicle_id = form.vehicle_id;
                         } else {
@@ -629,7 +718,6 @@
                             payload.vehicle_volume = form.vehicle_volume;
                         }
 
-                        // Водитель
                         if (form.driver_mode === 'own') {
                             payload.driver_id = form.driver_id;
                         } else {
