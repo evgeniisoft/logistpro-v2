@@ -519,7 +519,7 @@
                     }
                 },
 
-                setPreset(preset, reload = true) {
+                async setPreset(preset, reload = true) {
                     this.preset = preset;
                     const now = new Date();
 
@@ -543,12 +543,17 @@
                         this.customTo = '';
                     }
 
-                    if (reload) this.loadAll();
+                    if (reload) {
+                        await this.loadAll();
+                        // После загрузки данных — перерисовываем графики
+                        this.$nextTick(() => this.renderCharts());
+                    }
                 },
 
-                applyCustomRange() {
+                async applyCustomRange() {
                     if (this.customFrom || this.customTo) {
-                        this.loadAll();
+                        await this.loadAll();
+                        this.$nextTick(() => this.renderCharts());
                     }
                 },
 
@@ -630,11 +635,13 @@
                 },
 
                 renderCharts() {
-                    // Динамика на дашборде
+                    // === Динамика на дашборде ===
                     const ctxMonthly = document.getElementById('chartMonthly');
+                    if (this.chartMonthly) {
+                        this.chartMonthly.destroy();
+                        this.chartMonthly = null;
+                    }
                     if (ctxMonthly && this.monthly.length > 0) {
-                        if (this.chartMonthly) this.chartMonthly.destroy();
-                        
                         const labels = [...this.monthly].reverse().map(m => m.month_label);
                         const revenue = [...this.monthly].reverse().map(m => m.revenue);
                         const costs = [...this.monthly].reverse().map(m => m.costs);
@@ -667,11 +674,13 @@
                         });
                     }
 
-                    // Круговая затрат
+                    // === Круговая затрат (дашборд) ===
                     const ctxCosts = document.getElementById('chartCosts');
+                    if (this.chartCosts) {
+                        this.chartCosts.destroy();
+                        this.chartCosts = null;
+                    }
                     if (ctxCosts && this.costsBreakdown.length > 0) {
-                        if (this.chartCosts) this.chartCosts.destroy();
-                        
                         const labels = this.costsBreakdown.map(c => this.categoryLabel(c.category));
                         const data = this.costsBreakdown.map(c => Number(c.total));
 
@@ -699,11 +708,13 @@
                         });
                     }
 
-                    // График месяцев (полный)
+                    // === График месяцев (полный) ===
                     const ctxMonthsFull = document.getElementById('chartMonthsFull');
+                    if (this.chartMonthsFull) {
+                        this.chartMonthsFull.destroy();
+                        this.chartMonthsFull = null;
+                    }
                     if (ctxMonthsFull && this.byMonths.length > 0) {
-                        if (this.chartMonthsFull) this.chartMonthsFull.destroy();
-                        
                         const labels = [...this.byMonths].reverse().map(m => m.month_label);
                         const revenue = [...this.byMonths].reverse().map(m => m.revenue);
                         const costs = [...this.byMonths].reverse().map(m => m.costs);
@@ -736,11 +747,13 @@
                         });
                     }
 
-                    // График затрат (полный)
+                    // === График затрат (полный) ===
                     const ctxCostsFull = document.getElementById('chartCostsFull');
+                    if (this.chartCostsFull) {
+                        this.chartCostsFull.destroy();
+                        this.chartCostsFull = null;
+                    }
                     if (ctxCostsFull && this.costsBreakdown.length > 0) {
-                        if (this.chartCostsFull) this.chartCostsFull.destroy();
-                        
                         const labels = this.costsBreakdown.map(c => this.categoryLabel(c.category));
                         const data = this.costsBreakdown.map(c => Number(c.total));
 
