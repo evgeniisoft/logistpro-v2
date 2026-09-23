@@ -593,23 +593,26 @@ async function handler(req, res) {
       const { status, month, driver_id, vehicle_id, limit } = req.query;
 
       let sql = `
-                SELECT 
-                    t.id, t.trip_number, t.trip_date, t.trip_type, t.status,
-                    t.plan_km, t.fact_km, t.revenue, t.comment, t.version,
-                    t.driver_rate_at_time, t.vehicle_volume_at_time,
-                    t.created_at, t.updated_at,
-                    v.plate AS vehicle_plate, v.model AS vehicle_model, v.type AS vehicle_type,
-                    d.full_name AS driver_name,
-                    r.name AS route_name,
-                    (SELECT COUNT(*) FROM orders WHERE trip_id = t.id) AS orders_count,
-                    (SELECT COALESCE(SUM(volume), 0) FROM orders WHERE trip_id = t.id) AS total_volume,
-                    (SELECT COALESCE(SUM(amount), 0) FROM costs WHERE trip_id = t.id) AS total_costs
-                FROM trips t
-                LEFT JOIN vehicles v ON v.id = t.vehicle_id
-                LEFT JOIN drivers d ON d.id = t.driver_id
-                LEFT JOIN routes r ON r.id = t.route_id
-                WHERE 1=1
-            `;
+          SELECT 
+              t.id, t.trip_number, t.trip_date, t.trip_type, t.status,
+              t.plan_km, t.fact_km, t.revenue, t.comment, t.version,
+              t.driver_rate_at_time, t.vehicle_volume_at_time,
+              t.vehicle_id, t.hired_vehicle_info,
+              t.driver_id, t.hired_driver_info,
+              t.route_text,
+              t.created_at, t.updated_at,
+              v.plate AS vehicle_plate, v.model AS vehicle_model, v.type AS vehicle_type,
+              d.full_name AS driver_name,
+              r.name AS route_name,
+              (SELECT COUNT(*) FROM orders WHERE trip_id = t.id) AS orders_count,
+              (SELECT COALESCE(SUM(volume), 0) FROM orders WHERE trip_id = t.id) AS total_volume,
+              (SELECT COALESCE(SUM(amount), 0) FROM costs WHERE trip_id = t.id) AS total_costs
+          FROM trips t
+          LEFT JOIN vehicles v ON v.id = t.vehicle_id
+          LEFT JOIN drivers d ON d.id = t.driver_id
+          LEFT JOIN routes r ON r.id = t.route_id
+          WHERE 1=1
+      `;
 
       const params = [];
       let paramIndex = 1;
