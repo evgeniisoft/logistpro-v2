@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Журнал · ЛогистПро</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/styles.css">
+    <script src="/assets/app.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body x-data="journalPage()" x-init="$nextTick(() => init())">
+
+    <header class="app-header">
+        <div class="app-header-left">
+            <a href="/" class="app-logo">
+                <span class="app-logo-mark">LP</span>
+                <span>ЛогистПро</span>
+            </a>
+            <nav class="app-nav">
+                <a href="/" class="app-nav-link">Рейсы</a>
+                <a href="/incoming.html" class="app-nav-link">Входящие</a>
+                <a href="/reports.html" class="app-nav-link">Отчёты</a>
+                <a href="/references.html" class="app-nav-link">Справочники</a>
+                <a href="/journal.html" class="app-nav-link active">Журнал</a>
+            </nav>
+        </div>
+        <div class="app-header-right">
+            <div class="user-badge">
+                <div class="user-avatar" x-text="userInitials"></div>
+                <div>
+                    <div x-text="user?.full_name || ''" style="font-weight:500;"></div>
+                    <div x-text="roleLabel" style="font-size:11px;opacity:0.7;"></div>
+                </div>
+            </div>
+            <button class="btn btn-ghost btn-sm" @click="logout()" style="color:rgba(255,255,255,0.85);" title="Выйти">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <main class="app-main">
+        <div class="container">
+
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+                <div>
+                    <h1 style="font-size:24px;font-weight:600;margin:0 0 4px 0;">Журнал изменений</h1>
+                    <p style="font-size:13px;color:var(--text-secondary);margin:0;">
+                        История действий пользователей в системе
+                    </p>
+                </div>
+                <button class="btn btn-secondary" @click="loadEntries()" :disabled="loading">
+                    Обновить
+                </button>
+            </div>
+
+            <!-- Фильтры -->
+            <div class="reports-filters">
+                <template x-if="canViewAll">
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label class="form-label">Пользователь</label>
+                        <select class="form-input" x-model="filterUserId" @change="applyFilters()" style="width:220px;">
+                            <option value="">Все пользователи</option>
+                            <template x-for="u in users" :key="u.id">
+                                <option :value="u.id" x-text="u.full_name + ' (' + u.login + ')'"></option>
+                            </template>
+                        </select>
+                    </div>
+                </template>
+
+                <div class="form-group" style="margin-bottom:0;">
+                    <label class="form-label">Таблица</label>
+                    <select class="form-input" x-model="filterTable" @change="applyFilters()" style="width:200px;">
+                        <option value="">Все таблицы</option>
+                        <template x-for="t in tables" :key="t.value">
+                            <option :value="t.value" x-text="t.label + ' (' + t.count + ')'"></option>
+                        </template>
+                    </select>
+                </div>
+
+                <div class="form-group" style="margin-bottom:0;">
+                    <label class="form-label">Поле</label>
+                    <input type="text" class="form-input" x-model="filterField" @input.debounce.500ms="applyFilters()" placeholder="например, status" style="width:180px;">
+                </div>
+
+                <div class="form-group" style="margin-bottom:0;">
+                    <label class="form-label">Период</label>
+                    <div class="preset-buttons">
+                        <button class="preset-btn" :class="preset === 'today' ? 'active' : ''" @click="setPreset('today')">Сегодня</button>
+                        <button class="preset-btn" :class="preset === 'week' ? 'active' : ''" @click="setPreset('week')">7 дней</button>
+                        <button class="preset-btn" :class="preset === 'month' ? 'active' : ''" @click="setPreset('month')">30 дней</button>
+                        <button class="preset-btn" :class="preset === 'all' ? 'active' : ''" @click="setPreset('all')">Всё время</button>
+                        <button class="preset-btn" :class="preset === 'custom' ? 'active' : ''" @click="setPreset('custom')">Произвольно</button>
+                    </div>
+                </div>
+
+                <template x-if="preset === 'custom'">
+                    <div style="display:flex;gap:8px;align-items:flex-end;">
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label class="form-label">С</label>
+                            <input type="date" class="form-input" x-model="customFrom" @change="applyFilters()" style="width:150px;">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label class="form-label">По</label>
+                            <input type="date" class="form-input" x-model="customTo" @change="applyFilters()" style="width:150px;">
+                        </div>
+                    </div>
+                </template>
+
+                <button class="btn btn-secondary btn-sm" @click="resetFilters()" style="margin-left:auto;">Сбросить</button>
+            </div>
+
+            <div x-show="error" x-cloak class="alert alert-error" x-text="error"></div>
+
+            <div x-show="loading" class="skeleton" style="height:400px;"></div>
+
+            <!-- Таблица -->
+            <div x-show="!loading" class="report-table-wrapper">
+                <div class="report-table-header">
+                    <h3 class="report-table-title">
+                        Записи
+                        <span style="font-weight:400;color:var(--text-secondary);font-size:13px;margin-left:8px;"
+                            x-text="'(' + total + ')'"></span>
+                    </h3>
+                    <div style="font-size:12px;color:var(--text-secondary);" x-show="total > 0">
+                        Стр. <span x-text="page"></span> из <span x-text="pages"></span>
+                    </div>
+                </div>
+
+                <div x-show="entries.length === 0" style="padding:40px;text-align:center;color:var(--text-secondary);font-size:13px;">
+                    Нет записей за выбранный период
+                </div>
+
+                <div x-show="entries.length > 0" style="overflow-x:auto;">
+                    <table class="report-table journal-table">
+                        <thead>
+                            <tr>
+                                <th style="width:130px;">Дата</th>
+                                <th style="width:180px;">Пользователь</th>
+                                <th style="width:140px;">Таблица</th>
+                                <th style="width:100px;">Запись</th>
+                                <th style="width:180px;">Поле</th>
+                                <th>Было → Стало</th>
+                                <th style="width:120px;">IP</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="e in entries" :key="e.id">
+                                <tr>
+                                    <td style="font-size:12px;color:var(--text-secondary);" x-text="formatDateTime(e.created_at)"></td>
+                                    <td>
+                                        <div style="font-weight:500;" x-text="e.user_name || '—'"></div>
+                                        <div style="font-size:11px;color:var(--text-secondary);" x-text="e.user_login || ''"></div>
+                                    </td>
+                                    <td>
+                                        <span class="table-chip" x-text="e.table_label"></span>
+                                    </td>
+                                    <td style="font-family:monospace;font-size:12px;" x-text="e.record_id || '—'"></td>
+                                    <td style="font-size:12px;">
+                                        <span x-text="fieldLabel(e.field_name)"></span>
+                                    </td>
+                                    <td>
+                                        <div class="change-cell">
+                                            <span class="change-old" :title="e.old_value || ''" x-text="truncate(e.old_value)"></span>
+                                            <span class="change-arrow">→</span>
+                                            <span class="change-new" :title="e.new_value || ''" x-text="truncate(e.new_value)"></span>
+                                        </div>
+                                    </td>
+                                    <td style="font-family:monospace;font-size:11px;color:var(--text-secondary);" x-text="e.ip || '—'"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Пагинация -->
+                <div x-show="pages > 1" class="pagination">
+                    <button class="btn btn-secondary btn-sm" @click="goToPage(page - 1)" :disabled="page <= 1">
+                        ← Назад
+                    </button>
+                    <span style="font-size:13px;color:var(--text-secondary);">
+                        Страница <strong x-text="page"></strong> из <strong x-text="pages"></strong>
+                    </span>
+                    <button class="btn btn-secondary btn-sm" @click="goToPage(page + 1)" :disabled="page >= pages">
+                        Вперёд →
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        function journalPage() {
+            return {
+                user: null,
+                loading: true,
+                error: '',
+
+                // Фильтры
+                filterUserId: '',
+                filterTable: '',
+                filterField: '',
+                preset: 'month',
+                customFrom: '',
+                customTo: '',
+
+                // Данные
+                users: [],
+                tables: [],
+                canViewAll: false,
+                entries: [],
+                total: 0,
+                page: 1,
+                pages: 1,
+
+                get userInitials() {
+                    if (!this.user?.full_name) return '?';
+                    return this.user.full_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+                },
+
+                get roleLabel() {
+                    const roles = { 'admin': 'Администратор', 'senior_logist': 'Ст. логист', 'logist': 'Логист', 'manager': 'Руководитель', 'viewer': 'Наблюдатель' };
+                    return roles[this.user?.role] || this.user?.role || '';
+                },
+
+                async init() {
+                    if (!window.AUTH) {
+                        setTimeout(() => this.init(), 50);
+                        return;
+                    }
+                    if (!window.AUTH.requireLogin()) return;
+                    this.user = window.API.getUser();
+
+                    await this.loadFilters();
+                    this.setPreset('month', false);
+                    await this.loadEntries();
+                },
+
+                async loadFilters() {
+                    try {
+                        const data = await window.API.api('/api/admin?action=journal-filters');
+                        this.users = data.users || [];
+                        this.tables = data.tables || [];
+                        this.canViewAll = !!data.can_view_all;
+                    } catch (e) {
+                        console.error('Ошибка загрузки фильтров:', e);
+                    }
+                },
+
+                setPreset(preset, reload = true) {
+                    this.preset = preset;
+                    const now = new Date();
+
+                    if (preset === 'today') {
+                        this.customFrom = this.formatDateInput(now);
+                        this.customTo = this.formatDateInput(now);
+                    } else if (preset === 'week') {
+                        const from = new Date(now);
+                        from.setDate(from.getDate() - 6);
+                        this.customFrom = this.formatDateInput(from);
+                        this.customTo = this.formatDateInput(now);
+                    } else if (preset === 'month') {
+                        const from = new Date(now);
+                        from.setDate(from.getDate() - 29);
+                        this.customFrom = this.formatDateInput(from);
+                        this.customTo = this.formatDateInput(now);
+                    } else if (preset === 'all') {
+                        this.customFrom = '';
+                        this.customTo = '';
+                    }
+
+                    if (reload) this.applyFilters();
+                },
+
+                formatDateInput(d) {
+                    const y = d.getFullYear();
+                    const m = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    return y + '-' + m + '-' + day;
+                },
+
+                applyFilters() {
+                    this.page = 1;
+                    this.loadEntries();
+                },
+
+                resetFilters() {
+                    this.filterUserId = '';
+                    this.filterTable = '';
+                    this.filterField = '';
+                    this.setPreset('month');
+                },
+
+                buildQuery() {
+                    const params = new URLSearchParams();
+                    params.append('action', 'journal-list');
+                    if (this.filterUserId && this.canViewAll) params.append('user_id', this.filterUserId);
+                    if (this.filterTable) params.append('table_name', this.filterTable);
+                    if (this.filterField) params.append('field_name', this.filterField);
+                    if (this.customFrom) params.append('date_from', this.customFrom);
+                    if (this.customTo) params.append('date_to', this.customTo);
+                    params.append('page', this.page);
+                    return params.toString();
+                },
+
+                async loadEntries() {
+                    this.loading = true;
+                    this.error = '';
+                    try {
+                        const data = await window.API.api('/api/admin?' + this.buildQuery());
+                        this.entries = data.entries || [];
+                        this.total = data.total || 0;
+                        this.page = data.page || 1;
+                        this.pages = data.pages || 1;
+                    } catch (e) {
+                        this.error = e.message;
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                goToPage(p) {
+                    if (p < 1 || p > this.pages || p === this.page) return;
+                    this.page = p;
+                    this.loadEntries();
+                },
+
+                fieldLabel(f) {
+                    const map = {
+                        'status': 'Статус',
+                        'trip_date': 'Дата рейса',
+                        'revenue': 'Выручка',
+                        'fact_km': 'Пробег факт',
+                        'plan_km': 'Пробег план',
+                        'amort_rate': 'Амортизация',
+                        'fuel_rate': 'Расход топлива',
+                        'driver_rate_at_time': 'Ставка водителя',
+                        'comment': 'Комментарий',
+                        'volume': 'Объём',
+                        'phone': 'Телефон',
+                        'model': 'Модель',
+                        'show_revenue': 'Показывать выручку',
+                        'company_name': 'Название компании',
+                        'company_phone': 'Телефон компании',
+                        'full_name': 'ФИО',
+                        'role': 'Роль',
+                        'is_active': 'Активность'
+                    };
+                    return map[f] || f;
+                },
+
+                truncate(v) {
+                    if (v === null || v === undefined || v === '') return '—';
+                    const s = String(v);
+                    if (s.length <= 80) return s;
+                    return s.substring(0, 80) + '…';
+                },
+
+                formatDateTime(d) {
+                    if (!d) return '—';
+                    const date = new Date(d);
+                    return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' }) +
+                        ' ' + date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+                },
+
+                logout() {
+                    if (!confirm('Выйти из системы?')) return;
+                    window.API.clearAuth();
+                    window.location.href = '/login.html';
+                }
+            };
+        }
+    </script>
+</body>
+</html>
