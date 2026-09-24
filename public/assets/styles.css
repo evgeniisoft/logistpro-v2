@@ -2695,3 +2695,235 @@ body {
     border-top: 1px solid var(--border-light);
     background: #FAFBFC;
 }
+/* ============ БЛОК 5: ПРОСРОЧКА И ПЕРИОД НА ДОСКЕ ============ */
+
+/* Панель периода над доской */
+.board-period-panel {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.board-period-panel .preset-buttons {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.board-period-custom {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-left: 8px;
+}
+
+.board-period-custom input[type="date"] {
+    padding: 6px 10px;
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: inherit;
+    background: #fff;
+    color: var(--text-primary);
+    outline: none;
+}
+
+.board-period-custom input[type="date"]:focus {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* Сводка над доской */
+.board-summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: #fff;
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    flex-wrap: wrap;
+}
+
+.board-summary-link {
+    cursor: pointer;
+    color: var(--text-primary);
+    font-weight: 600;
+    transition: color 0.15s;
+}
+
+.board-summary-link:hover {
+    color: var(--color-accent);
+    text-decoration: underline;
+}
+
+.board-summary-link.overdue {
+    color: #991B1B;
+}
+
+.board-summary-link.today {
+    color: #D97706;
+}
+
+.board-summary-link.empty {
+    color: var(--text-secondary);
+}
+
+/* Таблетка активного фильтра */
+.filter-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--color-accent);
+    color: #fff;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    margin-left: auto;
+}
+
+.filter-pill-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    border-radius: 50%;
+    color: #fff;
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.15s;
+}
+
+.filter-pill-close:hover {
+    background: rgba(255, 255, 255, 0.35);
+}
+
+/* Плашка «просроченные вне периода» */
+.overdue-outside-notice {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: #FEF3C7;
+    border: 1px solid #FCD34D;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #92400E;
+    margin-bottom: 16px;
+}
+
+.overdue-outside-notice svg {
+    flex-shrink: 0;
+}
+
+.overdue-outside-notice a,
+.overdue-outside-notice button {
+    color: #92400E;
+    font-weight: 600;
+    text-decoration: underline;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: inherit;
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+.overdue-outside-notice a:hover,
+.overdue-outside-notice button:hover {
+    color: #78350F;
+}
+
+/* Полоски на карточках рейсов */
+.trip-card {
+    position: relative;
+}
+
+.trip-card.overdue {
+    border-left: 4px solid #991B1B;
+    padding-left: 8px;
+}
+
+.trip-card.today {
+    border-left: 4px solid #D97706;
+    padding-left: 8px;
+}
+
+/* Бейдж срочности в правом верхнем углу карточки */
+.trip-card-urgency {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    pointer-events: none;
+    white-space: nowrap;
+    line-height: 1.4;
+}
+
+.trip-card-urgency.overdue {
+    background: #FEE2E2;
+    color: #991B1B;
+}
+
+.trip-card-urgency.today {
+    background: #FEF3C7;
+    color: #92400E;
+}
+
+/* Счётчик просроченных на колонке */
+.board-column-overdue {
+    display: inline-block;
+    padding: 1px 6px;
+    background: #FEE2E2;
+    color: #991B1B;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+}
+
+/* Плашка «ничего не найдено в периоде — искать везде» */
+.search-empty-notice {
+    padding: 10px 14px;
+    background: #F1F5F9;
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.search-empty-notice button {
+    background: none;
+    border: none;
+    color: var(--color-accent);
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: inherit;
+    padding: 0;
+    text-decoration: underline;
+}
+
+.search-empty-notice button:hover {
+    color: var(--color-accent-hover);
+}
