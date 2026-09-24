@@ -608,6 +608,51 @@
                     </div>
                 </div>
 
+                <!-- Секция: Пороги отчётов -->
+                <div class="settings-section">
+                    <h2 class="settings-section-title">Пороги отчётов</h2>
+                    <p class="settings-section-desc">
+                        Значения, при превышении которых строки в отчёте «По машинам» подсвечиваются.
+                    </p>
+
+                    <div class="form-group">
+                        <label class="form-label">Порог себестоимости, ₽/км</label>
+                        <input type="number"
+                            class="form-input"
+                            x-model.number="settingsForm.cost_per_km_warning"
+                            min="0"
+                            step="1"
+                            placeholder="40"
+                            style="max-width:200px;"
+                            :disabled="savingSettings">
+                        <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">
+                            Если себестоимость километра выше — строка в отчёте подсветится жёлтым.
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Порог ремонтов, ₽</label>
+                        <input type="number"
+                            class="form-input"
+                            x-model.number="settingsForm.repairs_warning"
+                            min="0"
+                            step="100"
+                            placeholder="20000"
+                            style="max-width:200px;"
+                            :disabled="savingSettings">
+                        <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">
+                            Если сумма ремонтов за период выше — ячейка подсветится красным.
+                        </div>
+                    </div>
+
+                    <div style="margin-top:16px;">
+                        <button class="btn btn-primary" @click="saveReportThresholds()" :disabled="savingSettings">
+                            <span x-show="!savingSettings">Сохранить</span>
+                            <span x-show="savingSettings" x-cloak>Сохранение...</span>
+                        </button>
+                    </div>
+                </div>
+
             </div>
         </div>
     </main>
@@ -884,7 +929,9 @@
                 settingsForm: {
                     show_revenue: false,
                     company_name: '',
-                    company_phone: ''
+                    company_phone: '',
+                    cost_per_km_warning: 40,
+                    repairs_warning: 20000
                 },
                 settingsError: '',
                 settingsSuccess: '',
@@ -1264,10 +1311,12 @@
                         this.settingsForm.show_revenue = settings['show_revenue'] === 'true';
                         this.settingsForm.company_name = settings['company_name'] || '';
                         this.settingsForm.company_phone = settings['company_phone'] || '';
+                        this.settingsForm.cost_per_km_warning = Number(settings['cost_per_km_warning']) || 40;
+                        this.settingsForm.repairs_warning = Number(settings['repairs_warning']) || 20000;
                     } catch (e) {
                         this.settingsError = 'Ошибка загрузки настроек: ' + e.message;
                     }
-                },
+                },,
 
                 async saveShowRevenue() {
                     this.settingsError = '';
@@ -1312,6 +1361,44 @@
                         });
 
                         this.settingsSuccess = 'Настройки сохранены';
+                        setTimeout(() => this.settingsSuccess = '', 3000);
+
+                    } catch (e) {
+                        this.settingsError = e.message;
+                    } finally {
+                        this.savingSettings = false;
+                    }
+                },
+
+                async saveReportThresholds() {
+                    this.settingsError = '';
+                    this.settingsSuccess = '';
+                    this.savingSettings = true;
+
+                    // Валидация
+                    const costWarn = Number(this.settingsForm.cost_per_km_warning);
+                    const repWarn = Number(this.settingsForm.repairs_warning);
+                    if (isNaN(costWarn) || costWarn < 0) {
+                        this.settingsError = 'Порог себестоимости должен быть числом ≥ 0';
+                        this.savingSettings = false;
+                        return;
+                    }
+                    if (isNaN(repWarn) || repWarn < 0) {
+                        this.settingsError = 'Порог ремонтов должен быть числом ≥ 0';
+                        this.savingSettings = false;
+                        return;
+                    }
+
+                    try {
+                        await window.API.api('/api/settings?action=update', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                cost_per_km_warning: String(costWarn),
+                                repairs_warning: String(repWarn)
+                            })
+                        });
+
+                        this.settingsSuccess = 'Пороги сохранены';
                         setTimeout(() => this.settingsSuccess = '', 3000);
 
                     } catch (e) {
