@@ -406,7 +406,7 @@
                             </thead>
                             <tbody>
                                 <template x-for="v in filteredVehicles" :key="v.vehicle_id || v.vehicle_plate">
-                                    <tr class="clickable" :class="v.cost_per_km > 40 ? 'warning' : ''" @click="openDrillDown('vehicles', v)">
+                                    <tr class="clickable" :class="v.cost_per_km > thresholds.cost_per_km_warning ? 'warning' : ''" @click="openDrillDown('vehicles', v)">
                                         <td class="col-name">
                                             <span x-text="v.vehicle_plate"></span>
                                             <span x-show="v.vehicle_model" style="color:var(--text-secondary);font-weight:400;"> · <span x-text="v.vehicle_model"></span></span>
@@ -429,9 +429,9 @@
                                         <td :class="loadPercentClass(v.avg_load_percent)" x-text="v.avg_load_percent + '%'"></td>
                                         <td :class="loadPercentClass(v.weighted_load_percent)" x-text="v.weighted_load_percent + '%'"></td>
                                         <td :class="v.empty_trips > 0 ? 'col-negative' : ''" x-text="v.empty_trips || '—'"></td>
-                                        <td class="col-money" :class="v.repairs > 20000 ? 'col-negative' : ''" x-text="v.repairs > 0 ? formatMoney(v.repairs) : '—'"></td>
+                                        <td class="col-money" :class="v.repairs > thresholds.repairs_warning ? 'col-negative' : ''" x-text="v.repairs > 0 ? formatMoney(v.repairs) : '—'"></td>
                                         <td class="col-money" x-text="formatMoney(v.costs)"></td>
-                                        <td class="col-money" :class="v.cost_per_km > 40 ? 'col-negative' : ''" x-text="v.cost_per_km + ' ₽'"></td>
+                                        <td class="col-money" :class="v.cost_per_km > thresholds.cost_per_km_warning ? 'col-negative' : ''" x-text="v.cost_per_km + ' ₽'"></td>
                                         <td class="col-money" x-text="v.cost_per_m3 > 0 ? v.cost_per_m3 + ' ₽' : '—'"></td>
                                         <template x-if="showRevenue">
                                             <td class="col-money" :class="v.margin >= 0 ? 'col-positive' : 'col-negative'" x-text="formatMoney(v.margin)"></td>
@@ -926,6 +926,10 @@
                 loading: true,
                 error: '',
                 showRevenue: false,
+                thresholds: {
+                    cost_per_km_warning: 40,
+                    repairs_warning: 20000
+                },
 
                 // Фильтры
                 preset: 'current',
@@ -971,7 +975,6 @@
                 chartCosts: null,
                 chartMonthsFull: null,
                 chartCostsFull: null,
-                _chartsRendering: false,
                 _chartsRenderTimer: null,
                 costDetailModal: {
                     open: false,
@@ -1071,14 +1074,18 @@
                     if (!window.AUTH.requireLogin()) return;
                     this.user = window.API.getUser();
                     
-                    // Загружаем настройки (для show_revenue)
+                    // Загружаем настройки (show_revenue + пороги отчётов)
                     try {
                         const settings = await window.API.api('/api/settings');
-                        const setting = (settings.settings || []).find(s => s.key === 'show_revenue');
-                        this.showRevenue = setting?.value === 'true';
+                        const arr = settings.settings || [];
+                        const getVal = (k) => arr.find(s => s.key === k)?.value;
+                        this.showRevenue = getVal('show_revenue') === 'true';
+                        this.thresholds.cost_per_km_warning = Number(getVal('cost_per_km_warning')) || 40;
+                        this.thresholds.repairs_warning = Number(getVal('repairs_warning')) || 20000;
                     } catch (e) {
                         console.error('Ошибка загрузки настроек:', e);
                         this.showRevenue = false;
+                    }
                     }
                     
                     // Загружаем справочники для фильтров
