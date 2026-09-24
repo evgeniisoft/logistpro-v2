@@ -306,8 +306,8 @@
                                         <template x-if="idleAllowed">
                                             <td x-text="d.is_hired ? '—' : (d.utilization_days_percent !== null ? d.utilization_days_percent + '%' : '—')"></td>
                                         </template>
-                                        <td :class="d.avg_load_percent < 50 ? 'col-negative' : ''" x-text="d.avg_load_percent + '%'"></td>
-                                        <td :class="d.weighted_load_percent < 50 ? 'col-negative' : ''" x-text="d.weighted_load_percent + '%'"></td>
+                                        <td :class="loadPercentClass(d.avg_load_percent)" x-text="d.avg_load_percent + '%'"></td>
+                                        <td :class="loadPercentClass(d.weighted_load_percent)" x-text="d.weighted_load_percent + '%'"></td>
                                         <td :class="d.empty_trips > 0 ? 'col-negative' : ''" x-text="d.empty_trips || '—'"></td>
                                         <td class="col-money" x-text="formatMoney(d.costs)"></td>
                                         <td class="col-money" x-text="d.cost_per_km + ' ₽'"></td>
@@ -426,8 +426,8 @@
                                         <template x-if="idleAllowed">
                                             <td x-text="v.is_hired ? '—' : (v.utilization_days_percent !== null ? v.utilization_days_percent + '%' : '—')"></td>
                                         </template>
-                                        <td :class="v.avg_load_percent < 50 ? 'col-negative' : ''" x-text="v.avg_load_percent + '%'"></td>
-                                        <td :class="v.weighted_load_percent < 50 ? 'col-negative' : ''" x-text="v.weighted_load_percent + '%'"></td>
+                                        <td :class="loadPercentClass(v.avg_load_percent)" x-text="v.avg_load_percent + '%'"></td>
+                                        <td :class="loadPercentClass(v.weighted_load_percent)" x-text="v.weighted_load_percent + '%'"></td>
                                         <td :class="v.empty_trips > 0 ? 'col-negative' : ''" x-text="v.empty_trips || '—'"></td>
                                         <td class="col-money" :class="v.repairs > 20000 ? 'col-negative' : ''" x-text="v.repairs > 0 ? formatMoney(v.repairs) : '—'"></td>
                                         <td class="col-money" x-text="formatMoney(v.costs)"></td>
@@ -523,8 +523,8 @@
                                         <td class="col-name" x-text="monthLabelRu(m.month)"></td>
                                         <td x-text="m.trips_count"></td>
                                         <td x-text="formatNumber(m.total_km)"></td>
-                                        <td :class="m.avg_load_percent < 50 ? 'col-negative' : ''" x-text="m.avg_load_percent + '%'"></td>
-                                        <td :class="m.weighted_load_percent < 50 ? 'col-negative' : ''" x-text="m.weighted_load_percent + '%'"></td>
+                                        <td :class="loadPercentClass(m.avg_load_percent)" x-text="m.avg_load_percent + '%'"></td>
+                                        <td :class="loadPercentClass(m.weighted_load_percent)" x-text="m.weighted_load_percent + '%'"></td>
                                         <td :class="m.empty_trips > 0 ? 'col-negative' : ''" x-text="m.empty_trips || '—'"></td>
                                         <template x-if="showRevenue">
                                             <td class="col-money" x-text="formatMoney(m.revenue)"></td>
@@ -583,8 +583,8 @@
                                         <td class="col-name" x-text="r.route_name"></td>
                                         <td x-text="r.trips_count"></td>
                                         <td x-text="formatNumber(r.total_km)"></td>
-                                        <td :class="r.avg_load_percent < 50 ? 'col-negative' : ''" x-text="r.avg_load_percent + '%'"></td>
-                                        <td :class="r.weighted_load_percent < 50 ? 'col-negative' : ''" x-text="r.weighted_load_percent + '%'"></td>
+                                        <td :class="loadPercentClass(r.avg_load_percent)" x-text="r.avg_load_percent + '%'"></td>
+                                        <td :class="loadPercentClass(r.weighted_load_percent)" x-text="r.weighted_load_percent + '%'"></td>
                                         <td :class="r.empty_trips > 0 ? 'col-negative' : ''" x-text="r.empty_trips || '—'"></td>
                                         <td class="col-money" x-text="formatMoney(r.costs)"></td>
                                         <td class="col-money" x-text="r.cost_per_km + ' ₽'"></td>
@@ -894,7 +894,7 @@
                                                     </td>
                                                 </template>
                                                 <td x-text="formatNumber(t.fact_km) + ' км'"></td>
-                                                <td :class="t.load_percent < 50 ? 'col-negative' : ''" x-text="t.load_percent + '%'"></td>
+                                                <td :class="loadPercentClass(t.load_percent)" x-text="t.load_percent + '%'"></td>
                                                 <td class="col-money" x-text="formatMoney(t.costs)"></td>
                                                 <template x-if="showRevenue">
                                                     <td class="col-money" x-text="formatMoney(t.revenue)"></td>
@@ -1566,9 +1566,13 @@
                     return window.HELPERS.formatMoney(v);
                 },
 
-                formatNumber(v) {
-                    if (!v && v !== 0) return '—';
-                    return Number(v).toLocaleString('ru-RU', { maximumFractionDigits: 0 });
+                // Подсветка процента загрузки: три зоны
+                loadPercentClass(p) {
+                    const n = Number(p) || 0;
+                    if (n > 100) return 'col-negative';   // перегруз
+                    if (n <= 30) return 'col-negative';   // критический недогруз
+                    if (n <= 60) return 'col-warning';    // недогруз
+                    return 'col-positive';                // норма
                 },
 
                 monthLabelRu(monthStr) {
