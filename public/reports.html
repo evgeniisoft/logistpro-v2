@@ -1566,6 +1566,11 @@
                     return window.HELPERS.formatMoney(v);
                 },
 
+                formatNumber(v) {
+                    if (!v && v !== 0) return '—';
+                    return Number(v).toLocaleString('ru-RU', { maximumFractionDigits: 0 });
+                },
+
                 // Подсветка процента загрузки: три зоны
                 loadPercentClass(p) {
                     const n = Number(p) || 0;
