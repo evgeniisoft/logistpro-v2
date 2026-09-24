@@ -564,11 +564,13 @@
                 },
 
                 get loadColorTripModal() {
+                    // Пустой рейс — серый
+                    if (this.totalVolume === 0) return 'load-empty';
                     const p = this.loadPercent;
-                    if (p > 100) return 'load-orange';
-                    if (p >= 81) return 'load-green';
-                    if (p >= 51) return 'load-yellow';
-                    return 'load-red';
+                    if (p > 100) return 'load-overload';
+                    if (p <= 30) return 'load-red';
+                    if (p <= 60) return 'load-yellow';
+                    return 'load-green';
                 },
 
                 // ============ ПЕРИОД ============
@@ -807,11 +809,14 @@
                 },
 
                 loadColor(t) {
+                    const vol = Number(t.total_volume) || 0;
+                    // Пустой рейс — серый
+                    if (vol === 0) return 'load-empty';
                     const p = this.tripLoadPercent(t);
-                    if (p > 100) return 'load-orange';
-                    if (p >= 81) return 'load-green';
-                    if (p >= 51) return 'load-yellow';
-                    return 'load-red';
+                    if (p > 100) return 'load-overload';
+                    if (p <= 30) return 'load-red';
+                    if (p <= 60) return 'load-yellow';
+                    return 'load-green';
                 },
 
                 tripsByStatus(status) {
