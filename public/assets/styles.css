@@ -1812,10 +1812,6 @@ body {
     flex-shrink: 0;
 }
 
-.top-item:nth-child(1) .top-rank { background: #FEF3C7; color: #92400E; }
-.top-item:nth-child(2) .top-rank { background: #E5E7EB; color: #374151; }
-.top-item:nth-child(3) .top-rank { background: #FED7AA; color: #9A3412; }
-
 .top-name {
     flex: 1;
     font-size: 13px;
