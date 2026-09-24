@@ -1,6 +1,43 @@
 const { query } = require("./_lib/db");
 const { requireAuth } = require("./_lib/auth");
 
+// ============ УТИЛИТЫ ДЛЯ ПЕРИОДА ============
+
+function todayStr() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return y + "-" + m + "-" + day;
+}
+
+// Возвращает { start, end, days } — календарный период с ограничением "не позже сегодня"
+function resolvePeriod(from, to) {
+  const today = todayStr();
+  let start = from || null;
+  let end = to && to < today ? to : today;
+
+  // Если start в будущем — периода нет
+  if (start && start > end) {
+    return { start: null, end: null, days: 0, valid: false };
+  }
+  if (!start) {
+    // При отсутствии from — не считаем дни (метрика простоя неприменима)
+    return { start: null, end: null, days: 0, valid: false };
+  }
+
+  const sd = new Date(start + "T00:00:00");
+  const ed = new Date(end + "T00:00:00");
+  const days = Math.round((ed - sd) / (1000 * 60 * 60 * 24)) + 1;
+
+  return { start, end, days, valid: days > 0 };
+}
+
+// Метрика "простой" осмысленна только для коротких периодов
+function idleMetricsAllowed(periodDays) {
+  return periodDays > 0 && periodDays <= 92;
+}
+
 async function handler(req, res) {
   if (req.method !== "GET")
     return res.status(405).json({ error: "Method not allowed" });
@@ -32,6 +69,10 @@ async function handler(req, res) {
 
   const whereClause =
     periodFilter.length > 0 ? "WHERE " + periodFilter.join(" AND ") : "";
+
+  // Период для метрик простоя
+  const period = resolvePeriod(from, to);
+  const idleAllowed = idleMetricsAllowed(period.days);
 
   try {
     // ============ DASHBOARD ============
@@ -109,7 +150,21 @@ async function handler(req, res) {
       const avgRevenue =
         kpi.trips_count > 0 ? Math.round(revenue / kpi.trips_count) : 0;
 
-      // Топ-5 водителей (свои + наёмные)
+      // Общая средняя загрузка парка (взвешенная по объёму)
+      const loadResult = await query(
+        `SELECT 
+                    COALESCE(SUM(t.vehicle_volume_at_time), 0) AS total_capacity,
+                    COALESCE(SUM((SELECT COALESCE(SUM(o.volume), 0) FROM orders o WHERE o.trip_id = t.id)), 0) AS total_load
+                 FROM trips t
+                 ${whereClause}`,
+        periodParams,
+      );
+      const totalCapacity = Number(loadResult.rows[0].total_capacity) || 0;
+      const totalLoad = Number(loadResult.rows[0].total_load) || 0;
+      const weightedLoadPercent =
+        totalCapacity > 0 ? Math.round((totalLoad / totalCapacity) * 100) : 0;
+
+      // Топ-5 водителей (свои + наёмные) — с метриками для переключателя
       const topDrivers = await query(
         `SELECT 
                     COALESCE('own_' || d.id::text, 'hired_' || t.hired_driver_info) AS driver_key,
@@ -135,7 +190,8 @@ async function handler(req, res) {
                     v.model AS vehicle_model,
                     CASE WHEN t.hired_vehicle_info IS NOT NULL THEN true ELSE false END AS is_hired,
                     COUNT(t.id) AS trips_count,
-                    COALESCE(SUM(t.fact_km), 0) AS total_km
+                    COALESCE(SUM(t.fact_km), 0) AS total_km,
+                    COALESCE(SUM(t.revenue), 0) AS total_revenue
                  FROM trips t
                  LEFT JOIN vehicles v ON v.id = t.vehicle_id
                  ${whereClause ? whereClause + " AND" : "WHERE"} (t.vehicle_id IS NOT NULL OR t.hired_vehicle_info IS NOT NULL)
@@ -201,6 +257,7 @@ async function handler(req, res) {
           avg_trip_cost: avgTripCost,
           avg_revenue: avgRevenue,
           total_km: Number(kpi.total_km),
+          weighted_load_percent: weightedLoadPercent,
         },
         top_drivers: topDrivers.rows,
         top_vehicles: topVehicles.rows,
@@ -213,8 +270,11 @@ async function handler(req, res) {
       const tripsResult = await query(
         `SELECT 
                     t.id AS trip_id,
+                    t.trip_date,
                     t.driver_id,
                     t.hired_driver_info,
+                    t.vehicle_id,
+                    t.hired_vehicle_info,
                     t.fact_km,
                     t.revenue,
                     t.vehicle_volume_at_time,
@@ -228,7 +288,8 @@ async function handler(req, res) {
                  FROM trips t
                  LEFT JOIN drivers d ON d.id = t.driver_id
                  LEFT JOIN vehicles v ON v.id = t.vehicle_id
-                 ${whereClause}`,
+                 ${whereClause}
+                 ORDER BY t.trip_date ASC`,
         periodParams,
       );
 
@@ -264,9 +325,14 @@ async function handler(req, res) {
             total_km: 0,
             total_revenue: 0,
             total_volume: 0,
+            total_capacity: 0,
             total_costs: 0,
             load_sum: 0,
             load_count: 0,
+            empty_trips: 0,
+            underload_trips: 0,
+            trip_dates: [],
+            dates_set: new Set(),
           };
         }
 
@@ -276,12 +342,25 @@ async function handler(req, res) {
         d.total_km += Number(t.fact_km) || 0;
         d.total_revenue += Number(t.revenue) || 0;
         d.total_volume += Number(t.load_volume) || 0;
+        d.total_capacity += Number(t.vehicle_volume_at_time) || 0;
 
         const cap = Number(t.vehicle_volume_at_time) || 0;
         const load = Number(t.load_volume) || 0;
         if (cap > 0 && load > 0) {
           d.load_sum += (load / cap) * 100;
           d.load_count++;
+          if (load < cap * 0.5) d.underload_trips++;
+        } else if (load === 0) {
+          d.empty_trips++;
+        }
+
+        // Для простоя — только не отменённые
+        if (t.status !== "cancelled") {
+          const day = String(t.trip_date).slice(0, 10);
+          if (!d.dates_set.has(day)) {
+            d.dates_set.add(day);
+            d.trip_dates.push(day);
+          }
         }
 
         const tripCosts = costsResult.rows.filter(
@@ -293,7 +372,8 @@ async function handler(req, res) {
 
         // Зарплата
         const hasSalaryInCosts = tripCosts.some((c) => c.category === "salary");
-        if (!hasSalaryInCosts && Number(t.driver_rate_at_time) > 0) {
+        const hasHiredInCosts = tripCosts.some((c) => c.category === "hired");
+        if (!hasSalaryInCosts && !hasHiredInCosts && Number(t.driver_rate_at_time) > 0) {
           d.total_costs += Number(t.driver_rate_at_time);
         }
 
@@ -312,28 +392,92 @@ async function handler(req, res) {
       });
 
       const allData = Object.values(driversMap)
-        .map((d) => ({
-          driver_id: d.driver_id,
-          driver_name: d.driver_name,
-          driver_phone: d.driver_phone,
-          is_hired: d.is_hired,
-          trips_count: d.trips_count,
-          trips_done: d.trips_done,
-          total_km: d.total_km,
-          total_revenue: d.total_revenue,
-          total_volume: d.total_volume,
-          avg_load_percent:
-            d.load_count > 0 ? Math.round(d.load_sum / d.load_count) : 0,
-          costs: d.total_costs,
-          cost_per_trip:
-            d.trips_count > 0 ? Math.round(d.total_costs / d.trips_count) : 0,
-        }))
+        .map((d) => {
+          const margin = d.total_revenue - d.total_costs;
+          const marginPercent =
+            d.total_revenue > 0
+              ? Math.round((margin / d.total_revenue) * 100)
+              : 0;
+
+          // Метрики простоя — только для своих и только для коротких периодов
+          let duty_days = null;
+          let idle_days = null;
+          let utilization_days_percent = null;
+          let avg_trips_per_week = null;
+          let max_gap_days = null;
+
+          if (!d.is_hired && idleAllowed && period.valid) {
+            duty_days = d.trip_dates.length;
+            idle_days = Math.max(0, period.days - duty_days);
+            utilization_days_percent = Math.round(
+              (duty_days / period.days) * 100,
+            );
+            avg_trips_per_week =
+              Math.round((d.trips_count / (period.days / 7)) * 10) / 10;
+
+            // Максимальный разрыв между рейсами
+            if (d.trip_dates.length > 1) {
+              const sorted = [...d.trip_dates].sort();
+              let maxGap = 0;
+              for (let i = 1; i < sorted.length; i++) {
+                const prev = new Date(sorted[i - 1] + "T00:00:00");
+                const cur = new Date(sorted[i] + "T00:00:00");
+                const gap = Math.round((cur - prev) / (1000 * 60 * 60 * 24)) - 1;
+                if (gap > maxGap) maxGap = gap;
+              }
+              max_gap_days = maxGap;
+            } else {
+              max_gap_days = 0;
+            }
+          }
+
+          return {
+            driver_id: d.driver_id,
+            driver_name: d.driver_name,
+            driver_phone: d.driver_phone,
+            is_hired: d.is_hired,
+            trips_count: d.trips_count,
+            trips_done: d.trips_done,
+            total_km: d.total_km,
+            total_revenue: d.total_revenue,
+            total_volume: d.total_volume,
+            total_capacity: d.total_capacity,
+            avg_load_percent:
+              d.load_count > 0 ? Math.round(d.load_sum / d.load_count) : 0,
+            weighted_load_percent:
+              d.total_capacity > 0
+                ? Math.round((d.total_volume / d.total_capacity) * 100)
+                : 0,
+            empty_trips: d.empty_trips,
+            underload_trips: d.underload_trips,
+            costs: d.total_costs,
+            cost_per_trip:
+              d.trips_count > 0 ? Math.round(d.total_costs / d.trips_count) : 0,
+            cost_per_km:
+              d.total_km > 0
+                ? Math.round((d.total_costs / d.total_km) * 10) / 10
+                : 0,
+            cost_per_m3:
+              d.total_volume > 0
+                ? Math.round(d.total_costs / d.total_volume)
+                : 0,
+            margin: margin,
+            margin_percent: marginPercent,
+            duty_days: duty_days,
+            idle_days: idle_days,
+            utilization_days_percent: utilization_days_percent,
+            avg_trips_per_week: avg_trips_per_week,
+            max_gap_days: max_gap_days,
+          };
+        })
         .sort((a, b) => b.trips_count - a.trips_count);
 
       return res.json({
         data: allData,
         own: allData.filter((d) => !d.is_hired),
         hired: allData.filter((d) => d.is_hired),
+        idle_allowed: idleAllowed && period.valid,
+        period_days: period.days,
       });
     }
 
@@ -342,18 +486,23 @@ async function handler(req, res) {
       const tripsResult = await query(
         `SELECT 
                     t.id AS trip_id,
+                    t.trip_date,
                     t.vehicle_id,
                     t.hired_vehicle_info,
                     t.fact_km,
                     t.revenue,
+                    t.vehicle_volume_at_time,
                     t.driver_rate_at_time,
+                    t.status,
                     v.plate AS vehicle_plate,
                     v.model AS vehicle_model,
                     v.type AS vehicle_type,
-                    v.amort_rate AS vehicle_amort_rate
+                    v.amort_rate AS vehicle_amort_rate,
+                    (SELECT COALESCE(SUM(o.volume), 0) FROM orders o WHERE o.trip_id = t.id) AS load_volume
                  FROM trips t
                  LEFT JOIN vehicles v ON v.id = t.vehicle_id
-                 ${whereClause}`,
+                 ${whereClause}
+                 ORDER BY t.trip_date ASC`,
         periodParams,
       );
 
@@ -372,7 +521,6 @@ async function handler(req, res) {
       const vehiclesMap = {};
 
       tripsResult.rows.forEach((t) => {
-        // Ключ: для своих — vehicle_id, для наёмных — hired_vehicle_info
         const isHired = !!t.hired_vehicle_info;
         const key = isHired
           ? "hired_" + t.hired_vehicle_info
@@ -389,9 +537,17 @@ async function handler(req, res) {
             trips_count: 0,
             total_km: 0,
             total_revenue: 0,
+            total_volume: 0,
+            total_capacity: 0,
             total_costs: 0,
             total_repairs: 0,
             total_amort: 0,
+            load_sum: 0,
+            load_count: 0,
+            empty_trips: 0,
+            underload_trips: 0,
+            trip_dates: [],
+            dates_set: new Set(),
           };
         }
 
@@ -399,6 +555,27 @@ async function handler(req, res) {
         v.trips_count++;
         v.total_km += Number(t.fact_km) || 0;
         v.total_revenue += Number(t.revenue) || 0;
+        v.total_volume += Number(t.load_volume) || 0;
+        v.total_capacity += Number(t.vehicle_volume_at_time) || 0;
+
+        const cap = Number(t.vehicle_volume_at_time) || 0;
+        const load = Number(t.load_volume) || 0;
+        if (cap > 0 && load > 0) {
+          v.load_sum += (load / cap) * 100;
+          v.load_count++;
+          if (load < cap * 0.5) v.underload_trips++;
+        } else if (load === 0) {
+          v.empty_trips++;
+        }
+
+        // Для простоя — только не отменённые
+        if (t.status !== "cancelled") {
+          const day = String(t.trip_date).slice(0, 10);
+          if (!v.dates_set.has(day)) {
+            v.dates_set.add(day);
+            v.trip_dates.push(day);
+          }
+        }
 
         // Ручные затраты
         const tripCosts = costsResult.rows.filter(
@@ -412,9 +589,6 @@ async function handler(req, res) {
         });
 
         // Автоматическая амортизация (только для своих, если нет вручную)
-        if (!isHired && v.vehicle_amort_rate === undefined) {
-          v.vehicle_amort_rate = Number(t.vehicle_amort_rate) || 0;
-        }
         const hasAmortInCosts = tripCosts.some((c) => c.category === "amort");
         if (
           !isHired &&
@@ -432,35 +606,96 @@ async function handler(req, res) {
 
         // Зарплата водителя
         const hasSalaryInCosts = tripCosts.some((c) => c.category === "salary");
-        if (!hasSalaryInCosts && Number(t.driver_rate_at_time) > 0) {
+        const hasHiredInCosts = tripCosts.some((c) => c.category === "hired");
+        if (!hasSalaryInCosts && !hasHiredInCosts && Number(t.driver_rate_at_time) > 0) {
           v.total_costs += Number(t.driver_rate_at_time);
         }
       });
 
       const allData = Object.values(vehiclesMap)
-        .map((v) => ({
-          vehicle_id: v.vehicle_id,
-          vehicle_plate: v.vehicle_plate,
-          vehicle_model: v.vehicle_model,
-          vehicle_type: v.vehicle_type,
-          is_hired: v.is_hired,
-          trips_count: v.trips_count,
-          total_km: v.total_km,
-          total_revenue: v.total_revenue,
-          costs: v.total_costs,
-          repairs: v.total_repairs,
-          cost_per_km:
-            v.total_km > 0
-              ? Math.round((v.total_costs / v.total_km) * 10) / 10
-              : 0,
-          margin: v.total_revenue - v.total_costs,
-        }))
+        .map((v) => {
+          const margin = v.total_revenue - v.total_costs;
+          const marginPercent =
+            v.total_revenue > 0
+              ? Math.round((margin / v.total_revenue) * 100)
+              : 0;
+
+          let duty_days = null;
+          let idle_days = null;
+          let utilization_days_percent = null;
+          let avg_trips_per_week = null;
+          let max_gap_days = null;
+
+          if (!v.is_hired && idleAllowed && period.valid) {
+            duty_days = v.trip_dates.length;
+            idle_days = Math.max(0, period.days - duty_days);
+            utilization_days_percent = Math.round(
+              (duty_days / period.days) * 100,
+            );
+            avg_trips_per_week =
+              Math.round((v.trips_count / (period.days / 7)) * 10) / 10;
+
+            if (v.trip_dates.length > 1) {
+              const sorted = [...v.trip_dates].sort();
+              let maxGap = 0;
+              for (let i = 1; i < sorted.length; i++) {
+                const prev = new Date(sorted[i - 1] + "T00:00:00");
+                const cur = new Date(sorted[i] + "T00:00:00");
+                const gap = Math.round((cur - prev) / (1000 * 60 * 60 * 24)) - 1;
+                if (gap > maxGap) maxGap = gap;
+              }
+              max_gap_days = maxGap;
+            } else {
+              max_gap_days = 0;
+            }
+          }
+
+          return {
+            vehicle_id: v.vehicle_id,
+            vehicle_plate: v.vehicle_plate,
+            vehicle_model: v.vehicle_model,
+            vehicle_type: v.vehicle_type,
+            is_hired: v.is_hired,
+            trips_count: v.trips_count,
+            total_km: v.total_km,
+            total_revenue: v.total_revenue,
+            total_volume: v.total_volume,
+            total_capacity: v.total_capacity,
+            avg_load_percent:
+              v.load_count > 0 ? Math.round(v.load_sum / v.load_count) : 0,
+            weighted_load_percent:
+              v.total_capacity > 0
+                ? Math.round((v.total_volume / v.total_capacity) * 100)
+                : 0,
+            empty_trips: v.empty_trips,
+            underload_trips: v.underload_trips,
+            costs: v.total_costs,
+            repairs: v.total_repairs,
+            cost_per_km:
+              v.total_km > 0
+                ? Math.round((v.total_costs / v.total_km) * 10) / 10
+                : 0,
+            cost_per_m3:
+              v.total_volume > 0
+                ? Math.round(v.total_costs / v.total_volume)
+                : 0,
+            margin: margin,
+            margin_percent: marginPercent,
+            duty_days: duty_days,
+            idle_days: idle_days,
+            utilization_days_percent: utilization_days_percent,
+            avg_trips_per_week: avg_trips_per_week,
+            max_gap_days: max_gap_days,
+          };
+        })
         .sort((a, b) => b.total_km - a.total_km);
 
       return res.json({
         data: allData,
         own: allData.filter((v) => !v.is_hired),
         hired: allData.filter((v) => v.is_hired),
+        idle_allowed: idleAllowed && period.valid,
+        period_days: period.days,
       });
     }
 
@@ -471,19 +706,21 @@ async function handler(req, res) {
                     t.id AS trip_id,
                     TO_CHAR(t.trip_date, 'YYYY-MM') AS month,
                     TO_CHAR(t.trip_date, 'TMMonth YYYY') AS month_label,
+                    t.trip_date,
                     t.fact_km,
                     t.revenue,
                     t.status,
                     t.driver_rate_at_time,
+                    t.vehicle_volume_at_time,
                     v.type AS vehicle_type,
-                    v.amort_rate AS vehicle_amort_rate
+                    v.amort_rate AS vehicle_amort_rate,
+                    (SELECT COALESCE(SUM(o.volume), 0) FROM orders o WHERE o.trip_id = t.id) AS load_volume
                  FROM trips t
                  LEFT JOIN vehicles v ON v.id = t.vehicle_id
                  ${whereClause}`,
         periodParams,
       );
 
-      // Ручные затраты по рейсам
       const costsResult = await query(
         `SELECT 
                     t.id AS trip_id,
@@ -510,6 +747,11 @@ async function handler(req, res) {
             total_km: 0,
             revenue: 0,
             costs: 0,
+            total_volume: 0,
+            total_capacity: 0,
+            load_sum: 0,
+            load_count: 0,
+            empty_trips: 0,
           };
         }
         const row = monthsMap[m];
@@ -517,13 +759,29 @@ async function handler(req, res) {
         if (t.status === "done") row.trips_done++;
         row.total_km += Number(t.fact_km) || 0;
         row.revenue += Number(t.revenue) || 0;
+        row.total_volume += Number(t.load_volume) || 0;
+        row.total_capacity += Number(t.vehicle_volume_at_time) || 0;
+
+        const cap = Number(t.vehicle_volume_at_time) || 0;
+        const load = Number(t.load_volume) || 0;
+        if (cap > 0 && load > 0) {
+          row.load_sum += (load / cap) * 100;
+          row.load_count++;
+        } else if (load === 0) {
+          row.empty_trips++;
+        }
 
         // Зарплата водителя
         const salaryInCosts = costsResult.rows.find(
           (c) => c.trip_id === t.trip_id && c.category === "salary",
         );
+        const hiredInCosts = costsResult.rows.find(
+          (c) => c.trip_id === t.trip_id && c.category === "hired",
+        );
         if (salaryInCosts) {
           row.costs += Number(salaryInCosts.costs);
+        } else if (hiredInCosts) {
+          row.costs += Number(hiredInCosts.costs);
         } else if (Number(t.driver_rate_at_time) > 0) {
           row.costs += Number(t.driver_rate_at_time);
         }
@@ -548,7 +806,7 @@ async function handler(req, res) {
         const otherCosts = costsResult.rows.filter(
           (c) =>
             c.trip_id === t.trip_id &&
-            !["salary", "amort"].includes(c.category),
+            !["salary", "amort", "hired"].includes(c.category),
         );
         otherCosts.forEach((c) => {
           row.costs += Number(c.costs);
@@ -568,6 +826,21 @@ async function handler(req, res) {
           margin_percent:
             row.revenue > 0
               ? Math.round(((row.revenue - row.costs) / row.revenue) * 100)
+              : 0,
+          avg_load_percent:
+            row.load_count > 0 ? Math.round(row.load_sum / row.load_count) : 0,
+          weighted_load_percent:
+            row.total_capacity > 0
+              ? Math.round((row.total_volume / row.total_capacity) * 100)
+              : 0,
+          empty_trips: row.empty_trips,
+          cost_per_km:
+            row.total_km > 0
+              ? Math.round((row.costs / row.total_km) * 10) / 10
+              : 0,
+          cost_per_m3:
+            row.total_volume > 0
+              ? Math.round(row.costs / row.total_volume)
               : 0,
         }))
         .sort((a, b) => b.month.localeCompare(a.month));
@@ -619,20 +892,29 @@ async function handler(req, res) {
             total_km: 0,
             total_revenue: 0,
             total_costs: 0,
+            total_volume: 0,
+            total_capacity: 0,
             load_sum: 0,
             load_count: 0,
+            empty_trips: 0,
+            underload_trips: 0,
           };
         }
         const r = routesMap[rid];
         r.trips_count++;
         r.total_km += Number(t.fact_km) || 0;
         r.total_revenue += Number(t.revenue) || 0;
+        r.total_volume += Number(t.load_volume) || 0;
+        r.total_capacity += Number(t.vehicle_volume_at_time) || 0;
 
         const cap = Number(t.vehicle_volume_at_time) || 0;
         const load = Number(t.load_volume) || 0;
         if (cap > 0 && load > 0) {
           r.load_sum += (load / cap) * 100;
           r.load_count++;
+          if (load < cap * 0.5) r.underload_trips++;
+        } else if (load === 0) {
+          r.empty_trips++;
         }
 
         const costRow = costsResult.rows.find((c) => c.trip_id === t.trip_id);
@@ -649,9 +931,29 @@ async function handler(req, res) {
           total_km: r.total_km,
           avg_load_percent:
             r.load_count > 0 ? Math.round(r.load_sum / r.load_count) : 0,
+          weighted_load_percent:
+            r.total_capacity > 0
+              ? Math.round((r.total_volume / r.total_capacity) * 100)
+              : 0,
+          empty_trips: r.empty_trips,
+          underload_trips: r.underload_trips,
           total_revenue: r.total_revenue,
           costs: r.total_costs,
+          cost_per_km:
+            r.total_km > 0
+              ? Math.round((r.total_costs / r.total_km) * 10) / 10
+              : 0,
+          cost_per_m3:
+            r.total_volume > 0
+              ? Math.round(r.total_costs / r.total_volume)
+              : 0,
           margin: r.total_revenue - r.total_costs,
+          margin_percent:
+            r.total_revenue > 0
+              ? Math.round(
+                  ((r.total_revenue - r.total_costs) / r.total_revenue) * 100,
+                )
+              : 0,
         }))
         .sort((a, b) => b.trips_count - a.trips_count);
 
@@ -660,7 +962,6 @@ async function handler(req, res) {
 
     // ============ COSTS BREAKDOWN ============
     if (action === "costs-breakdown") {
-      // Ручные затраты с деталями по рейсам
       const result = await query(
         `SELECT 
                     c.category,
@@ -682,7 +983,6 @@ async function handler(req, res) {
         periodParams,
       );
 
-      // Группируем по категориям
       const categoriesMap = {};
 
       result.rows.forEach((r) => {
@@ -712,7 +1012,6 @@ async function handler(req, res) {
 
       const data = Object.values(categoriesMap);
 
-      // Автоматическая зарплата + наёмный транспорт
       const salaryInCosts = data.find((d) => d.category === "salary");
       const hiredInCosts = data.find((d) => d.category === "hired");
 
@@ -734,7 +1033,6 @@ async function handler(req, res) {
           periodParams,
         );
 
-        // Разделяем на "Зарплата" (своя машина) и "Наёмный транспорт" (наёмная машина)
         const salaryItems = [];
         const hiredItems = [];
 
@@ -778,7 +1076,6 @@ async function handler(req, res) {
         }
       }
 
-      // Автоматическая амортизация с деталями
       const amortInCosts = data.find((d) => d.category === "amort");
       if (!amortInCosts) {
         const amortDetails = await query(
@@ -819,10 +1116,85 @@ async function handler(req, res) {
         }
       }
 
-      // Сортируем по убыванию
       data.sort((a, b) => b.total - a.total);
 
       return res.json({ data });
+    }
+
+    // ============ IDLE (простой транспорт) ============
+    if (action === "idle") {
+      const { type } = req.query; // vehicles | drivers
+
+      if (!["vehicles", "drivers"].includes(type)) {
+        return res.status(400).json({ error: "type must be vehicles or drivers" });
+      }
+
+      if (!idleAllowed || !period.valid) {
+        return res.json({
+          data: [],
+          idle_allowed: false,
+          period_days: period.days,
+        });
+      }
+
+      if (type === "vehicles") {
+        const result = await query(
+          `SELECT v.id, v.plate, v.model, v.type
+           FROM vehicles v
+           WHERE v.is_archived = false
+             AND v.type = 'own'
+             AND NOT EXISTS (
+               SELECT 1 FROM trips t
+               WHERE t.vehicle_id = v.id
+                 AND t.trip_date >= $1 AND t.trip_date <= $2
+                 AND t.status != 'cancelled'
+             )
+           ORDER BY v.plate`,
+          [period.start, period.end],
+        );
+
+        const data = result.rows.map((v) => ({
+          vehicle_id: v.id,
+          vehicle_plate: v.plate,
+          vehicle_model: v.model,
+          idle_days: period.days,
+          period_days: period.days,
+        }));
+
+        return res.json({
+          data,
+          idle_allowed: true,
+          period_days: period.days,
+        });
+      } else {
+        const result = await query(
+          `SELECT d.id, d.full_name, d.phone
+           FROM drivers d
+           WHERE d.is_archived = false
+             AND NOT EXISTS (
+               SELECT 1 FROM trips t
+               WHERE t.driver_id = d.id
+                 AND t.trip_date >= $1 AND t.trip_date <= $2
+                 AND t.status != 'cancelled'
+             )
+           ORDER BY d.full_name`,
+          [period.start, period.end],
+        );
+
+        const data = result.rows.map((d) => ({
+          driver_id: d.id,
+          driver_name: d.full_name,
+          driver_phone: d.phone,
+          idle_days: period.days,
+          period_days: period.days,
+        }));
+
+        return res.json({
+          data,
+          idle_allowed: true,
+          period_days: period.days,
+        });
+      }
     }
 
     // ============ DRILL-DOWN ============
@@ -833,7 +1205,6 @@ async function handler(req, res) {
         return res.status(400).json({ error: "Invalid drill-down type" });
       }
 
-      // Собираем дополнительные условия поверх periodFilter
       const drillFilter = [...periodFilter];
       const drillParams = [...periodParams];
       let pIdx = drillParams.length + 1;
@@ -883,7 +1254,6 @@ async function handler(req, res) {
       const drillWhere =
         drillFilter.length > 0 ? "WHERE " + drillFilter.join(" AND ") : "";
 
-      // Список рейсов с джойнами
       const tripsRes = await query(
         `SELECT
             t.id,
@@ -917,7 +1287,6 @@ async function handler(req, res) {
         drillParams,
       );
 
-      // Затраты по рейсам с разбивкой по категориям
       const costsRes = await query(
         `SELECT
             t.id AS trip_id,
@@ -939,7 +1308,6 @@ async function handler(req, res) {
         });
       });
 
-      // Формируем строки рейсов
       const trips = tripsRes.rows.map((t) => {
         const tripCosts = costsByTrip[t.id] || [];
         const isHiredVehicle = !!t.hired_vehicle_info;
@@ -957,19 +1325,12 @@ async function handler(req, res) {
           if (c.category === "hired") hiredInCosts = true;
         });
 
-        // Авто-достройка статей (как в by-vehicles / by-drivers / by-months)
         if (
           !salaryInCosts &&
           !hiredInCosts &&
           Number(t.driver_rate_at_time) > 0
         ) {
-          if (isHiredVehicle) {
-            // наёмный транспорт — в статью hired
-            costs += Number(t.driver_rate_at_time);
-          } else {
-            // свой водитель — в статью salary
-            costs += Number(t.driver_rate_at_time);
-          }
+          costs += Number(t.driver_rate_at_time);
         }
 
         if (
@@ -1019,12 +1380,13 @@ async function handler(req, res) {
         };
       });
 
-      // KPI
       const tripsCount = trips.length;
       const tripsDone = trips.filter((x) => x.status === "done").length;
       const totalKm = trips.reduce((s, x) => s + x.fact_km, 0);
       const totalRevenue = trips.reduce((s, x) => s + x.revenue, 0);
       const totalCosts = trips.reduce((s, x) => s + x.costs, 0);
+      const totalVolume = trips.reduce((s, x) => s + x.load_volume, 0);
+      const totalCapacity = trips.reduce((s, x) => s + x.vehicle_volume, 0);
       const margin = totalRevenue - totalCosts;
       const marginPercent =
         totalRevenue > 0 ? Math.round((margin / totalRevenue) * 100) : 0;
@@ -1037,6 +1399,12 @@ async function handler(req, res) {
         total_costs: totalCosts,
         margin: margin,
         margin_percent: marginPercent,
+        weighted_load_percent:
+          totalCapacity > 0 ? Math.round((totalVolume / totalCapacity) * 100) : 0,
+        cost_per_km:
+          totalKm > 0 ? Math.round((totalCosts / totalKm) * 10) / 10 : 0,
+        cost_per_m3:
+          totalVolume > 0 ? Math.round(totalCosts / totalVolume) : 0,
       };
 
       // Специфичные KPI
@@ -1047,7 +1415,6 @@ async function handler(req, res) {
           if (r.category === "repair") repairsTotal += Number(r.amount);
           if (r.category === "amort") amortTotal += Number(r.amount);
         });
-        // авто-амортизация
         tripsRes.rows.forEach((t) => {
           const tripCosts = costsByTrip[t.id] || [];
           const hasAmort = tripCosts.some((c) => c.category === "amort");
@@ -1064,8 +1431,21 @@ async function handler(req, res) {
         });
         kpi.repairs_total = repairsTotal;
         kpi.amort_total = amortTotal;
-        kpi.cost_per_km =
-          totalKm > 0 ? Math.round((totalCosts / totalKm) * 10) / 10 : 0;
+
+        // Простой — только для своих и коротких периодов
+        const first = tripsRes.rows[0];
+        const isHired = first ? !!first.hired_vehicle_info : false;
+        if (!isHired && idleAllowed && period.valid) {
+          const dutySet = new Set();
+          trips.forEach((x) => {
+            if (x.status !== "cancelled") dutySet.add(String(x.trip_date).slice(0, 10));
+          });
+          kpi.duty_days = dutySet.size;
+          kpi.idle_days = Math.max(0, period.days - dutySet.size);
+          kpi.utilization_days_percent = Math.round(
+            (dutySet.size / period.days) * 100,
+          );
+        }
       }
 
       if (type === "drivers") {
@@ -1081,6 +1461,20 @@ async function handler(req, res) {
           loadCount > 0 ? Math.round(loadSum / loadCount) : 0;
         kpi.cost_per_trip =
           tripsCount > 0 ? Math.round(totalCosts / tripsCount) : 0;
+
+        const first = tripsRes.rows[0];
+        const isHired = first ? !!first.hired_driver_info : false;
+        if (!isHired && idleAllowed && period.valid) {
+          const dutySet = new Set();
+          trips.forEach((x) => {
+            if (x.status !== "cancelled") dutySet.add(String(x.trip_date).slice(0, 10));
+          });
+          kpi.duty_days = dutySet.size;
+          kpi.idle_days = Math.max(0, period.days - dutySet.size);
+          kpi.utilization_days_percent = Math.round(
+            (dutySet.size / period.days) * 100,
+          );
+        }
       }
 
       if (type === "routes") {
@@ -1096,7 +1490,47 @@ async function handler(req, res) {
           loadCount > 0 ? Math.round(loadSum / loadCount) : 0;
       }
 
-      // Для months — разбивка затрат по категориям
+      // Календарь по дням — только для vehicles/drivers и только для своих
+      let dayStatus = null;
+      let periodDays = null;
+      if (
+        (type === "vehicles" || type === "drivers") &&
+        idleAllowed &&
+        period.valid
+      ) {
+        const first = tripsRes.rows[0];
+        const isHired =
+          type === "vehicles"
+            ? first && !!first.hired_vehicle_info
+            : first && !!first.hired_driver_info;
+
+        if (!isHired) {
+          periodDays = period.days;
+          const dutySet = new Set();
+          trips.forEach((x) => {
+            if (x.status !== "cancelled")
+              dutySet.add(String(x.trip_date).slice(0, 10));
+          });
+
+          dayStatus = [];
+          const startD = new Date(period.start + "T00:00:00");
+          for (let i = 0; i < period.days; i++) {
+            const d = new Date(startD);
+            d.setDate(d.getDate() + i);
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, "0");
+            const day = String(d.getDate()).padStart(2, "0");
+            const iso = y + "-" + m + "-" + day;
+            dayStatus.push({
+              date: iso,
+              day: d.getDate(),
+              has_trip: dutySet.has(iso),
+            });
+          }
+        }
+      }
+
+      // Разбивка затрат (только для месяцев)
       let categories = null;
       if (type === "months") {
         const catMap = {};
@@ -1107,11 +1541,9 @@ async function handler(req, res) {
           catMap[cat].total += Number(r.amount);
         });
 
-        // Авто-статьи salary / hired
         const hasSalary = catMap["salary"];
         const hasHired = catMap["hired"];
         if (!hasSalary || !hasHired) {
-          // Считаем по рейсам: если своя машина → salary, если наёмная → hired
           let salaryTotal = 0;
           let salaryCount = 0;
           let hiredTotal = 0;
@@ -1153,7 +1585,6 @@ async function handler(req, res) {
           }
         }
 
-        // Авто-амортизация
         if (!catMap["amort"]) {
           let amortTotal = 0;
           let amortCount = 0;
@@ -1185,7 +1616,6 @@ async function handler(req, res) {
         categories = Object.values(catMap).sort((a, b) => b.total - a.total);
       }
 
-      // Заголовок для модалки
       let title = "";
       if (type === "vehicles") title = hired_label || "Машина";
       else if (type === "drivers") title = hired_label || "Водитель";
@@ -1195,7 +1625,6 @@ async function handler(req, res) {
           ? first.route_text || first.route_name || "Маршрут"
           : "Маршрут";
       } else if (type === "months") {
-        // "2026-09" → "Сентябрь 2026"
         const [y, m] = month.split("-");
         const d = new Date(parseInt(y), parseInt(m) - 1, 1);
         title = d.toLocaleDateString("ru-RU", {
@@ -1208,6 +1637,8 @@ async function handler(req, res) {
         type: type,
         title: title,
         period: { from: from || null, to: to || null },
+        period_days: periodDays,
+        day_status: dayStatus,
         kpi: kpi,
         categories: categories,
         trips: trips,
