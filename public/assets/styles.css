@@ -527,12 +527,14 @@ body {
 .load-bar-fill.load-yellow { background: #D97706; }
 .load-bar-fill.load-green { background: #059669; }
 .load-bar-fill.load-overload { background: #991B1B; }
+.load-bar-fill.load-orange { background: #991B1B; }  /* временный алиас */
 
 .trip-card-load-fill.load-empty { background: #CBD5E1; }
 .trip-card-load-fill.load-red { background: #DC2626; }
 .trip-card-load-fill.load-yellow { background: #D97706; }
 .trip-card-load-fill.load-green { background: #059669; }
 .trip-card-load-fill.load-overload { background: #991B1B; }
+.trip-card-load-fill.load-orange { background: #991B1B; }  /* временный алиас */
 
 .load-info {
     display: flex;
