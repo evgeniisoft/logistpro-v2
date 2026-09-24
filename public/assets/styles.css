@@ -2473,5 +2473,63 @@ body {
     text-transform: uppercase;
     letter-spacing: 0.3px;
 }
+/* ============ DRILL-DOWN В ОТЧЁТАХ ============ */
 
+.report-table tbody tr.clickable {
+    cursor: pointer;
+}
+
+.report-table tbody tr.clickable:hover {
+    background: #EFF6FF !important;
+}
+
+.drill-trip-link {
+    color: var(--color-accent);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.drill-trip-link:hover {
+    text-decoration: underline;
+}
+
+.drill-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+    padding: 16px;
+    background: var(--bg-page);
+    border: 1px solid var(--border-light);
+    border-radius: 10px;
+}
+
+.drill-kpi-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.drill-kpi-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+}
+
+.drill-kpi-value {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.2;
+}
+
+.drill-kpi-value.positive { color: #059669; }
+.drill-kpi-value.negative { color: #DC2626; }
+
+.drill-kpi-sub {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
 
