@@ -140,16 +140,19 @@ async function handler(req, res) {
         "cancel_reason",
         "problem_comment",
         "vehicle_id",
-        "vehicle_volume_at_time",
         "hired_vehicle_info",
         "driver_id",
-        "driver_rate_at_time",
         "hired_driver_info",
       ];
 
       const updates = [];
       const params = [];
       let paramIndex = 1;
+
+      // Флаги: колонки, которые уже добавлены в updates отдельно,
+      // чтобы общий цикл по allowedFields не добавил их повторно
+      let vehicleVolumeSet = false;
+      let driverRateSet = false;
 
       // Специальная обработка смены машины
       if (fields.vehicle_id !== undefined) {
@@ -164,6 +167,7 @@ async function handler(req, res) {
           } else {
             updates.push(`vehicle_volume_at_time = 0`);
           }
+          vehicleVolumeSet = true;
           await logChange(
             req.user.id,
             "trips",
@@ -183,6 +187,7 @@ async function handler(req, res) {
             updates.push(`vehicle_volume_at_time = $${paramIndex++}`);
             params.push(Number(v.rows[0].volume) || 0);
             updates.push(`hired_vehicle_info = NULL`);
+            vehicleVolumeSet = true;
             if (String(trip.vehicle_id) !== String(fields.vehicle_id)) {
               await logChange(
                 req.user.id,
@@ -208,6 +213,7 @@ async function handler(req, res) {
             updates.push(`driver_rate_at_time = $${paramIndex++}`);
             params.push(fields.driver_rate_at_time);
           }
+          driverRateSet = true;
           await logChange(
             req.user.id,
             "trips",
@@ -228,6 +234,7 @@ async function handler(req, res) {
             updates.push(`driver_rate_at_time = $${paramIndex++}`);
             params.push(Number(d.rows[0].default_rate) || 0);
             updates.push(`hired_driver_info = NULL`);
+            driverRateSet = true;
             if (String(trip.driver_id) !== String(fields.driver_id)) {
               await logChange(
                 req.user.id,
@@ -250,6 +257,9 @@ async function handler(req, res) {
           continue;
         if (field === "hired_driver_info" && fields.driver_id !== undefined)
           continue;
+        // Эти колонки уже обработаны в блоках смены машины/водителя
+        if (field === "vehicle_volume_at_time" && vehicleVolumeSet) continue;
+        if (field === "driver_rate_at_time" && driverRateSet) continue;
 
         if (fields[field] !== undefined) {
           updates.push(`${field} = $${paramIndex++}`);
@@ -266,6 +276,43 @@ async function handler(req, res) {
               ip,
             );
           }
+        }
+      }
+
+      // Отдельная обработка vehicle_volume_at_time / driver_rate_at_time,
+      // если они пришли БЕЗ смены машины/водителя
+      if (
+        !vehicleVolumeSet &&
+        fields.vehicle_volume_at_time !== undefined
+      ) {
+        updates.push(`vehicle_volume_at_time = $${paramIndex++}`);
+        params.push(fields.vehicle_volume_at_time);
+        if (String(trip.vehicle_volume_at_time) !== String(fields.vehicle_volume_at_time)) {
+          await logChange(
+            req.user.id,
+            "trips",
+            id,
+            "vehicle_volume_at_time",
+            trip.vehicle_volume_at_time,
+            fields.vehicle_volume_at_time,
+            ip,
+          );
+        }
+      }
+
+      if (!driverRateSet && fields.driver_rate_at_time !== undefined) {
+        updates.push(`driver_rate_at_time = $${paramIndex++}`);
+        params.push(fields.driver_rate_at_time);
+        if (String(trip.driver_rate_at_time) !== String(fields.driver_rate_at_time)) {
+          await logChange(
+            req.user.id,
+            "trips",
+            id,
+            "driver_rate_at_time",
+            trip.driver_rate_at_time,
+            fields.driver_rate_at_time,
+            ip,
+          );
         }
       }
 
