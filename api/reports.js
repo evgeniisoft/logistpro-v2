@@ -109,35 +109,37 @@ async function handler(req, res) {
       const avgRevenue =
         kpi.trips_count > 0 ? Math.round(revenue / kpi.trips_count) : 0;
 
-      // Топ-5 водителей
+      // Топ-5 водителей (свои + наёмные)
       const topDrivers = await query(
         `SELECT 
-                    d.id AS driver_id,
-                    d.full_name AS driver_name,
+                    COALESCE('own_' || d.id::text, 'hired_' || t.hired_driver_info) AS driver_key,
+                    COALESCE(d.full_name, t.hired_driver_info) AS driver_name,
+                    CASE WHEN t.hired_driver_info IS NOT NULL THEN true ELSE false END AS is_hired,
                     COUNT(t.id) AS trips_count,
                     COALESCE(SUM(t.fact_km), 0) AS total_km,
                     COALESCE(SUM(t.revenue), 0) AS total_revenue
                  FROM trips t
-                 JOIN drivers d ON d.id = t.driver_id
-                 ${whereClause}
-                 GROUP BY d.id, d.full_name
+                 LEFT JOIN drivers d ON d.id = t.driver_id
+                 ${whereClause ? whereClause + " AND" : "WHERE"} (t.driver_id IS NOT NULL OR t.hired_driver_info IS NOT NULL)
+                 GROUP BY d.id, d.full_name, t.hired_driver_info
                  ORDER BY trips_count DESC
                  LIMIT 5`,
         periodParams,
       );
 
-      // Топ-5 машин
+      // Топ-5 машин (свои + наёмные)
       const topVehicles = await query(
         `SELECT 
-                    v.id AS vehicle_id,
-                    v.plate AS vehicle_plate,
+                    COALESCE('own_' || v.id::text, 'hired_' || t.hired_vehicle_info) AS vehicle_key,
+                    COALESCE(v.plate, t.hired_vehicle_info) AS vehicle_plate,
                     v.model AS vehicle_model,
+                    CASE WHEN t.hired_vehicle_info IS NOT NULL THEN true ELSE false END AS is_hired,
                     COUNT(t.id) AS trips_count,
                     COALESCE(SUM(t.fact_km), 0) AS total_km
                  FROM trips t
-                 JOIN vehicles v ON v.id = t.vehicle_id
-                 ${whereClause}
-                 GROUP BY v.id, v.plate, v.model
+                 LEFT JOIN vehicles v ON v.id = t.vehicle_id
+                 ${whereClause ? whereClause + " AND" : "WHERE"} (t.vehicle_id IS NOT NULL OR t.hired_vehicle_info IS NOT NULL)
+                 GROUP BY v.id, v.plate, v.model, t.hired_vehicle_info
                  ORDER BY trips_count DESC
                  LIMIT 5`,
         periodParams,
@@ -710,10 +712,12 @@ async function handler(req, res) {
 
       const data = Object.values(categoriesMap);
 
-      // Автоматическая зарплата с деталями
+      // Автоматическая зарплата + наёмный транспорт
       const salaryInCosts = data.find((d) => d.category === "salary");
-      if (!salaryInCosts) {
-        const salaryDetails = await query(
+      const hiredInCosts = data.find((d) => d.category === "hired");
+
+      if (!salaryInCosts || !hiredInCosts) {
+        const details = await query(
           `SELECT 
                         t.id AS trip_id,
                         t.trip_number,
@@ -721,7 +725,7 @@ async function handler(req, res) {
                         t.driver_rate_at_time AS amount,
                         COALESCE(d.full_name, t.hired_driver_info, '—') AS driver_label,
                         COALESCE(v.plate, t.hired_vehicle_info, '—') AS vehicle_label,
-                        t.hired_driver_info IS NOT NULL AS is_hired_driver
+                        t.hired_vehicle_info IS NOT NULL AS is_hired_vehicle
                      FROM trips t
                      LEFT JOIN drivers d ON d.id = t.driver_id
                      LEFT JOIN vehicles v ON v.id = t.vehicle_id
@@ -730,23 +734,45 @@ async function handler(req, res) {
           periodParams,
         );
 
-        if (salaryDetails.rows.length > 0) {
-          const items = salaryDetails.rows.map((r) => ({
+        // Разделяем на "Зарплата" (своя машина) и "Наёмный транспорт" (наёмная машина)
+        const salaryItems = [];
+        const hiredItems = [];
+
+        details.rows.forEach((r) => {
+          const item = {
             trip_id: r.trip_id,
             trip_number: r.trip_number,
             trip_date: r.trip_date,
             amount: Number(r.amount),
-            note: r.is_hired_driver ? "Наёмный водитель" : "Свой водитель",
+            note: r.is_hired_vehicle ? "Наёмный транспорт" : "Свой водитель",
             vehicle_label: r.vehicle_label,
             driver_label: r.driver_label,
-            is_hired_vehicle: false,
-          }));
-          const total = items.reduce((s, i) => s + i.amount, 0);
+          };
+          if (r.is_hired_vehicle) {
+            hiredItems.push(item);
+          } else {
+            salaryItems.push(item);
+          }
+        });
+
+        if (!salaryInCosts && salaryItems.length > 0) {
+          const total = salaryItems.reduce((s, i) => s + i.amount, 0);
           data.push({
             category: "salary",
-            count: items.length,
+            count: salaryItems.length,
             total,
-            items,
+            items: salaryItems,
+            auto: true,
+          });
+        }
+
+        if (!hiredInCosts && hiredItems.length > 0) {
+          const total = hiredItems.reduce((s, i) => s + i.amount, 0);
+          data.push({
+            category: "hired",
+            count: hiredItems.length,
+            total,
+            items: hiredItems,
             auto: true,
           });
         }
