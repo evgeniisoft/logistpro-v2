@@ -1103,11 +1103,13 @@
                 },
 
                 get loadColor() {
+                    // Пустой рейс — серый
+                    if (this.totalVolume === 0) return 'load-empty';
                     const p = this.loadPercent;
-                    if (p > 100) return 'load-orange';
-                    if (p >= 81) return 'load-green';
-                    if (p >= 51) return 'load-yellow';
-                    return 'load-red';
+                    if (p > 100) return 'load-overload';
+                    if (p <= 30) return 'load-red';
+                    if (p <= 60) return 'load-yellow';
+                    return 'load-green';
                 },
 
                 get totalCostsManual() {
