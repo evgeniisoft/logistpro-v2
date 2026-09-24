@@ -1957,9 +1957,27 @@ body {
     font-size: 12px;
 }
 
-.col-positive { color: #059669; }
-.col-negative { color: #DC2626; }
-.col-muted { color: var(--text-secondary); }
+/* ============ КЛАССЫ ПОДСВЕТКИ ЗАГРУЗКИ В ОТЧЁТАХ ============ */
+
+/* Норма — зелёный */
+.col-positive {
+    color: #059669;
+}
+
+/* Недогруз — жёлтый */
+.col-warning {
+    color: #D97706;
+}
+
+/* Плохо (критический недогруз или перегруз) — красный */
+.col-negative {
+    color: #DC2626;
+}
+
+/* Приглушённый серый */
+.col-muted {
+    color: var(--text-secondary);
+}
 
 /* ============ ПЕРЕКЛЮЧАТЕЛЬ ТИПА (Своя/Наёмная) ============ */
 
