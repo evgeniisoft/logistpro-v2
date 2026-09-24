@@ -182,10 +182,14 @@
                         <h3 class="top-list-title">Топ водителей</h3>
                         <template x-if="topDrivers.length > 0">
                             <div class="top-list">
-                                <template x-for="(d, i) in topDrivers" :key="d.driver_id">
+                                <template x-for="(d, i) in topDrivers" :key="d.driver_key">
                                     <div class="top-item">
                                         <div class="top-rank" x-text="i + 1"></div>
-                                        <div class="top-name" x-text="d.driver_name"></div>
+                                        <div class="top-name">
+                                            <span x-text="d.driver_name"></span>
+                                            <span class="type-chip" :class="d.is_hired ? 'type-chip-hired' : 'type-chip-own'"
+                                                x-text="d.is_hired ? 'наём' : 'свой'"></span>
+                                        </div>
                                         <div class="top-bar-container">
                                             <div class="top-bar-fill" :style="'width:' + (d.trips_count / topDriversMax * 100) + '%'"></div>
                                         </div>
@@ -202,10 +206,14 @@
                         <h3 class="top-list-title">Топ машин</h3>
                         <template x-if="topVehicles.length > 0">
                             <div class="top-list">
-                                <template x-for="(v, i) in topVehicles" :key="v.vehicle_id">
+                                <template x-for="(v, i) in topVehicles" :key="v.vehicle_key">
                                     <div class="top-item">
                                         <div class="top-rank" x-text="i + 1"></div>
-                                        <div class="top-name" x-text="v.vehicle_plate + (v.vehicle_model ? ' · ' + v.vehicle_model : '')"></div>
+                                        <div class="top-name">
+                                            <span x-text="v.vehicle_plate + (v.vehicle_model ? ' · ' + v.vehicle_model : '')"></span>
+                                            <span class="type-chip" :class="v.is_hired ? 'type-chip-hired' : 'type-chip-own'"
+                                                x-text="v.is_hired ? 'наём' : 'своя'"></span>
+                                        </div>
                                         <div class="top-bar-container">
                                             <div class="top-bar-fill" :style="'width:' + (v.trips_count / topVehiclesMax * 100) + '%'"></div>
                                         </div>
@@ -1062,8 +1070,14 @@
 
                 categoryLabel(cat) {
                     const labels = {
-                        'salary': 'Зарплата', 'amort': 'Амортизация', 'fuel': 'Топливо',
-                        'toll': 'Платные дороги', 'repair': 'Ремонт', 'fine': 'Штрафы', 'other': 'Прочее'
+                        'salary': 'Зарплата',
+                        'hired': 'Наёмный транспорт',
+                        'amort': 'Амортизация',
+                        'fuel': 'Топливо',
+                        'toll': 'Платные дороги',
+                        'repair': 'Ремонт',
+                        'fine': 'Штрафы',
+                        'other': 'Прочее'
                     };
                     return labels[cat] || cat;
                 },
