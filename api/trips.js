@@ -590,7 +590,7 @@ async function handler(req, res) {
   // ============ INDEX: список / создание ============
   if (req.method === "GET") {
     try {
-      const { status, month, driver_id, vehicle_id, limit } = req.query;
+      const { status, month, driver_id, vehicle_id, limit, include_overdue_count } = req.query;
 
       let sql = `
           SELECT 
@@ -606,7 +606,25 @@ async function handler(req, res) {
               r.name AS route_name,
               (SELECT COUNT(*) FROM orders WHERE trip_id = t.id) AS orders_count,
               (SELECT COALESCE(SUM(volume), 0) FROM orders WHERE trip_id = t.id) AS total_volume,
-              (SELECT COALESCE(SUM(amount), 0) FROM costs WHERE trip_id = t.id) AS total_costs
+              (SELECT COALESCE(SUM(amount), 0) FROM costs WHERE trip_id = t.id) AS total_costs,
+              CASE 
+                  WHEN t.trip_date < (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Moscow')::date
+                   AND t.status NOT IN ('done', 'cancelled')
+                  THEN true 
+                  ELSE false 
+              END AS is_overdue,
+              CASE 
+                  WHEN t.trip_date < (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Moscow')::date
+                   AND t.status NOT IN ('done', 'cancelled')
+                  THEN ((CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Moscow')::date - t.trip_date)
+                  ELSE 0 
+              END AS days_overdue,
+              CASE 
+                  WHEN t.trip_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Moscow')::date
+                   AND t.status NOT IN ('done', 'cancelled')
+                  THEN true 
+                  ELSE false 
+              END AS is_today
           FROM trips t
           LEFT JOIN vehicles v ON v.id = t.vehicle_id
           LEFT JOIN drivers d ON d.id = t.driver_id
@@ -641,6 +659,21 @@ async function handler(req, res) {
       params.push(limitNum);
 
       const result = await query(sql, params);
+
+      // Опционально: счётчик просроченных рейсов вне периода
+      if (include_overdue_count === "true") {
+        const overdueRes = await query(`
+          SELECT COUNT(*)::int AS cnt
+          FROM trips
+          WHERE trip_date < (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Moscow')::date
+            AND status NOT IN ('done', 'cancelled')
+        `);
+        return res.json({
+          trips: result.rows,
+          overdue_outside_count: overdueRes.rows[0].cnt,
+        });
+      }
+
       return res.json({ trips: result.rows });
     } catch (e) {
       console.error("GET trips error:", e);
