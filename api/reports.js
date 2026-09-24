@@ -11,6 +11,17 @@ function todayStr() {
   return y + "-" + m + "-" + day;
 }
 
+// Приводит trip_date (Date-объект или строку) к формату "YYYY-MM-DD"
+function toLocalDateStr(v) {
+  if (!v) return null;
+  const d = v instanceof Date ? v : new Date(v);
+  if (isNaN(d.getTime())) return null;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return y + "-" + m + "-" + day;
+}
+
 // Возвращает { start, end, days } — календарный период с ограничением "не позже сегодня"
 function resolvePeriod(from, to) {
   const today = todayStr();
@@ -356,8 +367,8 @@ async function handler(req, res) {
 
         // Для простоя — только не отменённые
         if (t.status !== "cancelled") {
-          const day = String(t.trip_date).slice(0, 10);
-          if (!d.dates_set.has(day)) {
+          const day = toLocalDateStr(t.trip_date);
+          if (day && !d.dates_set.has(day)) {
             d.dates_set.add(day);
             d.trip_dates.push(day);
           }
@@ -570,8 +581,8 @@ async function handler(req, res) {
 
         // Для простоя — только не отменённые
         if (t.status !== "cancelled") {
-          const day = String(t.trip_date).slice(0, 10);
-          if (!v.dates_set.has(day)) {
+          const day = toLocalDateStr(t.trip_date);
+          if (day && !v.dates_set.has(day)) {
             v.dates_set.add(day);
             v.trip_dates.push(day);
           }
@@ -1438,7 +1449,9 @@ async function handler(req, res) {
         if (!isHired && idleAllowed && period.valid) {
           const dutySet = new Set();
           trips.forEach((x) => {
-            if (x.status !== "cancelled") dutySet.add(String(x.trip_date).slice(0, 10));
+            if (x.status !== "cancelled" && x.trip_date) {
+              dutySet.add(toLocalDateStr(x.trip_date));
+            }
           });
           kpi.duty_days = dutySet.size;
           kpi.idle_days = Math.max(0, period.days - dutySet.size);
@@ -1467,7 +1480,9 @@ async function handler(req, res) {
         if (!isHired && idleAllowed && period.valid) {
           const dutySet = new Set();
           trips.forEach((x) => {
-            if (x.status !== "cancelled") dutySet.add(String(x.trip_date).slice(0, 10));
+            if (x.status !== "cancelled" && x.trip_date) {
+              dutySet.add(toLocalDateStr(x.trip_date));
+            }
           });
           kpi.duty_days = dutySet.size;
           kpi.idle_days = Math.max(0, period.days - dutySet.size);
@@ -1508,8 +1523,9 @@ async function handler(req, res) {
           periodDays = period.days;
           const dutySet = new Set();
           trips.forEach((x) => {
-            if (x.status !== "cancelled")
-              dutySet.add(String(x.trip_date).slice(0, 10));
+            if (x.status !== "cancelled" && x.trip_date) {
+              dutySet.add(toLocalDateStr(x.trip_date));
+            }
           });
 
           dayStatus = [];
