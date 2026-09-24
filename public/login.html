@@ -93,7 +93,7 @@
                     this.loading = true;
 
                     try {
-                        const data = await window.API.api('/api/auth/login', {
+                        const data = await window.API.api('/api/auth?action=login', {
                             method: 'POST',
                             body: JSON.stringify(this.form)
                         });
