@@ -375,7 +375,7 @@
                             <tbody>
                                 <template x-for="m in byMonths" :key="m.month">
                                     <tr>
-                                        <td class="col-name" x-text="m.month_label"></td>
+                                        <td class="col-name" x-text="monthLabelRu(m.month)"></td>
                                         <td x-text="m.trips_count"></td>
                                         <td x-text="formatNumber(m.total_km)"></td>
                                         <template x-if="showRevenue">
@@ -867,7 +867,7 @@
                     // Динамика по месяцам
                     const ctxMonthly = document.getElementById('chartMonthly');
                     if (ctxMonthly && this.monthly.length > 0) {
-                        const labels = [...this.monthly].reverse().map(m => m.month_label);
+                        const labels = [...this.monthly].reverse().map(m => this.monthLabelRu(m.month));
                         const costs = [...this.monthly].reverse().map(m => m.costs);
                         
                         const datasets = [
@@ -929,7 +929,7 @@
                 renderMonthsCharts() {
                     const ctxMonthsFull = document.getElementById('chartMonthsFull');
                     if (ctxMonthsFull && this.byMonths.length > 0) {
-                        const labels = [...this.byMonths].reverse().map(m => m.month_label);
+                        const labels = [...this.byMonths].reverse().map(m => this.monthLabelRu(m.month));
                         const costs = [...this.byMonths].reverse().map(m => m.costs);
                         
                         const datasets = [
@@ -1022,7 +1022,7 @@
                         filename = 'vehicles-report-' + this.byVehiclesFilter + '.csv';
                     } else if (this.tab === 'months' && this.byMonths.length > 0) {
                         data = this.byMonths.map(m => ({
-                            'Месяц': m.month_label,
+                            'Месяц': this.monthLabelRu(m.month),
                             'Рейсов': m.trips_count,
                             'Пробег, км': m.total_km,
                             'Выручка, ₽': m.revenue,
@@ -1089,6 +1089,14 @@
                 formatNumber(v) {
                     if (!v && v !== 0) return '—';
                     return Number(v).toLocaleString('ru-RU', { maximumFractionDigits: 0 });
+                },
+
+                monthLabelRu(monthStr) {
+                    if (!monthStr) return '';
+                    const [year, month] = monthStr.split('-');
+                    if (!year || !month) return monthStr;
+                    const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+                    return date.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
                 },
 
 
