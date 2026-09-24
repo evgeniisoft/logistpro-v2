@@ -531,7 +531,23 @@
                     open: false,
                     saving: false,
                     error: '',
-                    form: {}
+                    form: {
+                        trip_date: '',
+                        trip_type: 'city',
+                        vehicle_mode: 'own',
+                        vehicle_id: null,
+                        hired_vehicle_info: '',
+                        vehicle_volume: 0,
+                        driver_mode: 'own',
+                        driver_id: null,
+                        hired_driver_info: '',
+                        driver_rate: 0,
+                        route_id: null,
+                        plan_km: 100,
+                        revenue: 0,
+                        comment: '',
+                        addresses: []
+                    }
                 },
 
                 get userInitials() {
