@@ -9,7 +9,9 @@ const ALLOWED_KEYS = [
     'bitrix_active',
     'show_revenue',
     'company_name',
-    'company_phone'
+    'company_phone',
+    'cost_per_km_warning',
+    'repairs_warning'
 ];
 
 // Ключи, которые НИКОГДА не возвращаем на фронт (только маскируем)
