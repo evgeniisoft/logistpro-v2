@@ -910,6 +910,7 @@
                 drivers: [],
                 routes: [],
                 showArchived: false,
+                loading: { vehicles: true, drivers: true, routes: true },
                 error: '',
                 // Интеграции
                 integrationForm: {
@@ -1315,7 +1316,7 @@
                     } catch (e) {
                         this.settingsError = 'Ошибка загрузки настроек: ' + e.message;
                     }
-                },,
+                },
 
                 async saveShowRevenue() {
                     this.settingsError = '';
