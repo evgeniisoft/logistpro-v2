@@ -630,6 +630,7 @@
                                                     <option value="toll">Платные дороги</option>
                                                     <option value="repair">Ремонт</option>
                                                     <option value="fine">Штрафы</option>
+                                                    <option value="hired">Наёмный транспорт</option>
                                                     <option value="other">Прочее</option>
                                                 </select>
                                             </td>
@@ -699,6 +700,7 @@
                                                 <option value="toll">Платные дороги</option>
                                                 <option value="repair">Ремонт</option>
                                                 <option value="fine">Штрафы</option>
+                                                <option value="hired">Наёмный транспорт</option>
                                                 <option value="other">Прочее</option>
                                             </select>
                                         </td>
@@ -1395,8 +1397,14 @@
 
                 categoryLabel(cat) {
                     const labels = {
-                        'salary': 'Зарплата', 'amort': 'Амортизация', 'fuel': 'Топливо',
-                        'toll': 'Платные дороги', 'repair': 'Ремонт', 'fine': 'Штрафы', 'other': 'Прочее'
+                        'salary': 'Зарплата',
+                        'hired': 'Наёмный транспорт',
+                        'amort': 'Амортизация',
+                        'fuel': 'Топливо',
+                        'toll': 'Платные дороги',
+                        'repair': 'Ремонт',
+                        'fine': 'Штрафы',
+                        'other': 'Прочее'
                     };
                     return labels[cat] || cat;
                 },
