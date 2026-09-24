@@ -133,7 +133,7 @@
             <!-- ============ ДАШБОРД ============ -->
             <div x-show="tab === 'dashboard'" x-cloak>
                 <!-- KPI -->
-                <div class="kpi-grid" :class="!showRevenue ? 'kpi-grid-2' : ''">
+                <div class="kpi-grid" :class="!showRevenue ? 'kpi-grid-3' : ''">
                     <div class="kpi-card">
                         <div class="kpi-label">Рейсов</div>
                         <div class="kpi-value" x-text="kpi.trips_count || 0"></div>
@@ -150,6 +150,11 @@
                         <div class="kpi-label">Затраты</div>
                         <div class="kpi-value" x-text="formatMoney(kpi.costs || 0)"></div>
                         <div class="kpi-sub" x-text="'Средние на рейс: ' + formatMoney(kpi.avg_trip_cost || 0)"></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Ср. загрузка</div>
+                        <div class="kpi-value" x-text="(kpi.weighted_load_percent || 0) + '%'"></div>
+                        <div class="kpi-sub">взвешенная по объёму</div>
                     </div>
                     <template x-if="showRevenue">
                         <div class="kpi-card">
@@ -177,6 +182,15 @@
                 </div>
 
                 <!-- Топ-5 -->
+                <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:12px;">
+                    <label style="font-size:12px;color:var(--text-secondary);">Топ-5 по:</label>
+                    <select class="form-input top-metric-select" x-model="topMetric" @change="loadAll()">
+                        <option value="trips_count">рейсам</option>
+                        <option value="total_km">пробегу</option>
+                        <option value="total_revenue">выручке</option>
+                    </select>
+                </div>
+
                 <div class="top-lists-grid">
                     <div class="top-list-card">
                         <h3 class="top-list-title">Топ водителей</h3>
@@ -191,10 +205,10 @@
                                                 x-text="d.is_hired ? 'наём' : 'свой'"></span>
                                         </div>
                                         <div class="top-bar-container">
-                                            <div class="top-bar-fill" :style="'width:' + (d.trips_count / topDriversMax * 100) + '%'"></div>
+                                            <div class="top-bar-fill" :style="'width:' + topBarWidth('drivers', d) + '%'"></div>
                                         </div>
-                                        <div class="top-value" x-text="d.trips_count"></div>
-                                        <div class="top-sub" x-text="formatNumber(d.total_km) + ' км'"></div>
+                                        <div class="top-value" x-text="topMetricValue(d)"></div>
+                                        <div class="top-sub" x-text="topMetricSub(d)"></div>
                                     </div>
                                 </template>
                             </div>
@@ -215,10 +229,10 @@
                                                 x-text="v.is_hired ? 'наём' : 'своя'"></span>
                                         </div>
                                         <div class="top-bar-container">
-                                            <div class="top-bar-fill" :style="'width:' + (v.trips_count / topVehiclesMax * 100) + '%'"></div>
+                                            <div class="top-bar-fill" :style="'width:' + topBarWidth('vehicles', v) + '%'"></div>
                                         </div>
-                                        <div class="top-value" x-text="v.trips_count"></div>
-                                        <div class="top-sub" x-text="formatNumber(v.total_km) + ' км'"></div>
+                                        <div class="top-value" x-text="topMetricValue(v)"></div>
+                                        <div class="top-sub" x-text="topMetricSub(v)"></div>
                                     </div>
                                 </template>
                             </div>
@@ -250,11 +264,26 @@
                                     <th>Тип</th>
                                     <th @click="sortBy('drivers', 'trips_count')">Рейсов</th>
                                     <th @click="sortBy('drivers', 'total_km')">Пробег, км</th>
+                                    <template x-if="idleAllowed">
+                                        <th @click="sortBy('drivers', 'duty_days')">Дней в работе</th>
+                                    </template>
+                                    <template x-if="idleAllowed">
+                                        <th @click="sortBy('drivers', 'idle_days')">Простой, дн</th>
+                                    </template>
+                                    <template x-if="idleAllowed">
+                                        <th @click="sortBy('drivers', 'utilization_days_percent')">Утилизация</th>
+                                    </template>
                                     <th @click="sortBy('drivers', 'avg_load_percent')">Ср. загрузка</th>
+                                    <th @click="sortBy('drivers', 'weighted_load_percent')">Взвеш. загр.</th>
+                                    <th @click="sortBy('drivers', 'empty_trips')">Порож.</th>
                                     <th @click="sortBy('drivers', 'costs')">Затраты</th>
-                                    <th @click="sortBy('drivers', 'cost_per_trip')">Затр/рейс</th>
+                                    <th @click="sortBy('drivers', 'cost_per_km')">Себест./км</th>
+                                    <th @click="sortBy('drivers', 'cost_per_m3')">Себест./м³</th>
                                     <template x-if="showRevenue">
                                         <th @click="sortBy('drivers', 'total_revenue')">Выручка</th>
+                                    </template>
+                                    <template x-if="showRevenue">
+                                        <th @click="sortBy('drivers', 'margin')">Маржа</th>
                                     </template>
                                 </tr>
                             </thead>
@@ -268,12 +297,62 @@
                                         </td>
                                         <td x-text="d.trips_count"></td>
                                         <td x-text="formatNumber(d.total_km)"></td>
+                                        <template x-if="idleAllowed">
+                                            <td x-text="d.is_hired ? '—' : (d.duty_days !== null ? d.duty_days : '—')"></td>
+                                        </template>
+                                        <template x-if="idleAllowed">
+                                            <td :class="!d.is_hired && d.idle_days > 15 ? 'col-negative' : ''" x-text="d.is_hired ? '—' : (d.idle_days !== null ? d.idle_days : '—')"></td>
+                                        </template>
+                                        <template x-if="idleAllowed">
+                                            <td x-text="d.is_hired ? '—' : (d.utilization_days_percent !== null ? d.utilization_days_percent + '%' : '—')"></td>
+                                        </template>
                                         <td :class="d.avg_load_percent < 50 ? 'col-negative' : ''" x-text="d.avg_load_percent + '%'"></td>
+                                        <td :class="d.weighted_load_percent < 50 ? 'col-negative' : ''" x-text="d.weighted_load_percent + '%'"></td>
+                                        <td :class="d.empty_trips > 0 ? 'col-negative' : ''" x-text="d.empty_trips || '—'"></td>
                                         <td class="col-money" x-text="formatMoney(d.costs)"></td>
-                                        <td class="col-money" x-text="formatMoney(d.cost_per_trip)"></td>
+                                        <td class="col-money" x-text="d.cost_per_km + ' ₽'"></td>
+                                        <td class="col-money" x-text="d.cost_per_m3 > 0 ? d.cost_per_m3 + ' ₽' : '—'"></td>
                                         <template x-if="showRevenue">
                                             <td class="col-money" x-text="formatMoney(d.total_revenue)"></td>
                                         </template>
+                                        <template x-if="showRevenue">
+                                            <td class="col-money" :class="d.margin >= 0 ? 'col-positive' : 'col-negative'" x-text="formatMoney(d.margin)"></td>
+                                        </template>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Секция "Простой транспорт" -->
+                <div x-show="idleAllowed" class="idle-section" x-cloak>
+                    <div class="idle-section-header" @click="toggleIdleDrivers()">
+                        <div>
+                            <span style="font-weight:600;">Простой транспорт</span>
+                            <span style="font-size:12px;color:var(--text-secondary);margin-left:8px;" x-text="idleDriversLoaded ? '(' + idleDrivers.length + ' водителей)' : ''"></span>
+                        </div>
+                        <span class="expand-icon" :class="idleDriversOpen ? 'open' : ''">▸</span>
+                    </div>
+                    <div x-show="idleDriversOpen" style="padding:0 20px 16px 20px;">
+                        <div x-show="idleDriversLoading" style="padding:20px;text-align:center;color:var(--text-secondary);font-size:13px;">Загрузка...</div>
+                        <div x-show="!idleDriversLoading && idleDrivers.length === 0" style="padding:20px;text-align:center;color:var(--text-secondary);font-size:13px;">Все свои водители были задействованы в периоде</div>
+                        <table x-show="!idleDriversLoading && idleDrivers.length > 0" class="report-table" style="margin-top:8px;">
+                            <thead>
+                                <tr>
+                                    <th>Водитель</th>
+                                    <th>Телефон</th>
+                                    <th>Простой, дн</th>
+                                    <th>Утилизация</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="d in idleDrivers" :key="d.driver_id">
+                                    <tr>
+                                        <td class="col-name" x-text="d.driver_name"></td>
+                                        <td x-text="d.driver_phone || '—'"></td>
+                                        <td class="col-negative" x-text="d.idle_days"></td>
+                                        <td class="col-negative" x-text="'0%'"></td>
                                     </tr>
                                 </template>
                             </tbody>
@@ -304,9 +383,22 @@
                                     <th @click="sortBy('vehicles', 'vehicle_type')">Тип</th>
                                     <th @click="sortBy('vehicles', 'trips_count')">Рейсов</th>
                                     <th @click="sortBy('vehicles', 'total_km')">Пробег, км</th>
+                                    <template x-if="idleAllowed">
+                                        <th @click="sortBy('vehicles', 'duty_days')">Дней в работе</th>
+                                    </template>
+                                    <template x-if="idleAllowed">
+                                        <th @click="sortBy('vehicles', 'idle_days')">Простой, дн</th>
+                                    </template>
+                                    <template x-if="idleAllowed">
+                                        <th @click="sortBy('vehicles', 'utilization_days_percent')">Утилизация</th>
+                                    </template>
+                                    <th @click="sortBy('vehicles', 'avg_load_percent')">Ср. загрузка</th>
+                                    <th @click="sortBy('vehicles', 'weighted_load_percent')">Взвеш. загр.</th>
+                                    <th @click="sortBy('vehicles', 'empty_trips')">Порож.</th>
                                     <th @click="sortBy('vehicles', 'repairs')">Ремонты</th>
                                     <th @click="sortBy('vehicles', 'costs')">Затраты</th>
-                                    <th @click="sortBy('vehicles', 'cost_per_km')">Затр/км</th>
+                                    <th @click="sortBy('vehicles', 'cost_per_km')">Себест./км</th>
+                                    <th @click="sortBy('vehicles', 'cost_per_m3')">Себест./м³</th>
                                     <template x-if="showRevenue">
                                         <th @click="sortBy('vehicles', 'margin')">Маржа</th>
                                     </template>
@@ -325,12 +417,60 @@
                                         </td>
                                         <td x-text="v.trips_count"></td>
                                         <td x-text="formatNumber(v.total_km)"></td>
+                                        <template x-if="idleAllowed">
+                                            <td x-text="v.is_hired ? '—' : (v.duty_days !== null ? v.duty_days : '—')"></td>
+                                        </template>
+                                        <template x-if="idleAllowed">
+                                            <td :class="!v.is_hired && v.idle_days > 15 ? 'col-negative' : ''" x-text="v.is_hired ? '—' : (v.idle_days !== null ? v.idle_days : '—')"></td>
+                                        </template>
+                                        <template x-if="idleAllowed">
+                                            <td x-text="v.is_hired ? '—' : (v.utilization_days_percent !== null ? v.utilization_days_percent + '%' : '—')"></td>
+                                        </template>
+                                        <td :class="v.avg_load_percent < 50 ? 'col-negative' : ''" x-text="v.avg_load_percent + '%'"></td>
+                                        <td :class="v.weighted_load_percent < 50 ? 'col-negative' : ''" x-text="v.weighted_load_percent + '%'"></td>
+                                        <td :class="v.empty_trips > 0 ? 'col-negative' : ''" x-text="v.empty_trips || '—'"></td>
                                         <td class="col-money" :class="v.repairs > 20000 ? 'col-negative' : ''" x-text="v.repairs > 0 ? formatMoney(v.repairs) : '—'"></td>
                                         <td class="col-money" x-text="formatMoney(v.costs)"></td>
                                         <td class="col-money" :class="v.cost_per_km > 40 ? 'col-negative' : ''" x-text="v.cost_per_km + ' ₽'"></td>
+                                        <td class="col-money" x-text="v.cost_per_m3 > 0 ? v.cost_per_m3 + ' ₽' : '—'"></td>
                                         <template x-if="showRevenue">
                                             <td class="col-money" :class="v.margin >= 0 ? 'col-positive' : 'col-negative'" x-text="formatMoney(v.margin)"></td>
                                         </template>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Секция "Простой транспорт" -->
+                <div x-show="idleAllowed" class="idle-section" x-cloak>
+                    <div class="idle-section-header" @click="toggleIdleVehicles()">
+                        <div>
+                            <span style="font-weight:600;">Простой транспорт</span>
+                            <span style="font-size:12px;color:var(--text-secondary);margin-left:8px;" x-text="idleVehiclesLoaded ? '(' + idleVehicles.length + ' машин)' : ''"></span>
+                        </div>
+                        <span class="expand-icon" :class="idleVehiclesOpen ? 'open' : ''">▸</span>
+                    </div>
+                    <div x-show="idleVehiclesOpen" style="padding:0 20px 16px 20px;">
+                        <div x-show="idleVehiclesLoading" style="padding:20px;text-align:center;color:var(--text-secondary);font-size:13px;">Загрузка...</div>
+                        <div x-show="!idleVehiclesLoading && idleVehicles.length === 0" style="padding:20px;text-align:center;color:var(--text-secondary);font-size:13px;">Все свои машины были задействованы в периоде</div>
+                        <table x-show="!idleVehiclesLoading && idleVehicles.length > 0" class="report-table" style="margin-top:8px;">
+                            <thead>
+                                <tr>
+                                    <th>Машина</th>
+                                    <th>Модель</th>
+                                    <th>Простой, дн</th>
+                                    <th>Утилизация</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="v in idleVehicles" :key="v.vehicle_id">
+                                    <tr>
+                                        <td class="col-name" x-text="v.vehicle_plate"></td>
+                                        <td x-text="v.vehicle_model || '—'"></td>
+                                        <td class="col-negative" x-text="v.idle_days"></td>
+                                        <td class="col-negative" x-text="'0%'"></td>
                                     </tr>
                                 </template>
                             </tbody>
@@ -360,10 +500,15 @@
                                     <th>Месяц</th>
                                     <th>Рейсов</th>
                                     <th>Пробег, км</th>
+                                    <th>Ср. загрузка</th>
+                                    <th>Взвеш. загр.</th>
+                                    <th>Порож.</th>
                                     <template x-if="showRevenue">
                                         <th>Выручка</th>
                                     </template>
                                     <th>Затраты</th>
+                                    <th>Себест./км</th>
+                                    <th>Себест./м³</th>
                                     <template x-if="showRevenue">
                                         <th>Маржа</th>
                                     </template>
@@ -378,10 +523,15 @@
                                         <td class="col-name" x-text="monthLabelRu(m.month)"></td>
                                         <td x-text="m.trips_count"></td>
                                         <td x-text="formatNumber(m.total_km)"></td>
+                                        <td :class="m.avg_load_percent < 50 ? 'col-negative' : ''" x-text="m.avg_load_percent + '%'"></td>
+                                        <td :class="m.weighted_load_percent < 50 ? 'col-negative' : ''" x-text="m.weighted_load_percent + '%'"></td>
+                                        <td :class="m.empty_trips > 0 ? 'col-negative' : ''" x-text="m.empty_trips || '—'"></td>
                                         <template x-if="showRevenue">
                                             <td class="col-money" x-text="formatMoney(m.revenue)"></td>
                                         </template>
                                         <td class="col-money" x-text="formatMoney(m.costs)"></td>
+                                        <td class="col-money" x-text="m.cost_per_km + ' ₽'"></td>
+                                        <td class="col-money" x-text="m.cost_per_m3 > 0 ? m.cost_per_m3 + ' ₽' : '—'"></td>
                                         <template x-if="showRevenue">
                                             <td class="col-money" :class="m.margin >= 0 ? 'col-positive' : 'col-negative'" x-text="formatMoney(m.margin)"></td>
                                         </template>
@@ -411,12 +561,19 @@
                                     <th @click="sortBy('routes', 'trips_count')">Рейсов</th>
                                     <th @click="sortBy('routes', 'total_km')">Пробег, км</th>
                                     <th @click="sortBy('routes', 'avg_load_percent')">Ср. загрузка</th>
+                                    <th @click="sortBy('routes', 'weighted_load_percent')">Взвеш. загр.</th>
+                                    <th @click="sortBy('routes', 'empty_trips')">Порож.</th>
                                     <th @click="sortBy('routes', 'costs')">Затраты</th>
+                                    <th @click="sortBy('routes', 'cost_per_km')">Себест./км</th>
+                                    <th @click="sortBy('routes', 'cost_per_m3')">Себест./м³</th>
                                     <template x-if="showRevenue">
                                         <th @click="sortBy('routes', 'total_revenue')">Выручка</th>
                                     </template>
                                     <template x-if="showRevenue">
                                         <th @click="sortBy('routes', 'margin')">Маржа</th>
+                                    </template>
+                                    <template x-if="showRevenue">
+                                        <th @click="sortBy('routes', 'margin_percent')">Рентаб.</th>
                                     </template>
                                 </tr>
                             </thead>
@@ -427,12 +584,19 @@
                                         <td x-text="r.trips_count"></td>
                                         <td x-text="formatNumber(r.total_km)"></td>
                                         <td :class="r.avg_load_percent < 50 ? 'col-negative' : ''" x-text="r.avg_load_percent + '%'"></td>
+                                        <td :class="r.weighted_load_percent < 50 ? 'col-negative' : ''" x-text="r.weighted_load_percent + '%'"></td>
+                                        <td :class="r.empty_trips > 0 ? 'col-negative' : ''" x-text="r.empty_trips || '—'"></td>
                                         <td class="col-money" x-text="formatMoney(r.costs)"></td>
+                                        <td class="col-money" x-text="r.cost_per_km + ' ₽'"></td>
+                                        <td class="col-money" x-text="r.cost_per_m3 > 0 ? r.cost_per_m3 + ' ₽' : '—'"></td>
                                         <template x-if="showRevenue">
                                             <td class="col-money" x-text="formatMoney(r.total_revenue)"></td>
                                         </template>
                                         <template x-if="showRevenue">
                                             <td class="col-money" :class="r.margin >= 0 ? 'col-positive' : 'col-negative'" x-text="formatMoney(r.margin)"></td>
+                                        </template>
+                                        <template x-if="showRevenue">
+                                            <td :class="r.margin_percent >= 0 ? 'col-positive' : 'col-negative'" x-text="r.margin_percent + '%'"></td>
                                         </template>
                                     </tr>
                                 </template>
@@ -490,6 +654,7 @@
             </div>
 
         </div>
+
         <!-- МОДАЛКА: ДЕТАЛИЗАЦИЯ ЗАТРАТ -->
         <div x-show="costDetailModal.open" x-cloak class="modal-backdrop" @click.self="closeCostDetail()">
             <div class="modal-window modal-window-wide" @click.stop>
@@ -592,6 +757,32 @@
                                     <div class="drill-kpi-label">Затраты</div>
                                     <div class="drill-kpi-value" x-text="formatMoney(drillDownModal.kpi.total_costs || 0)"></div>
                                 </div>
+                                <div class="drill-kpi-item">
+                                    <div class="drill-kpi-label">Ср. загрузка</div>
+                                    <div class="drill-kpi-value" x-text="(drillDownModal.kpi.weighted_load_percent || 0) + '%'"></div>
+                                    <div class="drill-kpi-sub">взвеш. по объёму</div>
+                                </div>
+                                <template x-if="drillDownModal.kpi.duty_days !== undefined && drillDownModal.kpi.duty_days !== null">
+                                    <div class="drill-kpi-item">
+                                        <div class="drill-kpi-label">Дней в работе</div>
+                                        <div class="drill-kpi-value" x-text="drillDownModal.kpi.duty_days"></div>
+                                        <div class="drill-kpi-sub" x-text="'Утилизация: ' + (drillDownModal.kpi.utilization_days_percent || 0) + '%'"></div>
+                                    </div>
+                                </template>
+                                <template x-if="drillDownModal.kpi.idle_days !== undefined && drillDownModal.kpi.idle_days !== null">
+                                    <div class="drill-kpi-item">
+                                        <div class="drill-kpi-label">Простой</div>
+                                        <div class="drill-kpi-value" :class="drillDownModal.kpi.idle_days > 15 ? 'negative' : ''" x-text="drillDownModal.kpi.idle_days + ' дн'"></div>
+                                    </div>
+                                </template>
+                                <div class="drill-kpi-item">
+                                    <div class="drill-kpi-label">Себест./км</div>
+                                    <div class="drill-kpi-value" x-text="(drillDownModal.kpi.cost_per_km || 0) + ' ₽'"></div>
+                                </div>
+                                <div class="drill-kpi-item">
+                                    <div class="drill-kpi-label">Себест./м³</div>
+                                    <div class="drill-kpi-value" x-text="drillDownModal.kpi.cost_per_m3 > 0 ? drillDownModal.kpi.cost_per_m3 + ' ₽' : '—'"></div>
+                                </div>
                                 <template x-if="showRevenue">
                                     <div class="drill-kpi-item">
                                         <div class="drill-kpi-label">Выручка</div>
@@ -606,25 +797,22 @@
                                         <div class="drill-kpi-sub" x-text="'Рентабельность: ' + (drillDownModal.kpi.margin_percent || 0) + '%'"></div>
                                     </div>
                                 </template>
-                                <template x-if="drillDownModal.type === 'vehicles'">
-                                    <div class="drill-kpi-item">
-                                        <div class="drill-kpi-label">Затрат / км</div>
-                                        <div class="drill-kpi-value" x-text="(drillDownModal.kpi.cost_per_km || 0) + ' ₽'"></div>
-                                    </div>
-                                </template>
-                                <template x-if="drillDownModal.type === 'drivers' || drillDownModal.type === 'routes'">
-                                    <div class="drill-kpi-item">
-                                        <div class="drill-kpi-label">Ср. загрузка</div>
-                                        <div class="drill-kpi-value" x-text="(drillDownModal.kpi.avg_load_percent || 0) + '%'"></div>
-                                    </div>
-                                </template>
-                                <template x-if="drillDownModal.type === 'drivers'">
-                                    <div class="drill-kpi-item">
-                                        <div class="drill-kpi-label">Затрат / рейс</div>
-                                        <div class="drill-kpi-value" x-text="formatMoney(drillDownModal.kpi.cost_per_trip || 0)"></div>
-                                    </div>
-                                </template>
                             </div>
+
+                            <!-- Календарь по дням (для своих машин/водителей) -->
+                            <template x-if="drillDownModal.day_status && drillDownModal.day_status.length > 0">
+                                <div style="margin-bottom:20px;">
+                                    <h3 style="font-size:13px;font-weight:600;margin:0 0 10px 0;">
+                                        Календарь работы
+                                        <span style="font-weight:400;color:var(--text-secondary);font-size:12px;margin-left:8px;">зелёный — рейс, серый — простой</span>
+                                    </h3>
+                                    <div class="day-strip">
+                                        <template x-for="d in drillDownModal.day_status" :key="d.date">
+                                            <div class="day-cell" :class="d.has_trip ? 'has-trip' : ''" :title="d.date + (d.has_trip ? ' — рейс' : ' — простой')" x-text="d.day"></div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
 
                             <!-- Разбивка затрат (только для месяцев) -->
                             <template x-if="drillDownModal.type === 'months' && drillDownModal.categories && drillDownModal.categories.length > 0">
@@ -763,6 +951,21 @@
                 byVehiclesFilter: 'all', // all | own | hired
                 byDriversFilter: 'all',  // all | own | hired
 
+                // Топ-5: метрика сортировки
+                topMetric: 'trips_count',
+
+                // Простой транспорт
+                idleAllowed: false,
+                periodDays: 0,
+                idleDrivers: [],
+                idleDriversOpen: false,
+                idleDriversLoaded: false,
+                idleDriversLoading: false,
+                idleVehicles: [],
+                idleVehiclesOpen: false,
+                idleVehiclesLoaded: false,
+                idleVehiclesLoading: false,
+
                 // Графики
                 chartMonthly: null,
                 chartCosts: null,
@@ -784,7 +987,9 @@
                     title: '',
                     kpi: {},
                     categories: null,
-                    trips: []
+                    trips: [],
+                    day_status: null,
+                    period_days: null
                 },
 
                 get userInitials() {
@@ -795,16 +1000,6 @@
                 get roleLabel() {
                     const roles = { 'admin': 'Администратор', 'senior_logist': 'Ст. логист', 'logist': 'Логист', 'manager': 'Руководитель', 'viewer': 'Наблюдатель' };
                     return roles[this.user?.role] || this.user?.role || '';
-                },
-
-                get topDriversMax() {
-                    if (this.topDrivers.length === 0) return 1;
-                    return Math.max(...this.topDrivers.map(d => d.trips_count));
-                },
-
-                get topVehiclesMax() {
-                    if (this.topVehicles.length === 0) return 1;
-                    return Math.max(...this.topVehicles.map(v => v.trips_count));
                 },
 
                 get costsTotal() {
@@ -835,6 +1030,38 @@
                     }
                     return this.byDrivers;
                 },
+
+                // ============ ТОП-5 ============
+
+                topMetricMax(collection) {
+                    const arr = collection === 'drivers' ? this.topDrivers : this.topVehicles;
+                    if (arr.length === 0) return 1;
+                    const vals = arr.map(x => Number(x[this.topMetric]) || 0);
+                    const max = Math.max(...vals);
+                    return max > 0 ? max : 1;
+                },
+
+                topBarWidth(collection, item) {
+                    const max = this.topMetricMax(collection);
+                    const v = Number(item[this.topMetric]) || 0;
+                    return Math.round((v / max) * 100);
+                },
+
+                topMetricValue(item) {
+                    const v = Number(item[this.topMetric]) || 0;
+                    if (this.topMetric === 'total_revenue') return this.formatMoney(v);
+                    if (this.topMetric === 'total_km') return this.formatNumber(v);
+                    return v;
+                },
+
+                topMetricSub(item) {
+                    if (this.topMetric === 'trips_count') return this.formatNumber(item.total_km) + ' км';
+                    if (this.topMetric === 'total_km') return item.trips_count + ' рейсов';
+                    if (this.topMetric === 'total_revenue') return item.trips_count + ' рейсов';
+                    return '';
+                },
+
+                // ============ ИНИЦИАЛИЗАЦИЯ ============
 
                 async init() {
                     if (!window.AUTH) {
@@ -902,14 +1129,12 @@
 
                     if (reload) {
                         await this.loadAll();
-                        // Графики нарисуются в loadAll
                     }
                 },
 
                 async applyCustomRange() {
                     if (this.customFrom || this.customTo) {
                         await this.loadAll();
-                        // renderCharts вызовется внутри loadAll через setTimeout
                     }
                 },
 
@@ -932,6 +1157,14 @@
                 async loadAll() {
                     this.loading = true;
                     this.error = '';
+
+                    // Сбрасываем состояние idle-секций
+                    this.idleDrivers = [];
+                    this.idleDriversLoaded = false;
+                    this.idleDriversOpen = false;
+                    this.idleVehicles = [];
+                    this.idleVehiclesLoaded = false;
+                    this.idleVehiclesOpen = false;
 
                     const q = this.getQueryParams();
                     const suffix = q ? '&' + q : '';
@@ -957,15 +1190,15 @@
                         this.byRoutes = byRoutes.data || [];
                         this.costsBreakdown = costsBreakdown.data || [];
 
-                        // Рисуем графики после сброса loading
+                        // Флаг "показывать ли метрики простоя"
+                        this.idleAllowed = !!(byDrivers.idle_allowed && byVehicles.idle_allowed);
+                        this.periodDays = byDrivers.period_days || 0;
                     } catch (e) {
                         this.error = e.message;
                     } finally {
                         this.loading = false;
                     }
 
-                    // Рисуем графики после того, как контейнер стал видимым
-                    // Ждём 2 кадра анимации + запас
                     requestAnimationFrame(() => {
                         requestAnimationFrame(() => {
                             setTimeout(() => this.renderCharts(), 150);
@@ -975,13 +1208,54 @@
 
                 switchTab(tab) {
                     this.tab = tab;
-                    // Ждём, пока Alpine отрисует таб и рендерим
                     requestAnimationFrame(() => {
                         requestAnimationFrame(() => {
                             setTimeout(() => this.renderCharts(), 100);
                         });
                     });
                 },
+
+                // ============ ПРОСТОЙ ТРАНСПОРТ (ленивая загрузка) ============
+
+                async toggleIdleDrivers() {
+                    this.idleDriversOpen = !this.idleDriversOpen;
+                    if (this.idleDriversOpen && !this.idleDriversLoaded) {
+                        this.idleDriversLoading = true;
+                        try {
+                            const q = this.getQueryParams();
+                            const suffix = q ? '&' + q : '';
+                            const data = await window.API.api('/api/reports?action=idle&type=drivers' + suffix);
+                            this.idleDrivers = data.data || [];
+                            this.idleDriversLoaded = true;
+                        } catch (e) {
+                            console.error('Ошибка загрузки простоя водителей:', e);
+                            this.idleDrivers = [];
+                        } finally {
+                            this.idleDriversLoading = false;
+                        }
+                    }
+                },
+
+                async toggleIdleVehicles() {
+                    this.idleVehiclesOpen = !this.idleVehiclesOpen;
+                    if (this.idleVehiclesOpen && !this.idleVehiclesLoaded) {
+                        this.idleVehiclesLoading = true;
+                        try {
+                            const q = this.getQueryParams();
+                            const suffix = q ? '&' + q : '';
+                            const data = await window.API.api('/api/reports?action=idle&type=vehicles' + suffix);
+                            this.idleVehicles = data.data || [];
+                            this.idleVehiclesLoaded = true;
+                        } catch (e) {
+                            console.error('Ошибка загрузки простоя машин:', e);
+                            this.idleVehicles = [];
+                        } finally {
+                            this.idleVehiclesLoading = false;
+                        }
+                    }
+                },
+
+                // ============ ГРАФИКИ ============
 
                 destroyCharts() {
                     if (this.chartMonthly) { try { this.chartMonthly.destroy(); } catch(e) {} this.chartMonthly = null; }
@@ -1009,7 +1283,6 @@
                 },
 
                 renderCharts() {
-                    // Отменяем предыдущий таймер
                     if (this._chartsRenderTimer) {
                         clearTimeout(this._chartsRenderTimer);
                         this._chartsRenderTimer = null;
@@ -1018,14 +1291,11 @@
                     this._chartsRenderTimer = setTimeout(() => {
                         this._chartsRenderTimer = null;
 
-                        // Проверяем, что canvas виден и имеет правильные размеры
                         const needChart = this.tab === 'dashboard' || this.tab === 'months' || this.tab === 'costs';
                         if (!needChart) return;
 
-                        // Уничтожаем старые диаграммы
                         this.destroyCharts();
 
-                        // Проверяем размер canvas
                         const testCanvas = this.tab === 'dashboard' 
                             ? document.getElementById('chartMonthly')
                             : this.tab === 'months'
@@ -1036,7 +1306,6 @@
 
                         const rect = testCanvas.getBoundingClientRect();
                         if (rect.width < 50 || rect.height < 50) {
-                            // Контейнер ещё не получил размеры — ждём ещё
                             setTimeout(() => this.renderCharts(), 200);
                             return;
                         }
@@ -1052,7 +1321,6 @@
                 },
 
                 renderDashboardCharts() {
-                    // Динамика по месяцам
                     const ctxMonthly = document.getElementById('chartMonthly');
                     if (ctxMonthly && this.monthly.length > 0) {
                         const labels = [...this.monthly].reverse().map(m => this.monthLabelRu(m.month));
@@ -1087,7 +1355,6 @@
                         });
                     }
 
-                    // Круговая затрат
                     const ctxCosts = document.getElementById('chartCosts');
                     if (ctxCosts && this.costsBreakdown.length > 0) {
                         const labels = this.costsBreakdown.map(c => this.categoryLabel(c.category));
@@ -1189,10 +1456,18 @@
                             'Рейсов': d.trips_count,
                             'Завершено': d.trips_done,
                             'Пробег, км': d.total_km,
-                            'Средняя загрузка, %': d.avg_load_percent,
+                            'Дней в работе': d.duty_days ?? '',
+                            'Простой, дн': d.idle_days ?? '',
+                            'Утилизация, %': d.utilization_days_percent ?? '',
+                            'Ср. загрузка, %': d.avg_load_percent,
+                            'Взвеш. загрузка, %': d.weighted_load_percent,
+                            'Порожних': d.empty_trips,
                             'Затраты, ₽': d.costs,
-                            'Затрат на рейс, ₽': d.cost_per_trip,
-                            'Выручка, ₽': d.total_revenue
+                            'Себест./км, ₽': d.cost_per_km,
+                            'Себест./м³, ₽': d.cost_per_m3,
+                            'Выручка, ₽': d.total_revenue,
+                            'Маржа, ₽': d.margin,
+                            'Рентабельность, %': d.margin_percent
                         }));
                         filename = 'drivers-report-' + this.byDriversFilter + '.csv';
                     } else if (this.tab === 'vehicles' && this.filteredVehicles.length > 0) {
@@ -1202,10 +1477,18 @@
                             'Тип': v.is_hired ? 'Наёмная' : 'Своя',
                             'Рейсов': v.trips_count,
                             'Пробег, км': v.total_km,
+                            'Дней в работе': v.duty_days ?? '',
+                            'Простой, дн': v.idle_days ?? '',
+                            'Утилизация, %': v.utilization_days_percent ?? '',
+                            'Ср. загрузка, %': v.avg_load_percent,
+                            'Взвеш. загрузка, %': v.weighted_load_percent,
+                            'Порожних': v.empty_trips,
                             'Ремонты, ₽': v.repairs,
                             'Затраты, ₽': v.costs,
-                            'Затрат/км, ₽': v.cost_per_km,
-                            'Маржа, ₽': v.margin
+                            'Себест./км, ₽': v.cost_per_km,
+                            'Себест./м³, ₽': v.cost_per_m3,
+                            'Маржа, ₽': v.margin,
+                            'Рентабельность, %': v.margin_percent
                         }));
                         filename = 'vehicles-report-' + this.byVehiclesFilter + '.csv';
                     } else if (this.tab === 'months' && this.byMonths.length > 0) {
@@ -1213,8 +1496,13 @@
                             'Месяц': this.monthLabelRu(m.month),
                             'Рейсов': m.trips_count,
                             'Пробег, км': m.total_km,
+                            'Ср. загрузка, %': m.avg_load_percent,
+                            'Взвеш. загрузка, %': m.weighted_load_percent,
+                            'Порожних': m.empty_trips,
                             'Выручка, ₽': m.revenue,
                             'Затраты, ₽': m.costs,
+                            'Себест./км, ₽': m.cost_per_km,
+                            'Себест./м³, ₽': m.cost_per_m3,
                             'Маржа, ₽': m.margin,
                             'Рентабельность, %': m.margin_percent
                         }));
@@ -1226,10 +1514,15 @@
                             'Куда': r.to_point || '',
                             'Рейсов': r.trips_count,
                             'Пробег, км': r.total_km,
-                            'Средняя загрузка, %': r.avg_load_percent,
+                            'Ср. загрузка, %': r.avg_load_percent,
+                            'Взвеш. загрузка, %': r.weighted_load_percent,
+                            'Порожних': r.empty_trips,
                             'Затраты, ₽': r.costs,
+                            'Себест./км, ₽': r.cost_per_km,
+                            'Себест./м³, ₽': r.cost_per_m3,
                             'Выручка, ₽': r.total_revenue,
-                            'Маржа, ₽': r.margin
+                            'Маржа, ₽': r.margin,
+                            'Рентабельность, %': r.margin_percent
                         }));
                         filename = 'routes-report.csv';
                     } else {
@@ -1237,7 +1530,6 @@
                         return;
                     }
 
-                    // Формируем CSV с BOM для Excel
                     const headers = Object.keys(data[0]);
                     const csv = [
                         headers.join(';'),
@@ -1287,7 +1579,6 @@
                     return date.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
                 },
 
-
                 openCostDetail(categoryData) {
                     this.costDetailModal = {
                         open: true,
@@ -1311,21 +1602,20 @@
                         title: '',
                         kpi: {},
                         categories: null,
-                        trips: []
+                        trips: [],
+                        day_status: null,
+                        period_days: null
                     };
 
-                    // Определяем параметры запроса
                     const params = new URLSearchParams();
                     params.append('action', 'drill-down');
                     params.append('type', type);
 
-                    // Период + фильтры — те же, что в основном отчёте
                     if (this.customFrom) params.append('from', this.customFrom);
                     if (this.customTo) params.append('to', this.customTo);
                     if (this.filterDriverId) params.append('driver_id', this.filterDriverId);
                     if (this.filterVehicleId) params.append('vehicle_id', this.filterVehicleId);
 
-                    // Идентификатор
                     if (type === 'drivers') {
                         if (row.is_hired) {
                             params.append('hired_label', row.driver_name);
@@ -1353,7 +1643,8 @@
                         this.drillDownModal.kpi = data.kpi || {};
                         this.drillDownModal.categories = data.categories || null;
                         this.drillDownModal.trips = data.trips || [];
-                        // заголовок с сервера приоритетнее (там русские месяцы)
+                        this.drillDownModal.day_status = data.day_status || null;
+                        this.drillDownModal.period_days = data.period_days || null;
                         if (data.title) this.drillDownModal.title = data.title;
                     } catch (e) {
                         this.drillDownModal.error = e.message;
@@ -1366,6 +1657,7 @@
                     this.drillDownModal.open = false;
                     this.drillDownModal.trips = [];
                     this.drillDownModal.categories = null;
+                    this.drillDownModal.day_status = null;
                 },
 
                 goToTrip(tripId) {
