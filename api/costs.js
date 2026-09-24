@@ -2,7 +2,7 @@ const { query } = require('./_lib/db');
 const { requireAuth } = require('./_lib/auth');
 const { logChange } = require('./_lib/journal');
 
-const VALID_CATEGORIES = ['fuel', 'toll', 'repair', 'fine', 'other'];
+const VALID_CATEGORIES = ['fuel', 'toll', 'repair', 'fine', 'other', 'hired'];
 
 async function handler(req, res) {
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
