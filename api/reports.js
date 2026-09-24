@@ -825,6 +825,395 @@ async function handler(req, res) {
       return res.json({ data });
     }
 
+    // ============ DRILL-DOWN ============
+    if (action === "drill-down") {
+      const { type, route_id, month, hired_label } = req.query;
+
+      if (!["vehicles", "drivers", "routes", "months"].includes(type)) {
+        return res.status(400).json({ error: "Invalid drill-down type" });
+      }
+
+      // Собираем дополнительные условия поверх periodFilter
+      const drillFilter = [...periodFilter];
+      const drillParams = [...periodParams];
+      let pIdx = drillParams.length + 1;
+
+      if (type === "vehicles") {
+        if (hired_label) {
+          drillFilter.push(
+            `t.vehicle_id IS NULL AND t.hired_vehicle_info = $${pIdx++}`,
+          );
+          drillParams.push(hired_label);
+        } else if (vehicle_id) {
+          drillFilter.push(`t.vehicle_id = $${pIdx++}`);
+          drillParams.push(vehicle_id);
+        } else {
+          return res
+            .status(400)
+            .json({ error: "vehicle_id or hired_label required" });
+        }
+      } else if (type === "drivers") {
+        if (hired_label) {
+          drillFilter.push(
+            `t.driver_id IS NULL AND t.hired_driver_info = $${pIdx++}`,
+          );
+          drillParams.push(hired_label);
+        } else if (driver_id) {
+          drillFilter.push(`t.driver_id = $${pIdx++}`);
+          drillParams.push(driver_id);
+        } else {
+          return res
+            .status(400)
+            .json({ error: "driver_id or hired_label required" });
+        }
+      } else if (type === "routes") {
+        if (!route_id) {
+          return res.status(400).json({ error: "route_id required" });
+        }
+        drillFilter.push(`t.route_id = $${pIdx++}`);
+        drillParams.push(route_id);
+      } else if (type === "months") {
+        if (!month) {
+          return res.status(400).json({ error: "month required" });
+        }
+        drillFilter.push(`TO_CHAR(t.trip_date, 'YYYY-MM') = $${pIdx++}`);
+        drillParams.push(month);
+      }
+
+      const drillWhere =
+        drillFilter.length > 0 ? "WHERE " + drillFilter.join(" AND ") : "";
+
+      // Список рейсов с джойнами
+      const tripsRes = await query(
+        `SELECT
+            t.id,
+            t.trip_number,
+            t.trip_date,
+            t.status,
+            t.trip_type,
+            t.plan_km,
+            t.fact_km,
+            t.revenue,
+            t.vehicle_id,
+            t.hired_vehicle_info,
+            t.driver_id,
+            t.hired_driver_info,
+            t.driver_rate_at_time,
+            t.vehicle_volume_at_time,
+            t.route_text,
+            v.plate AS vehicle_plate,
+            v.model AS vehicle_model,
+            v.type AS vehicle_type,
+            v.amort_rate AS vehicle_amort_rate,
+            d.full_name AS driver_name,
+            r.name AS route_name,
+            (SELECT COALESCE(SUM(o.volume), 0) FROM orders o WHERE o.trip_id = t.id) AS load_volume
+         FROM trips t
+         LEFT JOIN vehicles v ON v.id = t.vehicle_id
+         LEFT JOIN drivers d ON d.id = t.driver_id
+         LEFT JOIN routes r ON r.id = t.route_id
+         ${drillWhere}
+         ORDER BY t.trip_date DESC, t.id DESC`,
+        drillParams,
+      );
+
+      // Затраты по рейсам с разбивкой по категориям
+      const costsRes = await query(
+        `SELECT
+            t.id AS trip_id,
+            c.category,
+            COALESCE(SUM(c.amount), 0) AS amount
+         FROM costs c
+         JOIN trips t ON t.id = c.trip_id
+         ${drillWhere}
+         GROUP BY t.id, c.category`,
+        drillParams,
+      );
+
+      const costsByTrip = {};
+      costsRes.rows.forEach((r) => {
+        if (!costsByTrip[r.trip_id]) costsByTrip[r.trip_id] = [];
+        costsByTrip[r.trip_id].push({
+          category: r.category,
+          amount: Number(r.amount),
+        });
+      });
+
+      // Формируем строки рейсов
+      const trips = tripsRes.rows.map((t) => {
+        const tripCosts = costsByTrip[t.id] || [];
+        const isHiredVehicle = !!t.hired_vehicle_info;
+        const isHiredDriver = !!t.hired_driver_info;
+
+        let costs = 0;
+        let salaryInCosts = false;
+        let amortInCosts = false;
+        let hiredInCosts = false;
+
+        tripCosts.forEach((c) => {
+          costs += c.amount;
+          if (c.category === "salary") salaryInCosts = true;
+          if (c.category === "amort") amortInCosts = true;
+          if (c.category === "hired") hiredInCosts = true;
+        });
+
+        // Авто-достройка статей (как в by-vehicles / by-drivers / by-months)
+        if (
+          !salaryInCosts &&
+          !hiredInCosts &&
+          Number(t.driver_rate_at_time) > 0
+        ) {
+          if (isHiredVehicle) {
+            // наёмный транспорт — в статью hired
+            costs += Number(t.driver_rate_at_time);
+          } else {
+            // свой водитель — в статью salary
+            costs += Number(t.driver_rate_at_time);
+          }
+        }
+
+        if (
+          !amortInCosts &&
+          t.vehicle_type === "own" &&
+          Number(t.vehicle_amort_rate) > 0 &&
+          Number(t.fact_km) > 0
+        ) {
+          costs += Math.round(Number(t.fact_km) * Number(t.vehicle_amort_rate));
+        }
+
+        const loadVolume = Number(t.load_volume) || 0;
+        const vehicleVolume = Number(t.vehicle_volume_at_time) || 0;
+        const loadPercent =
+          vehicleVolume > 0
+            ? Math.round((loadVolume / vehicleVolume) * 100)
+            : 0;
+
+        const vehicleLabel = isHiredVehicle
+          ? t.hired_vehicle_info
+          : t.vehicle_plate || "—";
+        const driverLabel = isHiredDriver
+          ? t.hired_driver_info
+          : t.driver_name || "—";
+
+        const revenue = Number(t.revenue) || 0;
+
+        return {
+          id: t.id,
+          trip_number: t.trip_number,
+          trip_date: t.trip_date,
+          status: t.status,
+          route_label: t.route_text || t.route_name || "—",
+          vehicle_label: vehicleLabel,
+          vehicle_model: isHiredVehicle ? null : t.vehicle_model || null,
+          is_hired_vehicle: isHiredVehicle,
+          driver_label: driverLabel,
+          is_hired_driver: isHiredDriver,
+          plan_km: Number(t.plan_km) || 0,
+          fact_km: Number(t.fact_km) || 0,
+          load_volume: loadVolume,
+          vehicle_volume: vehicleVolume,
+          load_percent: loadPercent,
+          revenue: revenue,
+          costs: costs,
+          margin: revenue - costs,
+        };
+      });
+
+      // KPI
+      const tripsCount = trips.length;
+      const tripsDone = trips.filter((x) => x.status === "done").length;
+      const totalKm = trips.reduce((s, x) => s + x.fact_km, 0);
+      const totalRevenue = trips.reduce((s, x) => s + x.revenue, 0);
+      const totalCosts = trips.reduce((s, x) => s + x.costs, 0);
+      const margin = totalRevenue - totalCosts;
+      const marginPercent =
+        totalRevenue > 0 ? Math.round((margin / totalRevenue) * 100) : 0;
+
+      const kpi = {
+        trips_count: tripsCount,
+        trips_done: tripsDone,
+        total_km: totalKm,
+        total_revenue: totalRevenue,
+        total_costs: totalCosts,
+        margin: margin,
+        margin_percent: marginPercent,
+      };
+
+      // Специфичные KPI
+      if (type === "vehicles") {
+        let repairsTotal = 0;
+        let amortTotal = 0;
+        costsRes.rows.forEach((r) => {
+          if (r.category === "repair") repairsTotal += Number(r.amount);
+          if (r.category === "amort") amortTotal += Number(r.amount);
+        });
+        // авто-амортизация
+        tripsRes.rows.forEach((t) => {
+          const tripCosts = costsByTrip[t.id] || [];
+          const hasAmort = tripCosts.some((c) => c.category === "amort");
+          if (
+            !hasAmort &&
+            t.vehicle_type === "own" &&
+            Number(t.vehicle_amort_rate) > 0 &&
+            Number(t.fact_km) > 0
+          ) {
+            amortTotal += Math.round(
+              Number(t.fact_km) * Number(t.vehicle_amort_rate),
+            );
+          }
+        });
+        kpi.repairs_total = repairsTotal;
+        kpi.amort_total = amortTotal;
+        kpi.cost_per_km =
+          totalKm > 0 ? Math.round((totalCosts / totalKm) * 10) / 10 : 0;
+      }
+
+      if (type === "drivers") {
+        let loadSum = 0;
+        let loadCount = 0;
+        trips.forEach((x) => {
+          if (x.vehicle_volume > 0 && x.load_volume > 0) {
+            loadSum += (x.load_volume / x.vehicle_volume) * 100;
+            loadCount++;
+          }
+        });
+        kpi.avg_load_percent =
+          loadCount > 0 ? Math.round(loadSum / loadCount) : 0;
+        kpi.cost_per_trip =
+          tripsCount > 0 ? Math.round(totalCosts / tripsCount) : 0;
+      }
+
+      if (type === "routes") {
+        let loadSum = 0;
+        let loadCount = 0;
+        trips.forEach((x) => {
+          if (x.vehicle_volume > 0 && x.load_volume > 0) {
+            loadSum += (x.load_volume / x.vehicle_volume) * 100;
+            loadCount++;
+          }
+        });
+        kpi.avg_load_percent =
+          loadCount > 0 ? Math.round(loadSum / loadCount) : 0;
+      }
+
+      // Для months — разбивка затрат по категориям
+      let categories = null;
+      if (type === "months") {
+        const catMap = {};
+        costsRes.rows.forEach((r) => {
+          const cat = r.category;
+          if (!catMap[cat]) catMap[cat] = { category: cat, count: 0, total: 0 };
+          catMap[cat].count++;
+          catMap[cat].total += Number(r.amount);
+        });
+
+        // Авто-статьи salary / hired
+        const hasSalary = catMap["salary"];
+        const hasHired = catMap["hired"];
+        if (!hasSalary || !hasHired) {
+          // Считаем по рейсам: если своя машина → salary, если наёмная → hired
+          let salaryTotal = 0;
+          let salaryCount = 0;
+          let hiredTotal = 0;
+          let hiredCount = 0;
+          tripsRes.rows.forEach((t) => {
+            const tripCosts = costsByTrip[t.id] || [];
+            const hasSalaryIn = tripCosts.some((c) => c.category === "salary");
+            const hasHiredIn = tripCosts.some((c) => c.category === "hired");
+            const rate = Number(t.driver_rate_at_time) || 0;
+            if (rate > 0) {
+              if (t.hired_vehicle_info) {
+                if (!hasHiredIn) {
+                  hiredTotal += rate;
+                  hiredCount++;
+                }
+              } else {
+                if (!hasSalaryIn) {
+                  salaryTotal += rate;
+                  salaryCount++;
+                }
+              }
+            }
+          });
+          if (!hasSalary && salaryCount > 0) {
+            catMap["salary"] = {
+              category: "salary",
+              count: salaryCount,
+              total: salaryTotal,
+              auto: true,
+            };
+          }
+          if (!hasHired && hiredCount > 0) {
+            catMap["hired"] = {
+              category: "hired",
+              count: hiredCount,
+              total: hiredTotal,
+              auto: true,
+            };
+          }
+        }
+
+        // Авто-амортизация
+        if (!catMap["amort"]) {
+          let amortTotal = 0;
+          let amortCount = 0;
+          tripsRes.rows.forEach((t) => {
+            const tripCosts = costsByTrip[t.id] || [];
+            const hasAmort = tripCosts.some((c) => c.category === "amort");
+            if (
+              !hasAmort &&
+              t.vehicle_type === "own" &&
+              Number(t.vehicle_amort_rate) > 0 &&
+              Number(t.fact_km) > 0
+            ) {
+              amortTotal += Math.round(
+                Number(t.fact_km) * Number(t.vehicle_amort_rate),
+              );
+              amortCount++;
+            }
+          });
+          if (amortCount > 0) {
+            catMap["amort"] = {
+              category: "amort",
+              count: amortCount,
+              total: amortTotal,
+              auto: true,
+            };
+          }
+        }
+
+        categories = Object.values(catMap).sort((a, b) => b.total - a.total);
+      }
+
+      // Заголовок для модалки
+      let title = "";
+      if (type === "vehicles") title = hired_label || "Машина";
+      else if (type === "drivers") title = hired_label || "Водитель";
+      else if (type === "routes") {
+        const first = tripsRes.rows[0];
+        title = first
+          ? first.route_text || first.route_name || "Маршрут"
+          : "Маршрут";
+      } else if (type === "months") {
+        // "2026-09" → "Сентябрь 2026"
+        const [y, m] = month.split("-");
+        const d = new Date(parseInt(y), parseInt(m) - 1, 1);
+        title = d.toLocaleDateString("ru-RU", {
+          month: "long",
+          year: "numeric",
+        });
+      }
+
+      return res.json({
+        type: type,
+        title: title,
+        period: { from: from || null, to: to || null },
+        kpi: kpi,
+        categories: categories,
+        trips: trips,
+      });
+    }
+
     return res.status(400).json({ error: "Unknown action: " + action });
   } catch (e) {
     console.error("Reports error:", e);
