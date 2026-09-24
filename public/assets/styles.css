@@ -2618,3 +2618,80 @@ body {
 .drill-kpi-grid-wide {
     grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
 }
+/* ============ БЛОК 4: ЖУРНАЛ + ПОЛЬЗОВАТЕЛИ ============ */
+
+/* Чип роли пользователя */
+.role-chip {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.role-admin { background: #FEE2E2; color: #991B1B; }
+.role-senior_logist { background: #DBEAFE; color: #1E40AF; }
+.role-logist { background: #D1FAE5; color: #065F46; }
+.role-manager { background: #FEF3C7; color: #92400E; }
+.role-viewer { background: #F1F5F9; color: #475569; }
+
+/* Чип таблицы в журнале */
+.table-chip {
+    display: inline-block;
+    padding: 2px 8px;
+    background: var(--bg-muted);
+    color: var(--text-secondary);
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+/* Журнал: ячейка "было → стало" */
+.journal-table td {
+    vertical-align: middle;
+}
+
+.change-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    min-width: 0;
+}
+
+.change-old {
+    color: var(--text-secondary);
+    text-decoration: line-through;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 240px;
+}
+
+.change-arrow {
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.change-new {
+    color: var(--text-primary);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 240px;
+}
+
+/* Пагинация */
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+    border-top: 1px solid var(--border-light);
+    background: #FAFBFC;
+}
