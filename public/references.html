@@ -89,6 +89,16 @@
                 <template x-if="user?.role === 'admin'">
                     <button 
                         class="tab-btn"
+                        :class="tab === 'users' ? 'tab-btn-active' : ''"
+                        @click="switchTab('users')"
+                    >
+                        Пользователи
+                        <span class="tab-count" x-text="usersList.length"></span>
+                    </button>
+                </template>
+                <template x-if="user?.role === 'admin'">
+                    <button 
+                        class="tab-btn"
                         :class="tab === 'integrations' ? 'tab-btn-active' : ''"
                         @click="switchTab('integrations')"
                     >
@@ -319,6 +329,96 @@
                     </table>
                 </div>
             </div>
+            <!-- ТАБ: ПОЛЬЗОВАТЕЛИ (только админ) -->
+            <div x-show="tab === 'users'" x-cloak>
+
+                <div x-show="usersError" x-cloak class="alert alert-error" x-text="usersError"></div>
+                <div x-show="usersSuccess" x-cloak style="padding:12px 14px;background:#D1FAE5;border:1px solid #A7F3D0;border-radius:6px;color:#065F46;font-size:13px;margin-bottom:16px;" x-text="usersSuccess"></div>
+
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-secondary);cursor:pointer;">
+                        <input type="checkbox" x-model="showInactive" style="cursor:pointer;">
+                        Показать деактивированных
+                    </label>
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn btn-secondary btn-sm" @click="openChangeOwnPassword()">
+                            Сменить мой пароль
+                        </button>
+                        <button class="btn btn-primary btn-sm" @click="openUserModal(null)">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                            Добавить пользователя
+                        </button>
+                    </div>
+                </div>
+
+                <div x-show="loading.users" class="skeleton" style="height:200px;"></div>
+
+                <div x-show="!loading.users && filteredUsers.length === 0" class="empty-state">
+                    <h3 class="empty-title">Нет пользователей</h3>
+                    <p class="empty-description">Добавьте первого пользователя</p>
+                </div>
+
+                <div x-show="!loading.users && filteredUsers.length > 0" style="background:#fff;border:1px solid var(--border-light);border-radius:12px;overflow:hidden;">
+                    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                        <thead>
+                            <tr style="border-bottom:1px solid var(--border-light);background:#FAFBFC;">
+                                <th style="padding:12px 20px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Логин</th>
+                                <th style="padding:12px 20px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">ФИО</th>
+                                <th style="padding:12px 20px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Роль</th>
+                                <th style="padding:12px 20px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Статус</th>
+                                <th style="padding:12px 20px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">Последний вход</th>
+                                <th style="padding:12px 20px;text-align:right;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;width:180px;">Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="u in filteredUsers" :key="u.id">
+                                <tr :style="!u.is_active ? 'opacity:0.5;' : ''" style="border-bottom:1px solid var(--border-light);">
+                                    <td style="padding:14px 20px;font-family:monospace;font-size:12px;" x-text="u.login"></td>
+                                    <td style="padding:14px 20px;font-weight:600;" x-text="u.full_name"></td>
+                                    <td style="padding:14px 20px;">
+                                        <span class="role-chip" :class="'role-' + u.role" x-text="roleLabel(u.role)"></span>
+                                    </td>
+                                    <td style="padding:14px 20px;">
+                                        <span x-show="u.is_active" style="color:#059669;">Активен</span>
+                                        <span x-show="!u.is_active" style="color:#6B7280;">Деактивирован</span>
+                                    </td>
+                                    <td style="padding:14px 20px;font-size:12px;color:var(--text-secondary);" x-text="u.last_login ? formatDateTime(u.last_login) : '—'"></td>
+                                    <td style="padding:14px 20px;text-align:right;white-space:nowrap;">
+                                        <button class="btn-action" @click="openUserModal(u)" title="Редактировать">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                            </svg>
+                                        </button>
+                                        <button class="btn-action" @click="openResetPassword(u)" title="Сбросить пароль">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                            </svg>
+                                        </button>
+                                        <button class="btn-action" @click="toggleUserActive(u)" 
+                                            :title="u.is_active ? 'Деактивировать' : 'Активировать'"
+                                            :disabled="u.id === user?.id"
+                                            :style="u.is_active ? 'color:var(--alert-danger);' : 'color:#059669;'">
+                                            <svg x-show="u.is_active" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <circle cx="12" cy="12" r="10"></circle>
+                                                <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+                                            </svg>
+                                            <svg x-show="!u.is_active" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <polyline points="20 6 9 17 4 12"></polyline>
+                                            </svg>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- ТАБ: ИНТЕГРАЦИИ -->
             <div x-show="tab === 'integrations'" x-cloak>
                 
@@ -626,6 +726,136 @@
         </div>
     </div>
 
+    <!-- МОДАЛКА: ПОЛЬЗОВАТЕЛЬ -->
+    <div x-show="userModal.open" x-cloak class="modal-backdrop" @click.self="closeUserModal()">
+        <div class="modal-window" @click.stop>
+            <div class="modal-header">
+                <h2 class="modal-title" x-text="userModal.id ? 'Редактировать пользователя' : 'Новый пользователь'"></h2>
+                <button class="modal-close" @click="closeUserModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div x-show="userModal.error" class="alert alert-error" x-text="userModal.error"></div>
+
+                <div class="form-group">
+                    <label class="form-label">Логин *</label>
+                    <input type="text" class="form-input" x-model="userModal.form.login" :disabled="!!userModal.id || userModal.saving" placeholder="ivanov">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">ФИО *</label>
+                    <input type="text" class="form-input" x-model="userModal.form.full_name" :disabled="userModal.saving" placeholder="Иванов Иван Иванович">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Роль *</label>
+                    <select class="form-input" x-model="userModal.form.role" :disabled="userModal.saving">
+                        <option value="admin">Администратор</option>
+                        <option value="senior_logist">Ст. логист</option>
+                        <option value="logist">Логист</option>
+                        <option value="manager">Руководитель</option>
+                        <option value="viewer">Наблюдатель</option>
+                    </select>
+                </div>
+                <template x-if="!userModal.id">
+                    <div class="form-group">
+                        <label class="form-label">Пароль * <span style="color:var(--text-secondary);font-weight:400;">(минимум 6 символов)</span></label>
+                        <div style="display:flex;gap:8px;">
+                            <input type="text" class="form-input" x-model="userModal.form.password" :disabled="userModal.saving" placeholder="Пароль" style="font-family:monospace;">
+                            <button type="button" class="btn btn-secondary btn-sm" @click="generatePassword()" style="white-space:nowrap;">
+                                Сгенерировать
+                            </button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @click="closeUserModal()" :disabled="userModal.saving">Отмена</button>
+                <button class="btn btn-primary" @click="saveUser()" :disabled="userModal.saving">
+                    <span x-show="!userModal.saving">Сохранить</span>
+                    <span x-show="userModal.saving" x-cloak>Сохранение...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- МОДАЛКА: СБРОС ПАРОЛЯ -->
+    <div x-show="resetModal.open" x-cloak class="modal-backdrop" @click.self="closeResetModal()">
+        <div class="modal-window" @click.stop>
+            <div class="modal-header">
+                <h2 class="modal-title">Сбросить пароль</h2>
+                <button class="modal-close" @click="closeResetModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div x-show="resetModal.error" class="alert alert-error" x-text="resetModal.error"></div>
+                <div style="padding:12px 14px;background:var(--bg-muted);border-radius:6px;margin-bottom:16px;font-size:13px;">
+                    Пользователь: <strong x-text="resetModal.user?.full_name"></strong>
+                    <span style="color:var(--text-secondary);"> (<span x-text="resetModal.user?.login"></span>)</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Новый пароль *</label>
+                    <div style="display:flex;gap:8px;">
+                        <input type="text" class="form-input" x-model="resetModal.password" :disabled="resetModal.saving" style="font-family:monospace;">
+                        <button type="button" class="btn btn-secondary btn-sm" @click="resetModal.password = generateRandomPassword()" style="white-space:nowrap;">
+                            Сгенерировать
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @click="closeResetModal()" :disabled="resetModal.saving">Отмена</button>
+                <button class="btn btn-primary" @click="submitResetPassword()" :disabled="resetModal.saving">
+                    <span x-show="!resetModal.saving">Сбросить</span>
+                    <span x-show="resetModal.saving" x-cloak>Сохранение...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- МОДАЛКА: СМЕНИТЬ СВОЙ ПАРОЛЬ -->
+    <div x-show="ownPasswordModal.open" x-cloak class="modal-backdrop" @click.self="closeOwnPasswordModal()">
+        <div class="modal-window" @click.stop>
+            <div class="modal-header">
+                <h2 class="modal-title">Сменить мой пароль</h2>
+                <button class="modal-close" @click="closeOwnPasswordModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div x-show="ownPasswordModal.error" class="alert alert-error" x-text="ownPasswordModal.error"></div>
+                <div class="form-group">
+                    <label class="form-label">Текущий пароль *</label>
+                    <input type="password" class="form-input" x-model="ownPasswordModal.old_password" :disabled="ownPasswordModal.saving">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Новый пароль * <span style="color:var(--text-secondary);font-weight:400;">(минимум 6 символов)</span></label>
+                    <input type="password" class="form-input" x-model="ownPasswordModal.new_password" :disabled="ownPasswordModal.saving">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Повторите новый пароль *</label>
+                    <input type="password" class="form-input" x-model="ownPasswordModal.new_password_2" :disabled="ownPasswordModal.saving">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @click="closeOwnPasswordModal()" :disabled="ownPasswordModal.saving">Отмена</button>
+                <button class="btn btn-primary" @click="submitOwnPassword()" :disabled="ownPasswordModal.saving">
+                    <span x-show="!ownPasswordModal.saving">Сменить</span>
+                    <span x-show="ownPasswordModal.saving" x-cloak>Сохранение...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         function referencesPage() {
             return {
@@ -669,6 +899,35 @@
                     error: ''
                 },
 
+                // Пользователи
+                usersList: [],
+                loading: { vehicles: true, drivers: true, routes: true, users: false },
+                showInactive: false,
+                usersError: '',
+                usersSuccess: '',
+                userModal: {
+                    open: false,
+                    id: null,
+                    form: { login: '', full_name: '', role: 'logist', password: '' },
+                    saving: false,
+                    error: ''
+                },
+                resetModal: {
+                    open: false,
+                    user: null,
+                    password: '',
+                    saving: false,
+                    error: ''
+                },
+                ownPasswordModal: {
+                    open: false,
+                    old_password: '',
+                    new_password: '',
+                    new_password_2: '',
+                    saving: false,
+                    error: ''
+                },
+
                 get userInitials() {
                     if (!this.user?.full_name) return '?';
                     return this.user.full_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
@@ -688,6 +947,11 @@
                     return (this.modal.mode === 'create' ? 'Добавить ' : 'Редактировать ') + names[this.modal.type];
                 },
 
+                get filteredUsers() {
+                    if (this.showInactive) return this.usersList;
+                    return this.usersList.filter(u => u.is_active);
+                },
+
                 async init() {
                     if (!window.AUTH) {
                         setTimeout(() => this.init(), 50);
@@ -697,10 +961,11 @@
                     this.user = window.API.getUser();
                     await this.loadAll();
                     
-                    // Если админ — загружаем интеграции и настройки в фоне
+                    // Если админ — загружаем интеграции, настройки и пользователей в фоне
                     if (this.user.role === 'admin') {
                         this.loadIntegrations();
                         this.loadSettings();
+                        this.loadUsers();
                     }
                 },
 
@@ -765,6 +1030,9 @@
                     }
                     if (t === 'settings') {
                         this.loadSettings();
+                    }
+                    if (t === 'users') {
+                        this.loadUsers();
                     }
                 },
 
@@ -1050,6 +1318,236 @@
                         this.settingsError = e.message;
                     } finally {
                         this.savingSettings = false;
+                    }
+                },
+
+                // ============ ПОЛЬЗОВАТЕЛИ ============
+
+                roleLabel(role) {
+                    const map = {
+                        'admin': 'Администратор',
+                        'senior_logist': 'Ст. логист',
+                        'logist': 'Логист',
+                        'manager': 'Руководитель',
+                        'viewer': 'Наблюдатель'
+                    };
+                    return map[role] || role;
+                },
+
+                async loadUsers() {
+                    if (this.user?.role !== 'admin') return;
+                    this.loading.users = true;
+                    this.usersError = '';
+                    try {
+                        const data = await window.API.api('/api/admin?action=users-list');
+                        this.usersList = data.users || [];
+                    } catch (e) {
+                        this.usersError = e.message;
+                    } finally {
+                        this.loading.users = false;
+                    }
+                },
+
+                openUserModal(u) {
+                    this.userModal = {
+                        open: true,
+                        id: u?.id || null,
+                        form: u ? {
+                            login: u.login,
+                            full_name: u.full_name,
+                            role: u.role,
+                            password: ''
+                        } : {
+                            login: '',
+                            full_name: '',
+                            role: 'logist',
+                            password: ''
+                        },
+                        saving: false,
+                        error: ''
+                    };
+                },
+
+                closeUserModal() {
+                    if (this.userModal.saving) return;
+                    this.userModal.open = false;
+                },
+
+                generateRandomPassword() {
+                    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+                    let pwd = '';
+                    for (let i = 0; i < 10; i++) {
+                        pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+                    }
+                    return pwd;
+                },
+
+                generatePassword() {
+                    this.userModal.form.password = this.generateRandomPassword();
+                },
+
+                async saveUser() {
+                    this.userModal.error = '';
+                    this.userModal.saving = true;
+
+                    const f = this.userModal.form;
+
+                    if (!f.full_name || !f.full_name.trim()) {
+                        this.userModal.error = 'Укажите ФИО';
+                        this.userModal.saving = false;
+                        return;
+                    }
+
+                    try {
+                        if (this.userModal.id) {
+                            // Обновление
+                            await window.API.api('/api/admin?action=users-update&id=' + this.userModal.id, {
+                                method: 'PUT',
+                                body: JSON.stringify({
+                                    full_name: f.full_name.trim(),
+                                    role: f.role
+                                })
+                            });
+                        } else {
+                            // Создание
+                            if (!f.login || f.login.trim().length < 3) {
+                                this.userModal.error = 'Логин — минимум 3 символа';
+                                this.userModal.saving = false;
+                                return;
+                            }
+                            if (!f.password || f.password.length < 6) {
+                                this.userModal.error = 'Пароль — минимум 6 символов';
+                                this.userModal.saving = false;
+                                return;
+                            }
+                            await window.API.api('/api/admin?action=users-create', {
+                                method: 'POST',
+                                body: JSON.stringify({
+                                    login: f.login.trim(),
+                                    password: f.password,
+                                    full_name: f.full_name.trim(),
+                                    role: f.role
+                                })
+                            });
+                        }
+
+                        this.userModal.open = false;
+                        this.usersSuccess = this.userModal.id ? 'Пользователь обновлён' : 'Пользователь создан';
+                        setTimeout(() => this.usersSuccess = '', 3000);
+                        await this.loadUsers();
+
+                    } catch (e) {
+                        this.userModal.error = e.message;
+                    } finally {
+                        this.userModal.saving = false;
+                    }
+                },
+
+                openResetPassword(u) {
+                    this.resetModal = {
+                        open: true,
+                        user: u,
+                        password: '',
+                        saving: false,
+                        error: ''
+                    };
+                },
+
+                closeResetModal() {
+                    if (this.resetModal.saving) return;
+                    this.resetModal.open = false;
+                },
+
+                async submitResetPassword() {
+                    this.resetModal.error = '';
+                    if (!this.resetModal.password || this.resetModal.password.length < 6) {
+                        this.resetModal.error = 'Пароль — минимум 6 символов';
+                        return;
+                    }
+
+                    this.resetModal.saving = true;
+                    try {
+                        await window.API.api('/api/admin?action=users-reset-password&id=' + this.resetModal.user.id, {
+                            method: 'POST',
+                            body: JSON.stringify({ password: this.resetModal.password })
+                        });
+                        this.resetModal.open = false;
+                        this.usersSuccess = 'Пароль сброшен';
+                        setTimeout(() => this.usersSuccess = '', 3000);
+                    } catch (e) {
+                        this.resetModal.error = e.message;
+                    } finally {
+                        this.resetModal.saving = false;
+                    }
+                },
+
+                async toggleUserActive(u) {
+                    if (u.id === this.user?.id) return;
+                    const newState = !u.is_active;
+                    if (!confirm((newState ? 'Активировать' : 'Деактивировать') + ' пользователя ' + u.full_name + '?')) return;
+
+                    try {
+                        await window.API.api('/api/admin?action=users-update&id=' + u.id, {
+                            method: 'PUT',
+                            body: JSON.stringify({ is_active: newState })
+                        });
+                        this.usersSuccess = newState ? 'Пользователь активирован' : 'Пользователь деактивирован';
+                        setTimeout(() => this.usersSuccess = '', 3000);
+                        await this.loadUsers();
+                    } catch (e) {
+                        this.usersError = e.message;
+                    }
+                },
+
+                openChangeOwnPassword() {
+                    this.ownPasswordModal = {
+                        open: true,
+                        old_password: '',
+                        new_password: '',
+                        new_password_2: '',
+                        saving: false,
+                        error: ''
+                    };
+                },
+
+                closeOwnPasswordModal() {
+                    if (this.ownPasswordModal.saving) return;
+                    this.ownPasswordModal.open = false;
+                },
+
+                async submitOwnPassword() {
+                    this.ownPasswordModal.error = '';
+                    const m = this.ownPasswordModal;
+
+                    if (!m.old_password || !m.new_password) {
+                        m.error = 'Заполните все поля';
+                        return;
+                    }
+                    if (m.new_password.length < 6) {
+                        m.error = 'Новый пароль — минимум 6 символов';
+                        return;
+                    }
+                    if (m.new_password !== m.new_password_2) {
+                        m.error = 'Пароли не совпадают';
+                        return;
+                    }
+
+                    m.saving = true;
+                    try {
+                        await window.API.api('/api/admin?action=users-change-password', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                old_password: m.old_password,
+                                new_password: m.new_password
+                            })
+                        });
+                        m.open = false;
+                        this.usersSuccess = 'Пароль изменён';
+                        setTimeout(() => this.usersSuccess = '', 3000);
+                    } catch (e) {
+                        m.error = e.message;
+                    } finally {
+                        m.saving = false;
                     }
                 },
 
