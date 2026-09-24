@@ -260,7 +260,7 @@
                             </thead>
                             <tbody>
                                 <template x-for="d in filteredDrivers" :key="d.driver_id || d.driver_name">
-                                    <tr>
+                                    <tr class="clickable" @click="openDrillDown('drivers', d)">
                                         <td class="col-name" x-text="d.driver_name"></td>
                                         <td>
                                             <span class="type-chip" :class="d.is_hired ? 'type-chip-hired' : 'type-chip-own'"
@@ -314,7 +314,7 @@
                             </thead>
                             <tbody>
                                 <template x-for="v in filteredVehicles" :key="v.vehicle_id || v.vehicle_plate">
-                                    <tr :class="v.cost_per_km > 40 ? 'warning' : ''">
+                                    <tr class="clickable" :class="v.cost_per_km > 40 ? 'warning' : ''" @click="openDrillDown('vehicles', v)">
                                         <td class="col-name">
                                             <span x-text="v.vehicle_plate"></span>
                                             <span x-show="v.vehicle_model" style="color:var(--text-secondary);font-weight:400;"> · <span x-text="v.vehicle_model"></span></span>
@@ -374,7 +374,7 @@
                             </thead>
                             <tbody>
                                 <template x-for="m in byMonths" :key="m.month">
-                                    <tr>
+                                    <tr class="clickable" @click="openDrillDown('months', m)">
                                         <td class="col-name" x-text="monthLabelRu(m.month)"></td>
                                         <td x-text="m.trips_count"></td>
                                         <td x-text="formatNumber(m.total_km)"></td>
@@ -422,7 +422,7 @@
                             </thead>
                             <tbody>
                                 <template x-for="r in byRoutes" :key="r.route_id">
-                                    <tr>
+                                    <tr class="clickable" @click="openDrillDown('routes', r)">
                                         <td class="col-name" x-text="r.route_name"></td>
                                         <td x-text="r.trips_count"></td>
                                         <td x-text="formatNumber(r.total_km)"></td>
@@ -550,6 +550,184 @@
                 </div>
             </div>
         </div>
+
+        <!-- МОДАЛКА: DRILL-DOWN ПО ОТЧЁТАМ -->
+        <div x-show="drillDownModal.open" x-cloak class="modal-backdrop" @click.self="closeDrillDown()">
+            <div class="modal-window modal-window-wide" @click.stop>
+                <div class="modal-header">
+                    <h2 class="modal-title">
+                        <span x-text="drillDownModal.title"></span>
+                        <span style="font-weight:400;color:var(--text-secondary);font-size:13px;margin-left:8px;"
+                            x-text="drillDownModal.trips.length > 0 ? '(' + drillDownModal.trips.length + ' рейсов)' : ''"></span>
+                    </h2>
+                    <button class="modal-close" @click="closeDrillDown()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="modal-body">
+                    <div x-show="drillDownModal.loading" style="padding:40px;text-align:center;color:var(--text-secondary);font-size:13px;">
+                        Загрузка...
+                    </div>
+
+                    <div x-show="!drillDownModal.loading && drillDownModal.error" class="alert alert-error" x-text="drillDownModal.error"></div>
+
+                    <template x-if="!drillDownModal.loading && !drillDownModal.error">
+                        <div>
+                            <!-- KPI -->
+                            <div class="drill-kpi-grid">
+                                <div class="drill-kpi-item">
+                                    <div class="drill-kpi-label">Рейсов</div>
+                                    <div class="drill-kpi-value" x-text="drillDownModal.kpi.trips_count || 0"></div>
+                                    <div class="drill-kpi-sub" x-text="'Завершено: ' + (drillDownModal.kpi.trips_done || 0)"></div>
+                                </div>
+                                <div class="drill-kpi-item">
+                                    <div class="drill-kpi-label">Пробег</div>
+                                    <div class="drill-kpi-value" x-text="formatNumber(drillDownModal.kpi.total_km || 0) + ' км'"></div>
+                                </div>
+                                <div class="drill-kpi-item">
+                                    <div class="drill-kpi-label">Затраты</div>
+                                    <div class="drill-kpi-value" x-text="formatMoney(drillDownModal.kpi.total_costs || 0)"></div>
+                                </div>
+                                <template x-if="showRevenue">
+                                    <div class="drill-kpi-item">
+                                        <div class="drill-kpi-label">Выручка</div>
+                                        <div class="drill-kpi-value" x-text="formatMoney(drillDownModal.kpi.total_revenue || 0)"></div>
+                                    </div>
+                                </template>
+                                <template x-if="showRevenue">
+                                    <div class="drill-kpi-item">
+                                        <div class="drill-kpi-label">Маржа</div>
+                                        <div class="drill-kpi-value" :class="(drillDownModal.kpi.margin || 0) >= 0 ? 'positive' : 'negative'"
+                                            x-text="formatMoney(drillDownModal.kpi.margin || 0)"></div>
+                                        <div class="drill-kpi-sub" x-text="'Рентабельность: ' + (drillDownModal.kpi.margin_percent || 0) + '%'"></div>
+                                    </div>
+                                </template>
+                                <template x-if="drillDownModal.type === 'vehicles'">
+                                    <div class="drill-kpi-item">
+                                        <div class="drill-kpi-label">Затрат / км</div>
+                                        <div class="drill-kpi-value" x-text="(drillDownModal.kpi.cost_per_km || 0) + ' ₽'"></div>
+                                    </div>
+                                </template>
+                                <template x-if="drillDownModal.type === 'drivers' || drillDownModal.type === 'routes'">
+                                    <div class="drill-kpi-item">
+                                        <div class="drill-kpi-label">Ср. загрузка</div>
+                                        <div class="drill-kpi-value" x-text="(drillDownModal.kpi.avg_load_percent || 0) + '%'"></div>
+                                    </div>
+                                </template>
+                                <template x-if="drillDownModal.type === 'drivers'">
+                                    <div class="drill-kpi-item">
+                                        <div class="drill-kpi-label">Затрат / рейс</div>
+                                        <div class="drill-kpi-value" x-text="formatMoney(drillDownModal.kpi.cost_per_trip || 0)"></div>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <!-- Разбивка затрат (только для месяцев) -->
+                            <template x-if="drillDownModal.type === 'months' && drillDownModal.categories && drillDownModal.categories.length > 0">
+                                <div style="margin-bottom:20px;">
+                                    <h3 style="font-size:13px;font-weight:600;margin:0 0 10px 0;">Затраты по категориям</h3>
+                                    <table class="report-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Статья</th>
+                                                <th>Записей</th>
+                                                <th>Сумма</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template x-for="c in drillDownModal.categories" :key="c.category">
+                                                <tr>
+                                                    <td class="col-name">
+                                                        <span x-text="categoryLabel(c.category)"></span>
+                                                        <span x-show="c.auto" style="color:var(--text-muted);font-size:11px;margin-left:4px;">авто</span>
+                                                    </td>
+                                                    <td x-text="c.count"></td>
+                                                    <td class="col-money" x-text="formatMoney(c.total)"></td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </template>
+
+                            <!-- Таблица рейсов -->
+                            <div x-show="drillDownModal.trips.length === 0" style="padding:40px;text-align:center;color:var(--text-secondary);font-size:13px;">
+                                Нет рейсов за выбранный период
+                            </div>
+
+                            <div x-show="drillDownModal.trips.length > 0" style="overflow-x:auto;">
+                                <table class="report-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Рейс</th>
+                                            <th>Дата</th>
+                                            <th>Маршрут</th>
+                                            <template x-if="drillDownModal.type !== 'vehicles'">
+                                                <th>Машина</th>
+                                            </template>
+                                            <template x-if="drillDownModal.type !== 'drivers'">
+                                                <th>Водитель</th>
+                                            </template>
+                                            <th>Пробег</th>
+                                            <th>Загрузка</th>
+                                            <th>Затраты</th>
+                                            <template x-if="showRevenue">
+                                                <th>Выручка</th>
+                                            </template>
+                                            <template x-if="showRevenue">
+                                                <th>Маржа</th>
+                                            </template>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template x-for="t in drillDownModal.trips" :key="t.id">
+                                            <tr>
+                                                <td class="col-name">
+                                                    <span class="drill-trip-link" @click="goToTrip(t.id)" x-text="t.trip_number"></span>
+                                                </td>
+                                                <td x-text="formatShortDate(t.trip_date)"></td>
+                                                <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" :title="t.route_label" x-text="t.route_label"></td>
+                                                <template x-if="drillDownModal.type !== 'vehicles'">
+                                                    <td>
+                                                        <span x-text="t.vehicle_label"></span>
+                                                        <span class="type-chip" :class="t.is_hired_vehicle ? 'type-chip-hired' : 'type-chip-own'"
+                                                            x-text="t.is_hired_vehicle ? 'наём' : 'своя'"></span>
+                                                    </td>
+                                                </template>
+                                                <template x-if="drillDownModal.type !== 'drivers'">
+                                                    <td>
+                                                        <span x-text="t.driver_label"></span>
+                                                        <span class="type-chip" :class="t.is_hired_driver ? 'type-chip-hired' : 'type-chip-own'"
+                                                            x-text="t.is_hired_driver ? 'наём' : 'свой'"></span>
+                                                    </td>
+                                                </template>
+                                                <td x-text="formatNumber(t.fact_km) + ' км'"></td>
+                                                <td :class="t.load_percent < 50 ? 'col-negative' : ''" x-text="t.load_percent + '%'"></td>
+                                                <td class="col-money" x-text="formatMoney(t.costs)"></td>
+                                                <template x-if="showRevenue">
+                                                    <td class="col-money" x-text="formatMoney(t.revenue)"></td>
+                                                </template>
+                                                <template x-if="showRevenue">
+                                                    <td class="col-money" :class="t.margin >= 0 ? 'col-positive' : 'col-negative'" x-text="formatMoney(t.margin)"></td>
+                                                </template>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @click="closeDrillDown()">Закрыть</button>
+                </div>
+            </div>
+        </div>
     </main>
 
     <script>
@@ -597,6 +775,16 @@
                     category: '',
                     items: [],
                     total: 0
+                },
+                drillDownModal: {
+                    open: false,
+                    loading: false,
+                    error: '',
+                    type: '',
+                    title: '',
+                    kpi: {},
+                    categories: null,
+                    trips: []
                 },
 
                 get userInitials() {
@@ -1112,6 +1300,72 @@
                 closeCostDetail() {
                     this.costDetailModal.open = false;
                     this.costDetailModal.items = [];
+                },
+
+                async openDrillDown(type, row) {
+                    this.drillDownModal = {
+                        open: true,
+                        loading: true,
+                        error: '',
+                        type: type,
+                        title: '',
+                        kpi: {},
+                        categories: null,
+                        trips: []
+                    };
+
+                    // Определяем параметры запроса
+                    const params = new URLSearchParams();
+                    params.append('action', 'drill-down');
+                    params.append('type', type);
+
+                    // Период + фильтры — те же, что в основном отчёте
+                    if (this.customFrom) params.append('from', this.customFrom);
+                    if (this.customTo) params.append('to', this.customTo);
+                    if (this.filterDriverId) params.append('driver_id', this.filterDriverId);
+                    if (this.filterVehicleId) params.append('vehicle_id', this.filterVehicleId);
+
+                    // Идентификатор
+                    if (type === 'drivers') {
+                        if (row.is_hired) {
+                            params.append('hired_label', row.driver_name);
+                        } else {
+                            params.append('driver_id', row.driver_id);
+                        }
+                        this.drillDownModal.title = (row.is_hired ? 'Наёмный водитель · ' : 'Водитель · ') + row.driver_name;
+                    } else if (type === 'vehicles') {
+                        if (row.is_hired) {
+                            params.append('hired_label', row.vehicle_plate);
+                        } else {
+                            params.append('vehicle_id', row.vehicle_id);
+                        }
+                        this.drillDownModal.title = (row.is_hired ? 'Наёмная машина · ' : 'Машина · ') + row.vehicle_plate + (row.vehicle_model ? ' · ' + row.vehicle_model : '');
+                    } else if (type === 'routes') {
+                        params.append('route_id', row.route_id);
+                        this.drillDownModal.title = 'Маршрут · ' + row.route_name;
+                    } else if (type === 'months') {
+                        params.append('month', row.month);
+                        this.drillDownModal.title = 'Месяц · ' + this.monthLabelRu(row.month);
+                    }
+
+                    try {
+                        const data = await window.API.api('/api/reports?' + params.toString());
+                        this.drillDownModal.kpi = data.kpi || {};
+                        this.drillDownModal.categories = data.categories || null;
+                        this.drillDownModal.trips = data.trips || [];
+                        // заголовок с сервера приоритетнее (там русские месяцы)
+                        if (data.title) this.drillDownModal.title = data.title;
+                    } catch (e) {
+                        this.drillDownModal.error = e.message;
+                    } finally {
+                        this.drillDownModal.loading = false;
+                    }
+                },
+
+                closeDrillDown() {
+                    this.drillDownModal.open = false;
+                    this.drillDownModal.trips = [];
+                    this.drillDownModal.categories = null;
                 },
 
                 goToTrip(tripId) {
