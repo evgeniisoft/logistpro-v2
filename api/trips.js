@@ -149,15 +149,13 @@ async function handler(req, res) {
       const params = [];
       let paramIndex = 1;
 
-      // Флаги: колонки, которые уже добавлены в updates отдельно,
-      // чтобы общий цикл по allowedFields не добавил их повторно
+      // Флаги: колонки, которые уже добавлены в updates отдельно
       let vehicleVolumeSet = false;
       let driverRateSet = false;
 
       // Специальная обработка смены машины
       if (fields.vehicle_id !== undefined) {
         if (fields.vehicle_id === null) {
-          // Меняем на наёмную — обнуляем vehicle_id
           updates.push(`vehicle_id = NULL`);
           updates.push(`hired_vehicle_info = $${paramIndex++}`);
           params.push(fields.hired_vehicle_info || "Наёмная");
@@ -257,7 +255,6 @@ async function handler(req, res) {
           continue;
         if (field === "hired_driver_info" && fields.driver_id !== undefined)
           continue;
-        // Эти колонки уже обработаны в блоках смены машины/водителя
         if (field === "vehicle_volume_at_time" && vehicleVolumeSet) continue;
         if (field === "driver_rate_at_time" && driverRateSet) continue;
 
@@ -279,8 +276,7 @@ async function handler(req, res) {
         }
       }
 
-      // Отдельная обработка vehicle_volume_at_time / driver_rate_at_time,
-      // если они пришли БЕЗ смены машины/водителя
+      // Отдельная обработка vehicle_volume_at_time / driver_rate_at_time
       if (
         !vehicleVolumeSet &&
         fields.vehicle_volume_at_time !== undefined
@@ -326,6 +322,22 @@ async function handler(req, res) {
       params.push(id);
       const sql = `UPDATE trips SET ${updates.join(", ")} WHERE id = $${paramIndex} RETURNING *`;
       const result = await query(sql, params);
+
+      // Автоматически проставляем delivered для pending-заказов
+      // при переходе рейса в статус done
+      if (
+        fields.status === "done" &&
+        trip.status !== "done" &&
+        result.rows[0].status === "done"
+      ) {
+        await query(
+          `UPDATE orders 
+           SET delivery_status = 'delivered', updated_at = NOW()
+           WHERE trip_id = $1 
+             AND (delivery_status IS NULL OR delivery_status = 'pending')`,
+          [id],
+        );
+      }
 
       return res.json({ success: true, trip: result.rows[0] });
     } catch (e) {
@@ -469,8 +481,13 @@ async function handler(req, res) {
       let nextSeq = maxSeqResult.rows[0].max + 1;
 
       for (const order of orders.rows) {
+        // Сбрасываем delivery_status в pending и delivery_note в NULL
         await query(
-          "UPDATE orders SET trip_id = $1, sequence_num = $2, updated_at = NOW() WHERE id = $3",
+          `UPDATE orders 
+           SET trip_id = $1, sequence_num = $2, 
+               delivery_status = 'pending', delivery_note = NULL,
+               updated_at = NOW() 
+           WHERE id = $3`,
           [to_trip_id, nextSeq, order.id],
         );
         await query(
@@ -543,14 +560,19 @@ async function handler(req, res) {
         return res.status(400).json({ error: "Рейс уже отменён" });
 
       if (orders_action === "return_to_incoming") {
+        // Заказы уходят в пул. delivery_status не трогаем.
         await query(
-          `UPDATE orders SET trip_id = NULL, sequence_num = NULL, status = 'new', updated_at = NOW()
-                     WHERE trip_id = $1`,
+          `UPDATE orders 
+           SET trip_id = NULL, sequence_num = NULL, status = 'new', updated_at = NOW()
+           WHERE trip_id = $1`,
           [id],
         );
       } else {
+        // Заказы помечаются отменёнными.
         await query(
-          `UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE trip_id = $1`,
+          `UPDATE orders 
+           SET status = 'cancelled', delivery_status = 'cancelled', updated_at = NOW() 
+           WHERE trip_id = $1`,
           [id],
         );
       }
@@ -707,7 +729,6 @@ async function handler(req, res) {
 
       const result = await query(sql, params);
 
-      // Опционально: счётчик просроченных рейсов вне периода
       if (include_overdue_count === "true") {
         const overdueRes = await query(`
           SELECT COUNT(*)::int AS cnt
@@ -748,7 +769,6 @@ async function handler(req, res) {
       vehicle_volume,
     } = req.body;
 
-    // Валидация: либо своя машина, либо наёмная
     if (!trip_date)
       return res.status(400).json({ error: "Укажите дату рейса" });
     if (!vehicle_id && !hired_vehicle_info) {
@@ -800,7 +820,6 @@ async function handler(req, res) {
         finalDriverRate = Number(d.rows[0].default_rate) || 0;
       } else if (hired_driver_info && hired_driver_info.trim()) {
         finalHiredDriverInfo = hired_driver_info.trim();
-        // Для наёмного водителя ставка вводится вручную
         finalDriverRate = Number(req.body.driver_rate) || 0;
       }
 
@@ -843,8 +862,8 @@ async function handler(req, res) {
           if (!addr.address) continue;
 
           await query(
-            `INSERT INTO orders (trip_id, external_id, address, contact_name, phone, volume, sequence_num, note, source)
-                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'manual')`,
+            `INSERT INTO orders (trip_id, external_id, address, contact_name, phone, volume, sequence_num, note, source, delivery_status)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'manual', 'pending')`,
             [
               tripId,
               addr.external_id || null,
