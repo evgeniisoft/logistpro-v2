@@ -162,7 +162,25 @@
                                     <td>
                                         <span class="table-chip" x-text="e.table_label"></span>
                                     </td>
-                                    <td style="font-family:monospace;font-size:12px;" x-text="e.record_id || '—'"></td>
+                                    <td style="font-family:monospace;font-size:12px;">
+                                        <template x-if="e.table_name === 'trips' && e.trip_exists">
+                                            <span class="journal-trip-link"
+                                                @click="goToTrip(e.record_id)"
+                                                :title="'Открыть рейс ' + (e.linked_trip_number || e.record_id) + ' в новой вкладке'">
+                                                <span x-text="e.linked_trip_number || e.record_id"></span>
+                                                <span class="journal-trip-arrow">→</span>
+                                            </span>
+                                        </template>
+                                        <template x-if="e.table_name === 'trips' && !e.trip_exists">
+                                            <span style="color:var(--text-muted);">
+                                                <span x-text="e.record_id"></span>
+                                                <span style="font-size:11px;margin-left:4px;">(удалён)</span>
+                                            </span>
+                                        </template>
+                                        <template x-if="e.table_name !== 'trips'">
+                                            <span x-text="e.record_id || '—'"></span>
+                                        </template>
+                                    </td>
                                     <td style="font-size:12px;">
                                         <span x-text="fieldLabel(e.field_name)"></span>
                                     </td>
@@ -362,6 +380,11 @@
                     const s = String(v);
                     if (s.length <= 80) return s;
                     return s.substring(0, 80) + '…';
+                },
+
+                goToTrip(tripId) {
+                    if (!tripId) return;
+                    window.open('/trip.html?id=' + tripId, '_blank');
                 },
 
                 formatDateTime(d) {
