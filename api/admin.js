@@ -378,9 +378,14 @@ async function handler(req, res) {
             j.ip,
             j.created_at,
             u.full_name AS user_name,
-            u.login AS user_login
+            u.login AS user_login,
+            t.trip_number AS linked_trip_number,
+            (t.id IS NOT NULL) AS trip_exists
          FROM journal j
          LEFT JOIN users u ON u.id = j.user_id
+         LEFT JOIN trips t 
+           ON j.table_name = 'trips' 
+          AND t.id::text = j.record_id
          ${where}
          ORDER BY j.created_at DESC, j.id DESC
          LIMIT ${perPage} OFFSET ${offset}`,
@@ -390,6 +395,8 @@ async function handler(req, res) {
       const entries = entriesResult.rows.map((r) => ({
         ...r,
         table_label: TABLE_LABELS[r.table_name] || r.table_name,
+        trip_exists: !!r.trip_exists,
+        linked_trip_number: r.linked_trip_number || null,
       }));
 
       return res.json({
