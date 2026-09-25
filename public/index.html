@@ -999,32 +999,10 @@
                     const trip = this.trips.find(t => t.id === tripId);
                     if (!trip || trip.status === newStatus) return;
 
+                    // Перед закрытием — мягкая проверка со сводкой
                     if (newStatus === 'done') {
-                        const detail = await window.API.api('/api/trips?action=get&id=' + tripId);
-                        if (!detail.trip.fact_km || Number(detail.trip.fact_km) <= 0) {
-                            alert('Заполните пробег факт перед завершением рейса');
-                            return;
-                        }
-                        if (!detail.costs || detail.costs.length === 0) {
-                            alert('Добавьте хотя бы одну затрату перед завершением рейса');
-                            return;
-                        }
-
-                        // Мягкое предупреждение: сколько заказов без статуса
-                        const orders = detail.orders || [];
-                        const pendingCount = orders.filter(o =>
-                            !o.delivery_status || o.delivery_status === 'pending'
-                        ).length;
-
-                        if (pendingCount > 0) {
-                            const word = pendingCount === 1 ? 'адрес' : (pendingCount < 5 ? 'адреса' : 'адресов');
-                            const ok = confirm(
-                                'В рейсе ' + pendingCount + ' ' + word + ' без статуса доставки.\n\n' +
-                                'Они будут помечены как «Доставлено».\n\n' +
-                                'Закрыть рейс?'
-                            );
-                            if (!ok) return;
-                        }
+                        const ok = await this.confirmCloseTrip(tripId);
+                        if (!ok) return;
                     }
 
                     const previousStatus = trip.status;
@@ -1039,6 +1017,95 @@
                         trip.status = previousStatus;
                         alert('Ошибка: ' + e.message);
                     }
+                },
+
+                // Мягкая проверка перед закрытием рейса.
+                // Возвращает true — можно закрывать, false — логист отказался.
+                async confirmCloseTrip(tripId) {
+                    let detail;
+                    try {
+                        detail = await window.API.api('/api/trips?action=get&id=' + tripId);
+                    } catch (e) {
+                        alert('Не удалось загрузить рейс: ' + e.message);
+                        return false;
+                    }
+
+                    const trip = detail.trip;
+                    const orders = detail.orders || [];
+                    const costs = detail.costs || [];
+                    const autoCosts = detail.auto_costs || [];
+
+                    const factKm = Number(trip.fact_km) || 0;
+                    const pendingOrders = orders.filter(o =>
+                        !o.delivery_status || o.delivery_status === 'pending'
+                    ).length;
+                    const failedOrders = orders.filter(o =>
+                        o.delivery_status === 'failed'
+                    ).length;
+                    const deliveredOrders = orders.filter(o =>
+                        o.delivery_status === 'delivered'
+                    ).length;
+
+                    // Формируем сводку
+                    const lines = ['Рейс ' + trip.trip_number + '.'];
+
+                    // Пробег
+                    if (factKm > 0) {
+                        lines.push('Пробег факт: ' + factKm + ' км');
+                    } else {
+                        lines.push('Пробег факт: не заполнен (0 км)');
+                    }
+
+                    // Затраты
+                    const totalCostsCount = costs.length + autoCosts.length;
+                    if (totalCostsCount === 0) {
+                        lines.push('Затраты: нет');
+                    } else if (costs.length === 0 && autoCosts.length > 0) {
+                        lines.push('Затраты: ' + autoCosts.length + ' (только авто: ' +
+                            autoCosts.map(c => this.categoryLabelShort(c.category)).join(', ') + ')');
+                    } else {
+                        lines.push('Затраты: ' + costs.length + ' ручных' +
+                            (autoCosts.length > 0 ? ' + ' + autoCosts.length + ' авто' : ''));
+                    }
+
+                    // Заказы
+                    if (orders.length === 0) {
+                        lines.push('Заказов: нет');
+                    } else {
+                        let orderLine = 'Заказов: ' + orders.length;
+                        const parts = [];
+                        if (deliveredOrders > 0) parts.push('доставлено ' + deliveredOrders);
+                        if (failedOrders > 0) parts.push('не доставлено ' + failedOrders);
+                        if (pendingOrders > 0) parts.push('без статуса ' + pendingOrders);
+                        if (parts.length > 0) orderLine += ' (' + parts.join(', ') + ')';
+                        lines.push(orderLine);
+                    }
+
+                    // Предупреждение про pending
+                    if (pendingOrders > 0) {
+                        lines.push('');
+                        lines.push('Заказы без статуса будут помечены как «Доставлено».');
+                    }
+
+                    lines.push('');
+                    lines.push('Закрыть рейс?');
+
+                    return confirm(lines.join('\n'));
+                },
+
+                // Короткое название категории для сводки
+                categoryLabelShort(cat) {
+                    const labels = {
+                        'salary': 'ЗП',
+                        'hired': 'наём',
+                        'amort': 'аморт',
+                        'fuel': 'топливо',
+                        'toll': 'платные',
+                        'repair': 'ремонт',
+                        'fine': 'штрафы',
+                        'other': 'прочее'
+                    };
+                    return labels[cat] || cat;
                 },
 
                 // ============ МОДАЛКА СОЗДАНИЯ ============
