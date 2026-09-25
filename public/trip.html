@@ -745,9 +745,17 @@
                         <button class="btn btn-secondary" @click="printWaybill()" title="Распечатать путевой лист">
                             Путевой лист
                         </button>
-                        <template x-if="trip.status !== 'done' && trip.status !== 'cancelled'">
+
+                        <!-- Рейс в проблеме — показать "Решена проблема" -->
+                        <template x-if="trip.status === 'problem'">
+                            <button class="btn btn-primary" @click="openResolveProblemModal()">Решена проблема</button>
+                        </template>
+
+                        <!-- Рейс не в проблеме, не завершён — показать "Отметить проблему" -->
+                        <template x-if="trip.status !== 'problem' && trip.status !== 'done' && trip.status !== 'cancelled'">
                             <button class="btn btn-secondary" @click="openProblemModal()">Отметить проблему</button>
                         </template>
+
                         <template x-if="trip.status !== 'done' && trip.status !== 'cancelled'">
                             <button class="btn btn-danger" @click="openCancelModal()">Отменить рейс</button>
                         </template>
@@ -838,6 +846,63 @@
                         </div>
                     </div>
                 </div>
+                <!-- МОДАЛКА: РЕШЕНА ПРОБЛЕМА -->
+                <div x-show="resolveProblemModal.open" x-cloak class="modal-backdrop" @click.self="closeResolveProblemModal()">
+                    <div class="modal-window" @click.stop>
+                        <div class="modal-header">
+                            <h2 class="modal-title">Вернуть рейс в работу</h2>
+                            <button class="modal-close" @click="closeResolveProblemModal()">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            <div x-show="resolveProblemModal.error" class="alert alert-error" x-text="resolveProblemModal.error"></div>
+
+                            <div x-show="trip.problem_comment" style="padding:12px 14px;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;margin-bottom:16px;">
+                                <div style="font-size:11px;font-weight:600;color:#991B1B;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Была проблема</div>
+                                <div style="font-size:13px;color:#991B1B;" x-text="trip.problem_comment"></div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">В какой статус вернуть рейс? *</label>
+                                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+                                    <button type="button"
+                                        class="preset-btn"
+                                        :class="resolveProblemModal.newStatus === 'forming' ? 'active' : ''"
+                                        @click="resolveProblemModal.newStatus = 'forming'"
+                                        :disabled="resolveProblemModal.saving">
+                                        Формируется
+                                    </button>
+                                    <button type="button"
+                                        class="preset-btn"
+                                        :class="resolveProblemModal.newStatus === 'loading' ? 'active' : ''"
+                                        @click="resolveProblemModal.newStatus = 'loading'"
+                                        :disabled="resolveProblemModal.saving">
+                                        Загрузка
+                                    </button>
+                                    <button type="button"
+                                        class="preset-btn"
+                                        :class="resolveProblemModal.newStatus === 'transit' ? 'active' : ''"
+                                        @click="resolveProblemModal.newStatus = 'transit'"
+                                        :disabled="resolveProblemModal.saving">
+                                        В пути
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-secondary" @click="closeResolveProblemModal()" :disabled="resolveProblemModal.saving">Отмена</button>
+                            <button class="btn btn-primary" @click="submitResolveProblem()" :disabled="resolveProblemModal.saving">
+                                <span x-show="!resolveProblemModal.saving">Вернуть в работу</span>
+                                <span x-show="resolveProblemModal.saving" x-cloak>Сохранение...</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- МОДАЛКА: ПЕРЕНОС ОДНОГО ЗАКАЗА -->
                 <div x-show="moveOrderModal.open" x-cloak class="modal-backdrop" @click.self="closeMoveOrderModal()">
                     <div class="modal-window" @click.stop>
@@ -1038,6 +1103,7 @@
 
                 // Модалки
                 problemModal: { open: false, comment: '', saving: false, error: '' },
+                resolveProblemModal: { open: false, newStatus: 'forming', saving: false, error: '' },
                 cancelModal: { open: false, reason: '', orders_action: 'return_to_incoming', saving: false, error: '' },
                 // Модалки переноса
                 moveOrderModal: { open: false, order: null, toTripId: null, saving: false, error: '', overloadWarning: '' },
@@ -1654,6 +1720,44 @@
                         this.problemModal.error = e.message;
                     } finally {
                         this.problemModal.saving = false;
+                    }
+                },
+
+                // ============ РЕШЕНА ПРОБЛЕМА ============
+
+                openResolveProblemModal() {
+                    this.resolveProblemModal = {
+                        open: true,
+                        newStatus: 'forming',
+                        saving: false,
+                        error: ''
+                    };
+                },
+
+                closeResolveProblemModal() {
+                    if (this.resolveProblemModal.saving) return;
+                    this.resolveProblemModal.open = false;
+                },
+
+                async submitResolveProblem() {
+                    this.resolveProblemModal.error = '';
+                    this.resolveProblemModal.saving = true;
+
+                    try {
+                        await window.API.api('/api/trips?action=update&id=' + this.trip.id, {
+                            method: 'PUT',
+                            body: JSON.stringify({
+                                status: this.resolveProblemModal.newStatus
+                            })
+                        });
+
+                        this.resolveProblemModal.open = false;
+                        await this.loadTrip(this.trip.id);
+
+                    } catch (e) {
+                        this.resolveProblemModal.error = e.message;
+                    } finally {
+                        this.resolveProblemModal.saving = false;
                     }
                 },
 
