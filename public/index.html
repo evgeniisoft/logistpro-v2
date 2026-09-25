@@ -133,16 +133,46 @@
                 </div>
             </div>
 
+
+            <!-- Полоса проблемных рейсов -->
+            <div x-show="!loading && problemTrips.length > 0" x-cloak class="problem-strip">
+                <span class="problem-strip-label">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                        <line x1="12" y1="9" x2="12" y2="13"></line>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                    Проблемные:
+                </span>
+
+                <template x-for="(t, idx) in (problemStripExpanded ? problemTrips : problemTrips.slice(0, 3))" :key="t.id">
+                    <div class="problem-pill" @click="openTrip(t.id)" :title="t.problem_comment || 'Проблема'">
+                        <span class="problem-pill-number" x-text="t.trip_number"></span>
+                        <template x-if="t.problem_comment">
+                            <span class="problem-pill-comment" x-text="truncateComment(t.problem_comment)"></span>
+                        </template>
+                        <span class="problem-pill-date" x-text="formatShortDate(t.trip_date)"></span>
+                    </div>
+                </template>
+
+                <template x-if="!problemStripExpanded && problemTrips.length > 3">
+                    <button class="problem-strip-more" @click="problemStripExpanded = true" x-text="'ещё ' + (problemTrips.length - 3) + ' →'"></button>
+                </template>
+
+                <template x-if="problemStripExpanded && problemTrips.length > 3">
+                    <button class="problem-strip-more" @click="problemStripExpanded = false">свернуть</button>
+                </template>
+            </div>
             <!-- Сводка -->
             <div x-show="!loading && tripsInPeriod.length > 0" class="board-summary">
                 <span>На доске: <strong x-text="tripsInPeriod.length"></strong> рейсов</span>
 
-                <template x-if="problemTrips.length > 0">
-                    <span>· <span class="board-summary-link problem" @click="toggleFilterMode('problem')">🔴 <span x-text="problemTrips.length"></span> проблемных</span></span>
-                </template>
-
                 <template x-if="overdueTrips.length > 0">
                     <span>· <span class="board-summary-link overdue" @click="toggleFilterMode('overdue')">⚠ <span x-text="overdueTrips.length"></span> просрочены</span></span>
+                </template>
+
+                <template x-if="problemTrips.length > 0">
+                    <span>· <span class="board-summary-link" style="color:#991B1B;" @click="toggleFilterMode('problem')">⚠ <span x-text="problemTrips.length"></span> проблемных</span></span>
                 </template>
 
                 <template x-if="todayTrips.length > 0">
@@ -185,15 +215,18 @@
                 <button @click="searchEverywhere()">Искать во всех рейсах</button>
             </div>
 
+            <!-- Сообщение при фильтре "проблемные" -->
+            <div x-show="!loading && filterMode === 'problem'" x-cloak style="padding:40px 20px;text-align:center;background:#fff;border:1px solid var(--border-light);border-radius:10px;">
+                <div style="font-size:14px;color:var(--text-secondary);margin-bottom:12px;">
+                    Показаны только проблемные рейсы — они перечислены выше.
+                </div>
+                <button class="btn btn-secondary" @click="filterMode = null">Показать все рейсы</button>
+            </div>
+
             <!-- Доска -->
-            <div x-show="!loading" class="board">
+            <div x-show="!loading && filterMode !== 'problem'" class="board">
                 <template x-for="col in columns" :key="col.status">
-                    <div class="board-column" 
-                         :class="{
-                             'drag-over': dragOverStatus === col.status,
-                             'board-column-problem': col.status === 'problem'
-                         }"
-                         x-show="col.status !== 'problem' || tripsByStatus('problem').length > 0"
+                    <div class="board-column" :class="dragOverStatus === col.status ? 'drag-over' : ''"
                          @dragover.prevent="dragOverStatus = col.status"
                          @dragleave="dragOverStatus = null"
                          @drop="dropTrip(col.status)">
@@ -201,7 +234,7 @@
                             <span x-text="col.title"></span>
                             <span style="display:flex;align-items:center;gap:6px;">
                                 <span class="board-column-count" x-text="filteredTripsByStatus(col.status).length"></span>
-                                <template x-if="col.status !== 'problem' && overdueInColumn(col.status) > 0">
+                                <template x-if="overdueInColumn(col.status) > 0">
                                     <span class="board-column-overdue" x-text="'⚠ ' + overdueInColumn(col.status)"></span>
                                 </template>
                             </span>
@@ -210,41 +243,35 @@
                             <div class="trip-card"
                                 :class="{
                                     'dragging': draggedTripId === t.id,
-                                    'overdue': t.is_overdue && t.status !== 'problem',
-                                    'today': t.is_today && t.status !== 'problem' && !t.is_overdue,
-                                    'problem': t.status === 'problem'
+                                    'overdue': t.is_overdue,
+                                    'today': t.is_today
                                 }"
                                 draggable="true"
                                 @dragstart="dragStart(t.id)"
                                 @dragend="dragEnd()"
                                 @click="openTrip(t.id)">
 
-                                <!-- Бейдж срочности -->
-                                <template x-if="t.is_overdue && t.status !== 'problem'">
-                                    <span class="trip-card-urgency overdue" x-text="'просрочен ' + t.days_overdue + ' дн'"></span>
-                                </template>
-                                <template x-if="t.is_today && t.status !== 'problem'">
-                                    <span class="trip-card-urgency today">сегодня</span>
-                                </template>
-
-                                <!-- Шапка: номер + дата + выручка -->
-                                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
-                                    <div>
+                                <!-- Шапка: номер + дата | выручка + бейдж срочности -->
+                                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:8px;">
+                                    <div style="min-width:0;flex:1;">
                                         <div class="trip-card-number" x-text="t.trip_number"></div>
                                         <div class="trip-card-date" x-text="formatTripDate(t.trip_date)"></div>
                                     </div>
-                                    <template x-if="showRevenue && t.revenue > 0">
-                                        <div style="font-size:11px;font-weight:600;color:#059669;text-align:right;margin-right:70px;">
-                                            <div x-text="formatMoney(t.revenue)"></div>
-                                            <div style="font-size:9px;color:var(--text-secondary);font-weight:500;text-transform:uppercase;">выручка</div>
-                                        </div>
-                                    </template>
+                                    <div class="trip-card-header-right">
+                                        <template x-if="showRevenue && t.revenue > 0">
+                                            <div class="trip-card-revenue">
+                                                <div x-text="formatMoney(t.revenue)"></div>
+                                                <div class="trip-card-revenue-label">выручка</div>
+                                            </div>
+                                        </template>
+                                        <template x-if="t.is_overdue">
+                                            <span class="trip-card-urgency-inline overdue" x-text="'просрочен ' + t.days_overdue + ' дн'"></span>
+                                        </template>
+                                        <template x-if="t.is_today">
+                                            <span class="trip-card-urgency-inline today">сегодня</span>
+                                        </template>
+                                    </div>
                                 </div>
-
-                                <!-- Комментарий проблемы -->
-                                <template x-if="t.status === 'problem' && t.problem_comment">
-                                    <div class="trip-card-problem-comment" :title="t.problem_comment" x-text="shortProblemComment(t.problem_comment)"></div>
-                                </template>
 
                                 <!-- Машина -->
                                 <div class="trip-card-line">
@@ -522,15 +549,18 @@
                 searchQuery: '',
 
                 // Период
-                period: 'current',
+                period: 'current',      // current | prev | all | custom
                 customFrom: '',
                 customTo: '',
 
                 // Фильтр по срочности
-                filterMode: null,
+                filterMode: null,       // null | 'overdue' | 'today' | 'empty'
 
                 // Счётчик просроченных вне периода
                 overdueOutsideCount: 0,
+
+                // Полоса проблемных рейсов: раскрыта/свёрнута
+                problemStripExpanded: false,
 
                 draggedTripId: null,
                 dragOverStatus: null,
@@ -539,7 +569,6 @@
                     { status: 'forming', title: 'Формируется' },
                     { status: 'loading', title: 'Загрузка' },
                     { status: 'transit', title: 'В пути' },
-                    { status: 'problem', title: 'Проблема' },
                     { status: 'done', title: 'Завершён' }
                 ],
 
@@ -659,14 +688,15 @@
                 },
 
                 get filterModeLabel() {
-                    if (this.filterMode === 'problem') return 'Только проблемные';
                     if (this.filterMode === 'overdue') return 'Только просроченные';
                     if (this.filterMode === 'today') return 'Только сегодня';
                     if (this.filterMode === 'empty') return 'Только пустые';
+                    if (this.filterMode === 'problem') return 'Только проблемные';
                     return '';
                 },
 
                 matchesPeriod(t) {
+                    // Рейсы без даты — всегда видимы
                     if (!t.trip_date) return true;
                     if (this.period === 'all') return true;
 
@@ -679,10 +709,6 @@
 
                 get tripsInPeriod() {
                     return this.trips.filter(t => this.matchesPeriod(t));
-                },
-
-                get problemTrips() {
-                    return this.tripsInPeriod.filter(t => t.status === 'problem');
                 },
 
                 get overdueTrips() {
@@ -700,8 +726,13 @@
                     );
                 },
 
+                get problemTrips() {
+                    return this.tripsInPeriod.filter(t => t.status === 'problem');
+                },
+
                 setPeriod(p) {
                     this.period = p;
+                    // При "всё время" или смене периода — счётчик вне периода неактуален, пересчитываем на сервере
                     this.loadData();
                 },
 
@@ -735,6 +766,7 @@
                     if (!window.AUTH.requireLogin()) return;
                     this.user = window.API.getUser();
 
+                    // Загружаем настройки
                     try {
                         const settings = await window.API.api('/api/settings');
                         const setting = (settings.settings || []).find(s => s.key === 'show_revenue');
@@ -775,14 +807,21 @@
                     return window.HELPERS.formatDate(d);
                 },
 
-                formatMoney(v) {
-                    return window.HELPERS.formatMoney(v);
+                formatShortDate(d) {
+                    if (!d) return '—';
+                    const date = new Date(d);
+                    return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
                 },
 
-                shortProblemComment(text) {
-                    if (!text) return '';
-                    if (text.length <= 50) return text;
-                    return text.substring(0, 50) + '...';
+                truncateComment(s) {
+                    if (!s) return '';
+                    const str = String(s).trim();
+                    if (str.length <= 25) return str;
+                    return str.substring(0, 25) + '…';
+                },
+
+                formatMoney(v) {
+                    return window.HELPERS.formatMoney(v);
                 },
 
                 // ============ ХЕЛПЕРЫ ДЛЯ КАРТОЧКИ ============
@@ -877,9 +916,8 @@
                     const q = (this.searchQuery || '').trim();
                     let base = this.tripsInPeriod;
 
-                    if (this.filterMode === 'problem') {
-                        base = base.filter(t => t.status === 'problem');
-                    } else if (this.filterMode === 'overdue') {
+                    // Фильтр по срочности
+                    if (this.filterMode === 'overdue') {
                         base = base.filter(t => t.is_overdue);
                     } else if (this.filterMode === 'today') {
                         base = base.filter(t => t.is_today);
@@ -888,6 +926,9 @@
                             Number(t.orders_count) === 0 &&
                             (t.status === 'forming' || t.status === 'loading')
                         );
+                    } else if (this.filterMode === 'problem') {
+                        // Проблемные в колонках не показываются — колонки скрыты шаблоном
+                        base = [];
                     }
 
                     if (q.length < 2) return base;
@@ -900,7 +941,6 @@
                         if (String(t.trip_date || '').includes(q)) return true;
                         if (String(t.comment || '').toLowerCase().includes(qLower)) return true;
                         if (String(t.route_text || '').toLowerCase().includes(qLower)) return true;
-                        if (String(t.problem_comment || '').toLowerCase().includes(qLower)) return true;
 
                         const vehicle = t.hired_vehicle_info || t.vehicle_plate || '';
                         if (String(vehicle).toLowerCase().includes(qLower)) return true;
