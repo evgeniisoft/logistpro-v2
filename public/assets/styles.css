@@ -3204,3 +3204,56 @@ body {
     gap: 8px;
     flex-wrap: wrap;
 }
+/* ============ БЛОК 9: СЕЛЕКТОР СТАТУСА РЕЙСА ============ */
+
+/* Кликабельный бейдж статуса */
+.trip-status-badge-clickable {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: opacity 0.15s;
+    padding: 4px 12px;
+}
+
+.trip-status-badge-clickable:hover:not(:disabled) {
+    opacity: 0.8;
+}
+
+.trip-status-badge-clickable:disabled {
+    cursor: default;
+}
+
+.trip-status-badge-chevron {
+    font-size: 10px;
+    opacity: 0.6;
+    margin-left: 2px;
+}
+
+/* Кнопки в модалке смены статуса рейса */
+.status-menu-btn {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    text-align: left;
+    background: #fff;
+    border: 1px solid var(--border-light);
+    padding: 10px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.status-menu-btn:hover:not(:disabled) {
+    background: var(--bg-muted);
+    border-color: var(--border-medium);
+}
+
+.status-menu-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
