@@ -17,7 +17,8 @@ async function handler(req, res) {
         `SELECT 
                     o.id, o.trip_id, o.external_id, o.address, 
                     o.contact_name, o.phone, o.volume, o.sequence_num, 
-                    o.note, o.status
+                    o.note, o.status,
+                    o.delivery_status, o.delivery_note
                  FROM orders o
                  WHERE o.trip_id IS NOT NULL
                  ORDER BY o.trip_id, o.sequence_num ASC NULLS LAST, o.id ASC`,
@@ -27,6 +28,49 @@ async function handler(req, res) {
     } catch (e) {
       console.error("GET /api/orders?action=all error:", e);
       return res.status(500).json({ error: "Ошибка сервера" });
+    }
+  }
+
+  // ============ LIST-FAILED: список неудавшихся доставок ============
+  if (action === "list-failed") {
+    if (req.method !== "GET")
+      return res.status(405).json({ error: "Method not allowed" });
+
+    try {
+      // Заказы с delivery_status = 'failed', которые:
+      //   - либо вне рейса (trip_id IS NULL)
+      //   - либо в закрытом рейсе (done)
+      const result = await query(
+        `SELECT 
+                    o.id, o.trip_id, o.external_id, o.address,
+                    o.contact_name, o.phone, o.volume, o.sequence_num,
+                    o.note, o.status,
+                    o.delivery_status, o.delivery_note,
+                    o.updated_at,
+                    t.trip_number,
+                    t.trip_date,
+                    t.status AS trip_status,
+                    v.plate AS vehicle_plate,
+                    d.full_name AS driver_name
+                 FROM orders o
+                 LEFT JOIN trips t ON t.id = o.trip_id
+                 LEFT JOIN vehicles v ON v.id = t.vehicle_id
+                 LEFT JOIN drivers d ON d.id = t.driver_id
+                 WHERE o.delivery_status = 'failed'
+                   AND (
+                     o.trip_id IS NULL
+                     OR t.status = 'done'
+                     OR t.status = 'cancelled'
+                   )
+                 ORDER BY o.updated_at DESC NULLS LAST, o.id DESC`,
+      );
+
+      return res.json({ orders: result.rows });
+    } catch (e) {
+      console.error("GET /api/orders?action=list-failed error:", e);
+      return res
+        .status(500)
+        .json({ error: "Ошибка сервера", details: e.message });
     }
   }
 
@@ -43,7 +87,6 @@ async function handler(req, res) {
       return res.status(400).json({ error: "Адрес обязателен" });
 
     try {
-      // Проверяем, что рейс существует
       const tripCheck = await query(
         "SELECT id, trip_number FROM trips WHERE id = $1",
         [trip_id],
@@ -52,18 +95,16 @@ async function handler(req, res) {
         return res.status(404).json({ error: "Рейс не найден" });
       }
 
-      // Определяем sequence_num — последний в рейсе + 1
       const maxSeqResult = await query(
         "SELECT COALESCE(MAX(sequence_num), 0) as max FROM orders WHERE trip_id = $1",
         [trip_id],
       );
       const nextSeq = maxSeqResult.rows[0].max + 1;
 
-      // Вставляем заказ
       const result = await query(
         `INSERT INTO orders (
-                    trip_id, external_id, address, contact_name, phone, volume, sequence_num, note, source
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'manual')
+                    trip_id, external_id, address, contact_name, phone, volume, sequence_num, note, source, delivery_status
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'manual', 'pending')
                 RETURNING *`,
         [
           trip_id,
@@ -185,6 +226,172 @@ async function handler(req, res) {
     }
   }
 
+  // ============ UPDATE-DELIVERY-STATUS (смена статуса доставки) ============
+  if (action === "update-delivery-status") {
+    if (req.method !== "POST" && req.method !== "PUT") {
+      return res.status(405).json({ error: "Method not allowed" });
+    }
+
+    const { delivery_status, delivery_note } = req.body || {};
+
+    const ALLOWED_STATUSES = ["pending", "delivered", "failed", "cancelled"];
+    if (!delivery_status || !ALLOWED_STATUSES.includes(delivery_status)) {
+      return res.status(400).json({ error: "Неверный статус доставки" });
+    }
+
+    try {
+      const current = await query("SELECT * FROM orders WHERE id = $1", [id]);
+      if (current.rows.length === 0)
+        return res.status(404).json({ error: "Заказ не найден" });
+
+      const order = current.rows[0];
+
+      const updates = [];
+      const params = [];
+      let paramIndex = 1;
+
+      if (String(order.delivery_status) !== String(delivery_status)) {
+        updates.push(`delivery_status = $${paramIndex++}`);
+        params.push(delivery_status);
+
+        await logChange(
+          req.user.id,
+          "orders",
+          id,
+          "delivery_status",
+          order.delivery_status || "",
+          delivery_status,
+          ip,
+        );
+      }
+
+      // delivery_note — сохраняем только если передан (даже пустой)
+      if (delivery_note !== undefined) {
+        const newNote = delivery_note ? String(delivery_note) : null;
+        if (String(order.delivery_note || "") !== String(newNote || "")) {
+          updates.push(`delivery_note = $${paramIndex++}`);
+          params.push(newNote);
+
+          await logChange(
+            req.user.id,
+            "orders",
+            id,
+            "delivery_note",
+            order.delivery_note || "",
+            newNote || "",
+            ip,
+          );
+        }
+      }
+
+      if (updates.length === 0) {
+        return res.json({ success: true, order, message: "Нет изменений" });
+      }
+
+      updates.push("updated_at = NOW()");
+      params.push(id);
+      const sql = `UPDATE orders SET ${updates.join(", ")} WHERE id = $${paramIndex} RETURNING *`;
+      const result = await query(sql, params);
+
+      return res.json({ success: true, order: result.rows[0] });
+    } catch (e) {
+      console.error("update-delivery-status error:", e);
+      return res
+        .status(500)
+        .json({ error: "Ошибка сервера", details: e.message });
+    }
+  }
+
+  // ============ RETURN-TO-POOL (вернуть в пул) ============
+  if (action === "return-to-pool") {
+    if (req.method !== "POST")
+      return res.status(405).json({ error: "Method not allowed" });
+
+    try {
+      const current = await query(
+        `SELECT o.*, t.trip_number
+         FROM orders o
+         LEFT JOIN trips t ON t.id = o.trip_id
+         WHERE o.id = $1`,
+        [id],
+      );
+      if (current.rows.length === 0)
+        return res.status(404).json({ error: "Заказ не найден" });
+
+      const order = current.rows[0];
+
+      if (!order.trip_id) {
+        return res.status(400).json({ error: "Заказ уже вне рейса" });
+      }
+
+      // Очищаем trip_id и sequence_num
+      await query(
+        `UPDATE orders 
+         SET trip_id = NULL, sequence_num = NULL, updated_at = NOW() 
+         WHERE id = $1`,
+        [id],
+      );
+
+      // Пересчитываем очерёдность в исходном рейсе
+      await renumberOrders(order.trip_id);
+
+      await logChange(
+        req.user.id,
+        "orders",
+        id,
+        "Возврат в пул",
+        "Рейс " + (order.trip_number || order.trip_id),
+        "вне рейса",
+        ip,
+      );
+
+      return res.json({ success: true, message: "Заказ возвращён в пул" });
+    } catch (e) {
+      console.error("return-to-pool error:", e);
+      return res
+        .status(500)
+        .json({ error: "Ошибка сервера", details: e.message });
+    }
+  }
+
+  // ============ CANCEL (отменить заказ) ============
+  if (action === "cancel") {
+    if (req.method !== "POST")
+      return res.status(405).json({ error: "Method not allowed" });
+
+    try {
+      const current = await query("SELECT * FROM orders WHERE id = $1", [id]);
+      if (current.rows.length === 0)
+        return res.status(404).json({ error: "Заказ не найден" });
+
+      const order = current.rows[0];
+
+      await query(
+        `UPDATE orders 
+         SET delivery_status = 'cancelled', updated_at = NOW() 
+         WHERE id = $1`,
+        [id],
+      );
+
+      await logChange(
+        req.user.id,
+        "orders",
+        id,
+        "delivery_status",
+        order.delivery_status || "",
+        "cancelled",
+        ip,
+      );
+
+      return res.json({ success: true, message: "Заказ отменён" });
+    } catch (e) {
+      console.error("cancel order error:", e);
+      return res
+        .status(500)
+        .json({ error: "Ошибка сервера", details: e.message });
+    }
+  }
+
   // ============ DELETE ============
   if (action === "delete") {
     if (req.method !== "DELETE")
@@ -196,6 +403,8 @@ async function handler(req, res) {
         return res.status(404).json({ error: "Заказ не найден" });
 
       const order = current.rows[0];
+      const oldTripId = order.trip_id;
+
       await query("DELETE FROM orders WHERE id = $1", [id]);
       await logChange(
         req.user.id,
@@ -206,6 +415,9 @@ async function handler(req, res) {
         "",
         ip,
       );
+
+      // Пересчёт очерёдности в исходном рейсе
+      if (oldTripId) await renumberOrders(oldTripId);
 
       return res.json({ success: true });
     } catch (e) {
@@ -252,8 +464,13 @@ async function handler(req, res) {
         newSequence = maxSeq.rows[0].max + 1;
       }
 
+      // Сбрасываем delivery_status в pending и delivery_note в NULL
       await query(
-        "UPDATE orders SET trip_id = $1, sequence_num = $2, updated_at = NOW() WHERE id = $3",
+        `UPDATE orders 
+         SET trip_id = $1, sequence_num = $2, 
+             delivery_status = 'pending', delivery_note = NULL,
+             updated_at = NOW() 
+         WHERE id = $3`,
         [to_trip_id, newSequence, id],
       );
 
@@ -273,7 +490,6 @@ async function handler(req, res) {
         ip,
       );
 
-      // Пересчитываем очерёдность
       if (fromTripId) await renumberOrders(fromTripId);
       await renumberOrders(to_trip_id);
 
