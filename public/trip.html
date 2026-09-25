@@ -68,7 +68,17 @@
                     </a>
                     <h1 class="trip-page-title">
                         <span x-text="'Рейс ' + trip.trip_number"></span>
-                        <span class="trip-status-badge" :class="'trip-status-' + trip.status" x-text="statusLabel"></span>
+                        <button type="button"
+                            class="trip-status-badge trip-status-badge-clickable"
+                            :class="'trip-status-' + trip.status"
+                            @click="openTripStatusModal()"
+                            :disabled="trip.status === 'problem' || trip.status === 'cancelled'"
+                            :title="(trip.status === 'problem' || trip.status === 'cancelled') ? 'Изменить статус нельзя' : 'Изменить статус'">
+                            <span x-text="statusLabel"></span>
+                            <template x-if="trip.status !== 'problem' && trip.status !== 'cancelled'">
+                                <span class="trip-status-badge-chevron">▾</span>
+                            </template>
+                        </button>
                     </h1>
                 </div>
 
@@ -795,6 +805,55 @@
                     </template>
                 </div>
 
+                <!-- МОДАЛКА: ИЗМЕНЕНИЕ СТАТУСА РЕЙСА -->
+                <div x-show="tripStatusModal.open" x-cloak class="modal-backdrop" @click.self="closeTripStatusModal()">
+                    <div class="modal-window" @click.stop style="max-width:420px;">
+                        <div class="modal-header">
+                            <h2 class="modal-title">Статус рейса</h2>
+                            <button class="modal-close" @click="closeTripStatusModal()">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            <div x-show="tripStatusModal.error" class="alert alert-error" x-text="tripStatusModal.error"></div>
+
+                            <div style="display:flex;flex-direction:column;gap:8px;">
+                                <button type="button" class="status-menu-btn" @click="changeTripStatus('forming')"
+                                    :disabled="trip.status === 'forming' || tripStatusModal.saving">
+                                    <span class="trip-status-badge trip-status-forming">Формируется</span>
+                                    <template x-if="trip.status === 'forming'">
+                                        <span style="font-size:11px;color:var(--text-secondary);margin-left:8px;">текущий</span>
+                                    </template>
+                                </button>
+                                <button type="button" class="status-menu-btn" @click="changeTripStatus('loading')"
+                                    :disabled="trip.status === 'loading' || tripStatusModal.saving">
+                                    <span class="trip-status-badge trip-status-loading">Загрузка</span>
+                                    <template x-if="trip.status === 'loading'">
+                                        <span style="font-size:11px;color:var(--text-secondary);margin-left:8px;">текущий</span>
+                                    </template>
+                                </button>
+                                <button type="button" class="status-menu-btn" @click="changeTripStatus('transit')"
+                                    :disabled="trip.status === 'transit' || tripStatusModal.saving">
+                                    <span class="trip-status-badge trip-status-transit">В пути</span>
+                                    <template x-if="trip.status === 'transit'">
+                                        <span style="font-size:11px;color:var(--text-secondary);margin-left:8px;">текущий</span>
+                                    </template>
+                                </button>
+                                <button type="button" class="status-menu-btn" @click="changeTripStatus('done')"
+                                    :disabled="trip.status === 'done' || tripStatusModal.saving">
+                                    <span class="trip-status-badge trip-status-done">Завершён</span>
+                                    <template x-if="trip.status === 'done'">
+                                        <span style="font-size:11px;color:var(--text-secondary);margin-left:8px;">текущий</span>
+                                    </template>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- МОДАЛКА: ПРОБЛЕМА -->
                 <div x-show="problemModal.open" x-cloak class="modal-backdrop" @click.self="problemModal.open = false">
                     <div class="modal-window" @click.stop>
@@ -1207,6 +1266,8 @@
                 savingTrip: false,
                 showRevenue: false,
 
+                // Модалки
+                tripStatusModal: { open: false, saving: false, error: '' },
                 problemModal: { open: false, comment: '', saving: false, error: '' },
                 resolveProblemModal: { open: false, newStatus: 'forming', saving: false, error: '' },
                 cancelModal: { open: false, reason: '', orders_action: 'return_to_incoming', saving: false, error: '' },
@@ -1898,6 +1959,115 @@
                     } finally {
                         this.savingTrip = false;
                     }
+                },
+
+                // ============ СМЕНА СТАТУСА РЕЙСА ============
+
+                openTripStatusModal() {
+                    if (this.trip?.status === 'problem' || this.trip?.status === 'cancelled') {
+                        return;
+                    }
+                    this.tripStatusModal = {
+                        open: true,
+                        saving: false,
+                        error: ''
+                    };
+                },
+
+                closeTripStatusModal() {
+                    if (this.tripStatusModal.saving) return;
+                    this.tripStatusModal.open = false;
+                },
+
+                async changeTripStatus(newStatus) {
+                    if (!this.trip) return;
+                    if (newStatus === this.trip.status) {
+                        this.tripStatusModal.open = false;
+                        return;
+                    }
+
+                    // Перед закрытием — мягкая проверка со сводкой
+                    if (newStatus === 'done') {
+                        const ok = this.confirmCloseTrip();
+                        if (!ok) return;
+                    }
+
+                    this.tripStatusModal.saving = true;
+                    this.tripStatusModal.error = '';
+
+                    try {
+                        await window.API.api('/api/trips?action=update&id=' + this.trip.id, {
+                            method: 'PUT',
+                            body: JSON.stringify({ status: newStatus })
+                        });
+
+                        this.tripStatusModal.open = false;
+                        await this.loadTrip(this.trip.id);
+
+                    } catch (e) {
+                        this.tripStatusModal.error = e.message;
+                    } finally {
+                        this.tripStatusModal.saving = false;
+                    }
+                },
+
+                // Мягкая проверка перед закрытием рейса (в карточке)
+                confirmCloseTrip() {
+                    const trip = this.trip;
+                    const orders = this.orders || [];
+                    const costs = this.costs || [];
+                    const autoCosts = this.autoCosts || [];
+
+                    const factKm = Number(trip.fact_km) || 0;
+                    const pendingOrders = orders.filter(o =>
+                        !o.delivery_status || o.delivery_status === 'pending'
+                    ).length;
+                    const failedOrders = orders.filter(o =>
+                        o.delivery_status === 'failed'
+                    ).length;
+                    const deliveredOrders = orders.filter(o =>
+                        o.delivery_status === 'delivered'
+                    ).length;
+
+                    const lines = ['Рейс ' + trip.trip_number + '.'];
+
+                    if (factKm > 0) {
+                        lines.push('Пробег факт: ' + factKm + ' км');
+                    } else {
+                        lines.push('Пробег факт: не заполнен (0 км)');
+                    }
+
+                    const totalCostsCount = costs.length + autoCosts.length;
+                    if (totalCostsCount === 0) {
+                        lines.push('Затраты: нет');
+                    } else if (costs.length === 0 && autoCosts.length > 0) {
+                        lines.push('Затраты: ' + autoCosts.length + ' (только авто)');
+                    } else {
+                        lines.push('Затраты: ' + costs.length + ' ручных' +
+                            (autoCosts.length > 0 ? ' + ' + autoCosts.length + ' авто' : ''));
+                    }
+
+                    if (orders.length === 0) {
+                        lines.push('Заказов: нет');
+                    } else {
+                        let orderLine = 'Заказов: ' + orders.length;
+                        const parts = [];
+                        if (deliveredOrders > 0) parts.push('доставлено ' + deliveredOrders);
+                        if (failedOrders > 0) parts.push('не доставлено ' + failedOrders);
+                        if (pendingOrders > 0) parts.push('без статуса ' + pendingOrders);
+                        if (parts.length > 0) orderLine += ' (' + parts.join(', ') + ')';
+                        lines.push(orderLine);
+                    }
+
+                    if (pendingOrders > 0) {
+                        lines.push('');
+                        lines.push('Заказы без статуса будут помечены как «Доставлено».');
+                    }
+
+                    lines.push('');
+                    lines.push('Закрыть рейс?');
+
+                    return confirm(lines.join('\n'));
                 },
 
                 // ============ ПРОБЛЕМА ============
