@@ -1009,6 +1009,22 @@
                             alert('Добавьте хотя бы одну затрату перед завершением рейса');
                             return;
                         }
+
+                        // Мягкое предупреждение: сколько заказов без статуса
+                        const orders = detail.orders || [];
+                        const pendingCount = orders.filter(o =>
+                            !o.delivery_status || o.delivery_status === 'pending'
+                        ).length;
+
+                        if (pendingCount > 0) {
+                            const word = pendingCount === 1 ? 'адрес' : (pendingCount < 5 ? 'адреса' : 'адресов');
+                            const ok = confirm(
+                                'В рейсе ' + pendingCount + ' ' + word + ' без статуса доставки.\n\n' +
+                                'Они будут помечены как «Доставлено».\n\n' +
+                                'Закрыть рейс?'
+                            );
+                            if (!ok) return;
+                        }
                     }
 
                     const previousStatus = trip.status;
