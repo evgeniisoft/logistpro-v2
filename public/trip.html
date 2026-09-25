@@ -50,13 +50,10 @@
     <main class="app-main">
         <div class="container">
 
-            <!-- Загрузка -->
             <div x-show="loading" class="skeleton" style="height:400px;"></div>
 
-            <!-- Ошибка -->
             <div x-show="error && !loading" x-cloak class="alert alert-error" x-text="error"></div>
 
-            <!-- Контент -->
             <template x-if="!loading && !error && trip">
                 <div>
 
@@ -89,7 +86,6 @@
                                     <div class="info-item-value" x-text="trip.trip_type === 'city' ? 'Городской' : 'Междугородний'"></div>
                                 </div>
                                 
-                                <!-- Машина -->
                                 <div class="info-item">
                                     <div class="info-item-label">Машина</div>
                                     <template x-if="trip.hired_vehicle_info">
@@ -112,7 +108,6 @@
                                     </template>
                                 </div>
                                 
-                                <!-- Водитель -->
                                 <div class="info-item">
                                     <div class="info-item-label">Водитель</div>
                                     <template x-if="trip.hired_driver_info">
@@ -148,7 +143,6 @@
                                     <div class="info-item-value" x-text="formatMoney(trip.driver_rate_at_time)"></div>
                                 </div>
                                 
-                                <!-- Выручка — только если включена -->
                                 <div class="info-item" x-show="showRevenue">
                                     <div class="info-item-label">Выручка</div>
                                     <div class="info-item-value" x-text="formatMoney(trip.revenue)"></div>
@@ -187,7 +181,6 @@
                                 </div>
                             </div>
 
-                            <!-- Машина -->
                             <div class="form-group">
                                 <label class="form-label">Машина</label>
                                 <div class="type-switch">
@@ -224,7 +217,6 @@
                                 </div>
                             </template>
 
-                            <!-- Водитель -->
                             <div class="form-group">
                                 <label class="form-label">Водитель</label>
                                 <div class="type-switch">
@@ -299,7 +291,6 @@
                         </div>
                     </template>
 
-                    <!-- Загрузка -->
                     <div class="trip-load-block">
                         <div class="trip-load-info">
                             <span>Загрузка: <strong x-text="totalVolume + ' м³'"></strong> из <strong x-text="vehicleVolume + ' м³'"></strong></span>
@@ -365,7 +356,6 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <!-- Существующие заказы -->
                                 <template x-for="(order, index) in orders" :key="order.id">
                                     <template x-if="true">
                                         <tr :class="{
@@ -376,7 +366,6 @@
                                             @dragstart="onDragStart(order.id, index)" @dragover.prevent="onDragOver(index)"
                                             @dragleave="onDragLeave(index)" @drop.prevent="onDrop(index)" @dragend="onDragEnd()">
                     
-                                            <!-- Режим просмотра -->
                                             <template x-if="editingOrderId !== order.id">
                                                 <td class="col-seq-with-handle">
                                                     <span class="drag-handle" title="Перетащите для изменения порядка">
@@ -399,7 +388,6 @@
                                                 </td>
                                             </template>
                     
-                                            <!-- Просмотр/редактирование -->
                                             <template x-if="editingOrderId !== order.id">
                                                 <td class="col-id">
                                                     <span x-text="order.external_id || ('#' + order.id)"></span>
@@ -449,31 +437,12 @@
 
                                             <!-- СТАТУС ДОСТАВКИ -->
                                             <td class="col-status">
-                                                <div style="position:relative;">
-                                                    <span class="delivery-badge" 
-                                                        :class="'delivery-' + (order.delivery_status || 'pending')"
-                                                        @click="openDeliveryMenu(order)"
-                                                        :title="order.delivery_note || deliveryStatusLabel(order.delivery_status)"
-                                                        x-text="deliveryStatusLabel(order.delivery_status)">
-                                                    </span>
-                                                    <!-- Меню -->
-                                                    <div x-show="deliveryMenuOpenId === order.id" x-cloak 
-                                                        class="delivery-menu"
-                                                        @click.away="deliveryMenuOpenId = null">
-                                                        <button type="button" class="delivery-menu-item" @click="setDeliveryStatus(order, 'pending')">
-                                                            <span class="delivery-badge delivery-pending">Ожидает</span>
-                                                        </button>
-                                                        <button type="button" class="delivery-menu-item" @click="setDeliveryStatus(order, 'delivered')">
-                                                            <span class="delivery-badge delivery-delivered">Доставлено</span>
-                                                        </button>
-                                                        <button type="button" class="delivery-menu-item" @click="setDeliveryStatus(order, 'failed')">
-                                                            <span class="delivery-badge delivery-failed">Не доставлено</span>
-                                                        </button>
-                                                        <button type="button" class="delivery-menu-item" @click="setDeliveryStatus(order, 'cancelled')">
-                                                            <span class="delivery-badge delivery-cancelled">Отменён</span>
-                                                        </button>
-                                                    </div>
-                                                </div>
+                                                <span class="delivery-badge" 
+                                                    :class="'delivery-' + (order.delivery_status || 'pending')"
+                                                    @click="openStatusMenu(order)"
+                                                    :title="order.delivery_note || deliveryStatusLabel(order.delivery_status)"
+                                                    x-text="deliveryStatusLabel(order.delivery_status)">
+                                                </span>
                                             </td>
                     
                                             <template x-if="editingOrderId !== order.id">
@@ -492,7 +461,6 @@
                                                 </td>
                                             </template>
                     
-                                            <!-- Действия -->
                                             <td class="col-actions">
                                                 <template x-if="editingOrderId !== order.id">
                                                     <div style="display:flex;gap:2px;justify-content:flex-end;">
@@ -567,7 +535,6 @@
                                             </td>
                                         </tr>
                                     </template>
-                                    <!-- Плашка под failed-заказом -->
                                     <template x-if="order.delivery_status === 'failed'">
                                         <tr class="failed-row">
                                             <td :colspan="9" style="padding:0;border-top:none;">
@@ -673,7 +640,6 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <!-- Автоматические затраты (только просмотр) -->
                                 <template x-for="cost in autoCosts" :key="'auto-' + cost.category">
                                     <tr class="auto-row">
                                         <td x-text="categoryLabel(cost.category)"></td>
@@ -683,10 +649,8 @@
                                     </tr>
                                 </template>
 
-                                <!-- Обычные затраты -->
                                 <template x-for="cost in costs" :key="cost.id">
                                     <tr :class="{ 'row-editing': editingCostId === cost.id }">
-                                        <!-- Просмотр -->
                                         <template x-if="editingCostId !== cost.id">
                                             <td x-text="categoryLabel(cost.category)"></td>
                                         </template>
@@ -721,7 +685,6 @@
                                             </td>
                                         </template>
 
-                                        <!-- Действия -->
                                         <td style="text-align:right;">
                                             <template x-if="editingCostId !== cost.id">
                                                 <div style="display:flex;gap:2px;justify-content:flex-end;">
@@ -758,7 +721,6 @@
                                     </tr>
                                 </template>
 
-                                <!-- Новая затрата -->
                                 <template x-if="newCostRow">
                                     <tr class="row-editing">
                                         <td>
@@ -813,12 +775,10 @@
                             Путевой лист
                         </button>
 
-                        <!-- Рейс в проблеме — показать "Решена проблема" -->
                         <template x-if="trip.status === 'problem'">
                             <button class="btn btn-primary" @click="openResolveProblemModal()">Решена проблема</button>
                         </template>
 
-                        <!-- Рейс не в проблеме, не завершён — показать "Отметить проблему" -->
                         <template x-if="trip.status !== 'problem' && trip.status !== 'done' && trip.status !== 'cancelled'">
                             <button class="btn btn-secondary" @click="openProblemModal()">Отметить проблему</button>
                         </template>
@@ -967,6 +927,49 @@
                                 <span x-show="!resolveProblemModal.saving">Вернуть в работу</span>
                                 <span x-show="resolveProblemModal.saving" x-cloak>Сохранение...</span>
                             </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- МОДАЛКА: ВЫБОР СТАТУСА ДОСТАВКИ -->
+                <div x-show="statusMenuModal.open" x-cloak class="modal-backdrop" @click.self="closeStatusMenu()">
+                    <div class="modal-window" @click.stop style="max-width:420px;">
+                        <div class="modal-header">
+                            <h2 class="modal-title">Статус доставки</h2>
+                            <button class="modal-close" @click="closeStatusMenu()">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            <div x-show="statusMenuModal.order" style="padding:12px 14px;background:var(--bg-muted);border-radius:6px;margin-bottom:16px;">
+                                <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Заказ</div>
+                                <div style="font-size:13px;font-weight:500;" x-text="statusMenuModal.order?.address"></div>
+                                <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;" x-text="(statusMenuModal.order?.volume || 0) + ' м³ · ' + (statusMenuModal.order?.contact_name || '—')"></div>
+                            </div>
+
+                            <div style="display:flex;flex-direction:column;gap:8px;">
+                                <button type="button" class="status-menu-btn" @click="applyStatus('pending')">
+                                    <span class="delivery-badge delivery-pending">Ожидает</span>
+                                </button>
+                                <button type="button" class="status-menu-btn" @click="applyStatus('delivered')">
+                                    <span class="delivery-badge delivery-delivered">Доставлено</span>
+                                </button>
+                                <button type="button" class="status-menu-btn" @click="applyStatus('failed')">
+                                    <span class="delivery-badge delivery-failed">Не доставлено</span>
+                                </button>
+                                <button type="button" class="status-menu-btn" @click="applyStatus('cancelled')">
+                                    <span class="delivery-badge delivery-cancelled">Отменён</span>
+                                </button>
+                            </div>
+
+                            <div x-show="statusMenuModal.order?.delivery_status === 'failed'" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border-light);">
+                                <button type="button" class="btn btn-secondary" style="width:100%;" @click="returnFromStatusMenu()">
+                                    Вернуть заказ в пул
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1168,12 +1171,7 @@
                         <td x-text="o.contact_name || '—'"></td>
                         <td x-text="o.phone || '—'"></td>
                         <td x-text="o.volume || '—'"></td>
-                        <td style="width:130px;">
-                            <template x-if="(o.delivery_status || 'pending') === 'delivered'"><span>[✓] Доставлено</span></template>
-                            <template x-if="(o.delivery_status || 'pending') === 'failed'"><span>[✗] Не доставлено</span></template>
-                            <template x-if="(o.delivery_status || 'pending') === 'cancelled'"><span>[—] Отменён</span></template>
-                            <template x-if="!o.delivery_status || o.delivery_status === 'pending'"><span>[  ] Ожидает</span></template>
-                        </td>
+                        <td style="width:100px;">[  ] Доставлено</td>
                         <td style="width:120px;"></td>
                     </tr>
                 </template>
@@ -1204,46 +1202,36 @@
                 loading: true,
                 error: '',
 
-                // Редактирование рейса
                 editingTrip: false,
                 editTripForm: {},
                 savingTrip: false,
                 showRevenue: false,
 
-                // Модалки
                 problemModal: { open: false, comment: '', saving: false, error: '' },
                 resolveProblemModal: { open: false, newStatus: 'forming', saving: false, error: '' },
                 cancelModal: { open: false, reason: '', orders_action: 'return_to_incoming', saving: false, error: '' },
                 failedModal: { open: false, order: null, reason: '', saving: false, error: '' },
-                // Модалки переноса
+                statusMenuModal: { open: false, order: null },
                 moveOrderModal: { open: false, order: null, toTripId: null, saving: false, error: '', overloadWarning: '' },
                 moveAllModal: { open: false, toTripId: null, reason: '', saving: false, error: '' },
 
-                // Меню статуса доставки
-                deliveryMenuOpenId: null,
-
-                // Кеш списка рейсов для выбора
                 availableTrips: [],
 
-                // Затраты — inline редактирование
                 editingCostId: null,
                 editCostForm: {},
                 newCostRow: false,
                 newCostForm: {},
                 savingCost: false,
 
-                // Drag & drop состояние
                 draggedOrderId: null,
                 draggedOrderIndex: null,
                 dragOverOrderIndex: null,
                 reorderSaving: false,
 
-                // Inline редактирование
                 editingOrderId: null,
                 editForm: {},
                 savingEdit: false,
 
-                // Добавление нового
                 newOrderRow: false,
                 newOrderForm: {},
                 savingNewOrder: false,
@@ -1306,7 +1294,6 @@
                     return this.availableTrips;
                 },
 
-                // Счётчики статусов доставки
                 get deliveredCount() {
                     return this.orders.filter(o => o.delivery_status === 'delivered').length;
                 },
@@ -1385,17 +1372,26 @@
                     return labels[status || 'pending'] || 'Ожидает';
                 },
 
-                openDeliveryMenu(order) {
-                    // Не открываем, если рейс отменён — нечего менять
+                openStatusMenu(order) {
                     if (this.trip?.status === 'cancelled') return;
-                    this.deliveryMenuOpenId = this.deliveryMenuOpenId === order.id ? null : order.id;
+                    this.statusMenuModal = {
+                        open: true,
+                        order: order
+                    };
                 },
 
-                async setDeliveryStatus(order, status) {
-                    this.deliveryMenuOpenId = null;
+                closeStatusMenu() {
+                    this.statusMenuModal.open = false;
+                    this.statusMenuModal.order = null;
+                },
 
-                    // Если failed — открываем модалку причины
+                async applyStatus(status) {
+                    const order = this.statusMenuModal.order;
+                    if (!order) return;
+
+                    // failed — открыть модалку причины
                     if (status === 'failed') {
+                        this.statusMenuModal.open = false;
                         this.failedModal = {
                             open: true,
                             order: order,
@@ -1406,7 +1402,16 @@
                         return;
                     }
 
+                    this.statusMenuModal.open = false;
                     await this.saveDeliveryStatus(order.id, status, null);
+                },
+
+                async returnFromStatusMenu() {
+                    const order = this.statusMenuModal.order;
+                    if (!order) return;
+
+                    this.statusMenuModal.open = false;
+                    await this.returnOrderToPool(order);
                 },
 
                 async submitFailedReason() {
@@ -1441,7 +1446,6 @@
                         body: JSON.stringify(body)
                     });
 
-                    // Обновляем локально
                     const order = this.orders.find(o => o.id === orderId);
                     if (order) {
                         order.delivery_status = data.order.delivery_status;
@@ -1509,8 +1513,6 @@
                     this.draggedOrderIndex = null;
                     this.dragOverOrderIndex = null;
                 },
-
-                // ============ КНОПКИ ВВЕРХ/ВНИЗ ============
 
                 async moveUp(index) {
                     if (index === 0) return;
@@ -1650,8 +1652,6 @@
                         this.savingNewOrder = false;
                     }
                 },
-
-                // ============ УДАЛЕНИЕ ============
 
                 async deleteOrder(order) {
                     if (!confirm('Удалить адрес "' + order.address + '"?')) return;
@@ -2161,8 +2161,6 @@
                         this.moveAllModal.saving = false;
                     }
                 },
-
-                // ============ ЗАГРУЗКА СПИСКА РЕЙСОВ ДЛЯ ПЕРЕНОСА ============
 
                 async loadAvailableTrips() {
                     try {
