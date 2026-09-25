@@ -54,21 +54,21 @@
                 <div>
                     <h1 style="font-size:24px;font-weight:600;margin:0 0 4px 0;">Входящие заказы</h1>
                     <p style="font-size:13px;color:var(--text-secondary);margin:0;">
-                        Заказы из Битрикс24 и добавленные вручную
+                        Заказы из Битрикс24, добавленные вручную и неудавшиеся доставки
                     </p>
                 </div>
                 <div style="display:flex;gap:8px;">
                     <button class="btn btn-secondary" @click="loadData()" :disabled="loading">
                         Обновить
                     </button>
-                    <button class="btn btn-primary" @click="openCreateModal()">
+                    <button class="btn btn-primary" @click="openCreateModal()" x-show="tab !== 'failed'">
                         + Добавить вручную
                     </button>
                 </div>
             </div>
 
-            <!-- Статистика -->
-            <div class="stats-grid">
+            <!-- Статистика (только для не-failed вкладок) -->
+            <div class="stats-grid" x-show="tab !== 'failed'">
                 <div class="stat-card stat-card-pending">
                     <div class="stat-card-label">Ожидают распределения</div>
                     <div class="stat-card-value" x-text="stats.pending || 0"></div>
@@ -80,6 +80,14 @@
                 <div class="stat-card stat-card-rejected">
                     <div class="stat-card-label">Отклонены</div>
                     <div class="stat-card-value" x-text="stats.rejected || 0"></div>
+                </div>
+            </div>
+
+            <!-- Статистика для failed -->
+            <div class="stats-grid" x-show="tab === 'failed'" x-cloak>
+                <div class="stat-card" style="background:#FEF2F2;border-color:#FECACA;">
+                    <div class="stat-card-label" style="color:#991B1B;">Неудавшиеся доставки</div>
+                    <div class="stat-card-value" style="color:#991B1B;" x-text="failedOrders.length"></div>
                 </div>
             </div>
 
@@ -97,6 +105,10 @@
                     Отклонены
                     <span class="count" x-text="stats.rejected || 0"></span>
                 </button>
+                <button class="incoming-tab" :class="tab === 'failed' ? 'active' : ''" @click="switchTab('failed')">
+                    Неудавшиеся
+                    <span class="count" x-text="failedOrders.length"></span>
+                </button>
                 <button class="incoming-tab" :class="tab === 'all' ? 'active' : ''" @click="switchTab('all')">
                     Все
                 </button>
@@ -108,81 +120,146 @@
             <!-- Загрузка -->
             <div x-show="loading" class="skeleton" style="height:300px;"></div>
 
-            <!-- Пустое состояние -->
-            <div x-show="!loading && !error && incoming.length === 0" class="empty-state">
-                <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M22 12h-6l-2 3h-4l-2-3H2"></path>
-                    <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
-                </svg>
-                <h3 class="empty-title">Нет входящих заказов</h3>
-                <p class="empty-description">
-                    <template x-if="tab === 'pending'">Заказы из Битрикс24 появятся здесь автоматически</template>
-                    <template x-if="tab === 'assigned'">Здесь будут заказы, назначенные на рейсы</template>
-                    <template x-if="tab === 'rejected'">Здесь будут отклонённые заказы</template>
-                    <template x-if="tab === 'all'">Пока нет ни одного входящего заказа</template>
-                </p>
-            </div>
+            <!-- ============ ВКЛАДКА: НЕУДАВШИЕСЯ ============ -->
+            <template x-if="tab === 'failed'">
+                <div>
+                    <div x-show="!loading && failedOrders.length === 0" class="empty-state">
+                        <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                        </svg>
+                        <h3 class="empty-title">Нет неудавшихся доставок</h3>
+                        <p class="empty-description">Заказы с проваленной доставкой будут появляться здесь</p>
+                    </div>
 
-            <!-- Таблица -->
-            <div x-show="!loading && incoming.length > 0" style="background:#fff;border:1px solid var(--border-light);border-radius:12px;overflow:hidden;">
-                <div style="overflow-x:auto;">
-                    <table class="incoming-table">
-                        <thead>
-                            <tr>
-                                <th class="col-source">Источник</th>
-                                <th class="col-external-id">ID заказа</th>
-                                <th class="col-address">Адрес</th>
-                                <th class="col-contact">Контакт</th>
-                                <th class="col-phone">Телефон</th>
-                                <th class="col-volume text-right">м³</th>
-                                <th class="col-date">Получен</th>
-                                <th class="col-actions"></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <template x-for="item in incoming" :key="item.id">
-                                <tr>
-                                    <td class="col-source">
-                                        <span class="source-badge" :class="'source-' + (item.source || 'manual')" x-text="sourceLabel(item.source)"></span>
-                                    </td>
-                                    <td class="col-external-id" x-text="item.external_id || '—'"></td>
-                                    <td class="col-address" x-text="item.address || '—'"></td>
-                                    <td class="col-contact" x-text="item.contact_name || '—'"></td>
-                                    <td class="col-phone" x-text="item.phone || '—'"></td>
-                                    <td class="col-volume" x-text="item.volume || '—'"></td>
-                                    <td class="col-date" x-text="formatDateTime(item.created_at)"></td>
-                                    <td class="col-actions">
-                                        <!-- Для pending: назначить / отклонить -->
-                                        <template x-if="item.status === 'pending'">
-                                            <div style="display:flex;gap:6px;justify-content:flex-end;">
-                                                <button class="btn-assign" @click="openAssignModal(item)">На рейс</button>
-                                                <button class="btn-action danger" @click="rejectItem(item)" title="Отклонить">
-                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                                                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                                                    </svg>
-                                                </button>
-                                            </div>
-                                        </template>
-                                        <!-- Для assigned/rejected: только удалить -->
-                                        <template x-if="item.status !== 'pending'">
-                                            <div style="display:flex;gap:6px;justify-content:flex-end;">
-                                                <span class="status-badge" :class="'status-' + item.status" x-text="statusLabel(item.status)"></span>
-                                                <button class="btn-action danger" @click="deleteItem(item)" title="Удалить">
-                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                        <polyline points="3 6 5 6 21 6"></polyline>
-                                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                                    </svg>
-                                                </button>
-                                            </div>
-                                        </template>
-                                    </td>
-                                </tr>
-                            </template>
-                        </tbody>
-                    </table>
+                    <div x-show="!loading && failedOrders.length > 0" style="background:#fff;border:1px solid var(--border-light);border-radius:12px;overflow:hidden;">
+                        <div style="overflow-x:auto;">
+                            <table class="incoming-table">
+                                <thead>
+                                    <tr>
+                                        <th class="col-date">Рейс</th>
+                                        <th class="col-date">Дата попытки</th>
+                                        <th class="col-address">Адрес</th>
+                                        <th class="col-contact">Контакт</th>
+                                        <th class="col-phone">Телефон</th>
+                                        <th class="col-volume text-right">м³</th>
+                                        <th>Причина</th>
+                                        <th class="col-actions"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="item in failedOrders" :key="item.id">
+                                        <tr>
+                                            <td class="col-date">
+                                                <template x-if="item.trip_number">
+                                                    <span style="font-family:monospace;font-size:12px;" x-text="item.trip_number"></span>
+                                                </template>
+                                                <template x-if="!item.trip_number">
+                                                    <span style="color:var(--text-muted);">—</span>
+                                                </template>
+                                            </td>
+                                            <td class="col-date" x-text="formatDateTime(item.updated_at)"></td>
+                                            <td class="col-address" x-text="item.address || '—'"></td>
+                                            <td class="col-contact" x-text="item.contact_name || '—'"></td>
+                                            <td class="col-phone" x-text="item.phone || '—'"></td>
+                                            <td class="col-volume" x-text="item.volume || '—'"></td>
+                                            <td style="font-size:12px;color:var(--text-secondary);" x-text="item.delivery_note || '—'"></td>
+                                            <td class="col-actions">
+                                                <div style="display:flex;gap:6px;justify-content:flex-end;">
+                                                    <button class="btn-assign" @click="openFailedAssignModal(item)">В рейс</button>
+                                                    <button class="btn-action danger" @click="cancelFailedOrder(item)" title="Отменить заказ">
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
-            </div>
+            </template>
+
+            <!-- ============ ДРУГИЕ ВКЛАДКИ ============ -->
+            <template x-if="tab !== 'failed'">
+                <div>
+                    <div x-show="!loading && !error && incoming.length === 0" class="empty-state">
+                        <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 12h-6l-2 3h-4l-2-3H2"></path>
+                            <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
+                        </svg>
+                        <h3 class="empty-title">Нет входящих заказов</h3>
+                        <p class="empty-description">
+                            <template x-if="tab === 'pending'">Заказы из Битрикс24 появятся здесь автоматически</template>
+                            <template x-if="tab === 'assigned'">Здесь будут заказы, назначенные на рейсы</template>
+                            <template x-if="tab === 'rejected'">Здесь будут отклонённые заказы</template>
+                            <template x-if="tab === 'all'">Пока нет ни одного входящего заказа</template>
+                        </p>
+                    </div>
+
+                    <div x-show="!loading && incoming.length > 0" style="background:#fff;border:1px solid var(--border-light);border-radius:12px;overflow:hidden;">
+                        <div style="overflow-x:auto;">
+                            <table class="incoming-table">
+                                <thead>
+                                    <tr>
+                                        <th class="col-source">Источник</th>
+                                        <th class="col-external-id">ID заказа</th>
+                                        <th class="col-address">Адрес</th>
+                                        <th class="col-contact">Контакт</th>
+                                        <th class="col-phone">Телефон</th>
+                                        <th class="col-volume text-right">м³</th>
+                                        <th class="col-date">Получен</th>
+                                        <th class="col-actions"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="item in incoming" :key="item.id">
+                                        <tr>
+                                            <td class="col-source">
+                                                <span class="source-badge" :class="'source-' + (item.source || 'manual')" x-text="sourceLabel(item.source)"></span>
+                                            </td>
+                                            <td class="col-external-id" x-text="item.external_id || '—'"></td>
+                                            <td class="col-address" x-text="item.address || '—'"></td>
+                                            <td class="col-contact" x-text="item.contact_name || '—'"></td>
+                                            <td class="col-phone" x-text="item.phone || '—'"></td>
+                                            <td class="col-volume" x-text="item.volume || '—'"></td>
+                                            <td class="col-date" x-text="formatDateTime(item.created_at)"></td>
+                                            <td class="col-actions">
+                                                <template x-if="item.status === 'pending'">
+                                                    <div style="display:flex;gap:6px;justify-content:flex-end;">
+                                                        <button class="btn-assign" @click="openAssignModal(item)">На рейс</button>
+                                                        <button class="btn-action danger" @click="rejectItem(item)" title="Отклонить">
+                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                </template>
+                                                <template x-if="item.status !== 'pending'">
+                                                    <div style="display:flex;gap:6px;justify-content:flex-end;">
+                                                        <span class="status-badge" :class="'status-' + item.status" x-text="statusLabel(item.status)"></span>
+                                                        <button class="btn-action danger" @click="deleteItem(item)" title="Удалить">
+                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                                <polyline points="3 6 5 6 21 6"></polyline>
+                                                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                </template>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </template>
 
         </div>
     </main>
@@ -241,7 +318,7 @@
         </div>
     </div>
 
-    <!-- МОДАЛКА: НАЗНАЧИТЬ НА РЕЙС -->
+    <!-- МОДАЛКА: НАЗНАЧИТЬ НА РЕЙС (входящий) -->
     <div x-show="assignModal.open" x-cloak class="modal-backdrop" @click.self="closeAssignModal()">
         <div class="modal-window" @click.stop>
             <div class="modal-header">
@@ -304,11 +381,75 @@
         </div>
     </div>
 
+    <!-- МОДАЛКА: НАЗНАЧИТЬ НА РЕЙС (неудавшийся) -->
+    <div x-show="failedAssignModal.open" x-cloak class="modal-backdrop" @click.self="closeFailedAssignModal()">
+        <div class="modal-window" @click.stop>
+            <div class="modal-header">
+                <h2 class="modal-title">Вернуть в рейс</h2>
+                <button class="modal-close" @click="closeFailedAssignModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div x-show="failedAssignModal.error" class="alert alert-error" x-text="failedAssignModal.error"></div>
+
+                <div x-show="failedAssignModal.item" style="padding:12px 14px;background:var(--bg-muted);border-radius:6px;margin-bottom:16px;">
+                    <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Заказ</div>
+                    <div style="font-size:13px;font-weight:500;" x-text="failedAssignModal.item?.address"></div>
+                    <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;" x-text="(failedAssignModal.item?.volume || 0) + ' м³ · ' + (failedAssignModal.item?.contact_name || '—')"></div>
+                </div>
+
+                <div x-show="failedAssignModal.overloadWarning" class="overload-warning" style="margin-bottom:16px;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px;">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                        <line x1="12" y1="9" x2="12" y2="13"></line>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                    <div x-text="failedAssignModal.overloadWarning"></div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Выберите рейс *</label>
+                </div>
+
+                <div x-show="availableTrips.length === 0" class="trip-select-empty">
+                    Нет доступных рейсов
+                </div>
+
+                <div x-show="availableTrips.length > 0" class="assign-trip-list">
+                    <template x-for="t in availableTrips" :key="t.id">
+                        <div class="assign-trip-item" :class="failedAssignModal.tripId === t.id ? 'selected' : ''" @click="selectFailedAssignTrip(t)">
+                            <div class="assign-trip-info">
+                                <div class="assign-trip-title" x-text="'Рейс ' + t.trip_number"></div>
+                                <div class="assign-trip-sub" x-text="formatDate(t.trip_date) + ' · ' + (t.vehicle_plate || '—') + ' · ' + (t.driver_name || '—')"></div>
+                            </div>
+                            <div class="assign-trip-load">
+                                <div x-text="(Number(t.total_volume) || 0) + ' / ' + (Number(t.vehicle_volume_at_time) || Number(t.vehicle_volume) || '?') + ' м³'"></div>
+                                <div x-text="t.orders_count + ' адресов'"></div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @click="closeFailedAssignModal()" :disabled="failedAssignModal.saving">Отмена</button>
+                <button class="btn btn-primary" @click="submitFailedAssign()" :disabled="failedAssignModal.saving || !failedAssignModal.tripId">
+                    <span x-show="!failedAssignModal.saving">Вернуть в рейс</span>
+                    <span x-show="failedAssignModal.saving" x-cloak>Назначение...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         function incomingPage() {
             return {
                 user: null,
                 incoming: [],
+                failedOrders: [],
                 stats: { pending: 0, assigned: 0, rejected: 0 },
                 availableTrips: [],
                 tab: 'pending',
@@ -323,6 +464,15 @@
                 },
 
                 assignModal: {
+                    open: false,
+                    saving: false,
+                    error: '',
+                    item: null,
+                    tripId: null,
+                    overloadWarning: ''
+                },
+
+                failedAssignModal: {
                     open: false,
                     saving: false,
                     error: '',
@@ -348,10 +498,16 @@
                     }
                     if (!window.AUTH.requireLogin()) return;
                     this.user = window.API.getUser();
+                    await this.loadFailedOrders(); // грузим счётчик для вкладки
                     await this.loadData();
                 },
 
                 async loadData() {
+                    if (this.tab === 'failed') {
+                        await this.loadFailedOrders();
+                        return;
+                    }
+
                     this.loading = true;
                     this.error = '';
                     try {
@@ -363,6 +519,16 @@
                         this.error = e.message;
                     } finally {
                         this.loading = false;
+                    }
+                },
+
+                async loadFailedOrders() {
+                    try {
+                        const data = await window.API.api('/api/orders?action=list-failed');
+                        this.failedOrders = data.orders || [];
+                    } catch (e) {
+                        console.error('Ошибка загрузки неудавшихся:', e);
+                        this.failedOrders = [];
                     }
                 },
 
@@ -441,7 +607,7 @@
                     }
                 },
 
-                // ============ НАЗНАЧЕНИЕ ============
+                // ============ НАЗНАЧЕНИЕ ВХОДЯЩЕГО ============
 
                 async openAssignModal(item) {
                     this.assignModal = {
@@ -515,7 +681,88 @@
                     }
                 },
 
-                // ============ ОТКЛОНЕНИЕ ============
+                // ============ НАЗНАЧЕНИЕ НЕУДАВШЕГОСЯ ============
+
+                async openFailedAssignModal(item) {
+                    this.failedAssignModal = {
+                        open: true,
+                        saving: false,
+                        error: '',
+                        item: item,
+                        tripId: null,
+                        overloadWarning: ''
+                    };
+
+                    await this.loadAvailableTrips();
+                },
+
+                closeFailedAssignModal() {
+                    if (this.failedAssignModal.saving) return;
+                    this.failedAssignModal.open = false;
+                    this.failedAssignModal.item = null;
+                },
+
+                selectFailedAssignTrip(trip) {
+                    this.failedAssignModal.tripId = trip.id;
+
+                    const orderVolume = Number(this.failedAssignModal.item?.volume) || 0;
+                    const currentVolume = Number(trip.total_volume) || 0;
+                    const capacity = Number(trip.vehicle_volume_at_time) || Number(trip.vehicle_volume) || 0;
+                    const newVolume = currentVolume + orderVolume;
+
+                    if (capacity > 0 && newVolume > capacity) {
+                        this.failedAssignModal.overloadWarning = 
+                            'Превышение объёма: ' + newVolume.toFixed(1) + ' м³ из ' + capacity + ' м³';
+                    } else {
+                        this.failedAssignModal.overloadWarning = '';
+                    }
+                },
+
+                async submitFailedAssign() {
+                    if (!this.failedAssignModal.tripId) {
+                        this.failedAssignModal.error = 'Выберите рейс';
+                        return;
+                    }
+
+                    this.failedAssignModal.saving = true;
+                    this.failedAssignModal.error = '';
+
+                    try {
+                        // Переносим заказ в новый рейс
+                        await window.API.api('/api/orders?action=move&id=' + this.failedAssignModal.item.id, {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                to_trip_id: this.failedAssignModal.tripId,
+                                reason: 'Возврат после неудачной доставки'
+                            })
+                        });
+
+                        this.failedAssignModal.open = false;
+                        await this.loadFailedOrders();
+
+                    } catch (e) {
+                        this.failedAssignModal.error = e.message;
+                    } finally {
+                        this.failedAssignModal.saving = false;
+                    }
+                },
+
+                // ============ ОТМЕНА НЕУДАВШЕГОСЯ ============
+
+                async cancelFailedOrder(item) {
+                    if (!confirm('Отменить заказ "' + (item.address || 'без адреса') + '"?\n\nЗаказ будет помечен как отменённый и уйдёт из списка.')) return;
+
+                    try {
+                        await window.API.api('/api/orders?action=cancel&id=' + item.id, {
+                            method: 'POST'
+                        });
+                        await this.loadFailedOrders();
+                    } catch (e) {
+                        alert('Ошибка: ' + e.message);
+                    }
+                },
+
+                // ============ ОТКЛОНЕНИЕ ВХОДЯЩЕГО ============
 
                 async rejectItem(item) {
                     if (!confirm('Отклонить заказ "' + (item.address || 'без адреса') + '"?')) return;
