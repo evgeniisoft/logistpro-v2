@@ -3106,3 +3106,115 @@ body {
     font-size: 11px;
     opacity: 0.7;
 }
+/* ============ БЛОК 8: СТАТУС ДОСТАВКИ ЗАКАЗА ============ */
+
+/* Колонка статуса в таблице адресов */
+.address-table .col-status {
+    width: 130px;
+    white-space: nowrap;
+}
+
+/* Бейдж статуса */
+.delivery-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.delivery-badge:hover {
+    opacity: 0.8;
+}
+
+.delivery-pending {
+    background: #F1F5F9;
+    color: #475569;
+}
+
+.delivery-delivered {
+    background: #D1FAE5;
+    color: #065F46;
+}
+
+.delivery-failed {
+    background: #FEE2E2;
+    color: #991B1B;
+}
+
+.delivery-cancelled {
+    background: #F3F4F6;
+    color: #6B7280;
+    text-decoration: line-through;
+}
+
+/* Выпадающее меню статуса */
+.delivery-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 4px;
+    background: #fff;
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+    z-index: 50;
+    padding: 4px;
+    min-width: 140px;
+}
+
+.delivery-menu-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    padding: 4px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.delivery-menu-item:hover {
+    background: var(--bg-muted);
+}
+
+/* Плашка под failed-заказом */
+.failed-row td {
+    padding: 0 !important;
+    border-top: none !important;
+}
+
+.failed-panel {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 20px;
+    background: #FEF2F2;
+    border-top: 1px dashed #FECACA;
+    flex-wrap: wrap;
+}
+
+.failed-panel-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #991B1B;
+    font-weight: 500;
+}
+
+.failed-panel-info svg {
+    flex-shrink: 0;
+}
+
+.failed-panel-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
