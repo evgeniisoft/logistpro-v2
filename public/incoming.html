@@ -116,7 +116,7 @@
             <!-- Ошибка -->
             <div x-show="error" x-cloak class="alert alert-error" x-text="error"></div>
 
-            <!-- Панель массовых действий (x-show вместо x-if — убирает Alpine-ошибки) -->
+            <!-- Панель массовых действий -->
             <div x-show="selectedIds.length > 0" x-cloak class="bulk-actions-bar">
                 <div class="bulk-actions-info">
                     Выбрано: <strong x-text="selectedIds.length"></strong>
@@ -125,6 +125,9 @@
                 <div class="bulk-actions-buttons">
                     <button class="btn btn-primary btn-sm" x-show="tab === 'pending'" @click="openBulkAssignModal()">
                         Назначить на рейс
+                    </button>
+                    <button class="btn btn-secondary btn-sm" x-show="tab === 'pending'" @click="openCreateTripFromIncoming()">
+                        Создать рейс
                     </button>
                     <button class="btn btn-danger btn-sm" x-show="tab === 'pending'" @click="bulkReject()">
                         Отклонить
@@ -724,6 +727,156 @@
         </div>
     </div>
 
+    <!-- МОДАЛКА: СОЗДАНИЕ РЕЙСА ИЗ ВЫБРАННЫХ ЗАКАЗОВ -->
+    <div x-show="createTripModal.open" x-cloak class="modal-backdrop" @click.self="closeCreateTripModal()">
+        <div class="modal-window modal-window-wide" @click.stop>
+            <div class="modal-header">
+                <h2 class="modal-title">
+                    Новый рейс
+                    <span style="font-weight:400;color:var(--text-secondary);font-size:13px;margin-left:8px;"
+                        x-text="'(' + selectedIds.length + ' ' + pluralize(selectedIds.length, 'адрес', 'адреса', 'адресов') + ')'"></span>
+                </h2>
+                <button class="modal-close" @click="closeCreateTripModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div x-show="createTripModal.error" class="alert alert-error" x-text="createTripModal.error"></div>
+
+                <div style="padding:12px 14px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:6px;margin-bottom:20px;font-size:13px;color:#1E40AF;">
+                    Будет создан рейс с <strong x-text="selectedIds.length"></strong>
+                    <span x-text="pluralize(selectedIds.length, 'адресом', 'адресами', 'адресами')"></span>
+                    из входящих заказов.
+                </div>
+
+                <!-- Секция 1: Основные данные -->
+                <div class="form-section">
+                    <h3 class="form-section-title">Основные данные</h3>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Дата рейса *</label>
+                            <input type="date" class="form-input" x-model="createTripModal.form.trip_date" :disabled="createTripModal.saving">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Тип рейса *</label>
+                            <select class="form-input" x-model="createTripModal.form.trip_type" :disabled="createTripModal.saving">
+                                <option value="city">Городской</option>
+                                <option value="intercity">Междугородний</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Машина -->
+                    <div class="form-group">
+                        <label class="form-label">Машина *</label>
+                        <div class="type-switch">
+                            <button type="button" class="type-switch-btn" :class="createTripModal.form.vehicle_mode === 'own' ? 'active' : ''" @click="setCreateTripVehicleMode('own')">
+                                Своя
+                            </button>
+                            <button type="button" class="type-switch-btn" :class="createTripModal.form.vehicle_mode === 'hired' ? 'active' : ''" @click="setCreateTripVehicleMode('hired')">
+                                Наёмная
+                            </button>
+                        </div>
+                    </div>
+
+                    <template x-if="createTripModal.form.vehicle_mode === 'own'">
+                        <div class="form-group">
+                            <select class="form-input" x-model.number="createTripModal.form.vehicle_id" :disabled="createTripModal.saving">
+                                <option :value="null">— Выберите машину —</option>
+                                <template x-for="v in vehicles" :key="v.id">
+                                    <option :value="v.id" x-text="v.plate + ' · ' + (v.model || '') + ' · ' + (v.volume || '?') + ' м³'"></option>
+                                </template>
+                            </select>
+                        </div>
+                    </template>
+
+                    <template x-if="createTripModal.form.vehicle_mode === 'hired'">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Марка / госномер *</label>
+                                <input type="text" class="form-input" x-model="createTripModal.form.hired_vehicle_info" placeholder="Газель А123ВС" :disabled="createTripModal.saving">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Объём, м³ *</label>
+                                <input type="number" class="form-input" x-model.number="createTripModal.form.vehicle_volume" step="0.1" min="0" :disabled="createTripModal.saving">
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- Водитель -->
+                    <div class="form-group">
+                        <label class="form-label">Водитель *</label>
+                        <div class="type-switch">
+                            <button type="button" class="type-switch-btn" :class="createTripModal.form.driver_mode === 'own' ? 'active' : ''" @click="setCreateTripDriverMode('own')">
+                                Свой
+                            </button>
+                            <button type="button" class="type-switch-btn" :class="createTripModal.form.driver_mode === 'hired' ? 'active' : ''" @click="setCreateTripDriverMode('hired')">
+                                Наёмный
+                            </button>
+                        </div>
+                        <div x-show="(createTripModal.form.vehicle_mode === 'own' && createTripModal.form.driver_mode === 'hired') || (createTripModal.form.vehicle_mode === 'hired' && createTripModal.form.driver_mode === 'own')"
+                            style="font-size:12px;color:#D97706;margin-top:6px;">
+                            ⚠ Наёмный транспорт = только с наёмным водителем. Выберите согласованно.
+                        </div>
+                    </div>
+
+                    <template x-if="createTripModal.form.driver_mode === 'own'">
+                        <div class="form-group">
+                            <select class="form-input" x-model.number="createTripModal.form.driver_id" :disabled="createTripModal.saving">
+                                <option :value="null">— Выберите водителя —</option>
+                                <template x-for="d in drivers" :key="d.id">
+                                    <option :value="d.id" x-text="d.full_name + ' · ' + (d.default_rate || 0) + ' ₽'"></option>
+                                </template>
+                            </select>
+                        </div>
+                    </template>
+
+                    <template x-if="createTripModal.form.driver_mode === 'hired'">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">ФИО водителя *</label>
+                                <input type="text" class="form-input" x-model="createTripModal.form.hired_driver_info" placeholder="Петров П.П." :disabled="createTripModal.saving">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Ставка, ₽</label>
+                                <input type="number" class="form-input" x-model.number="createTripModal.form.driver_rate" min="0" :disabled="createTripModal.saving">
+                            </div>
+                        </div>
+                    </template>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Пробег план, км</label>
+                            <input type="number" class="form-input" x-model.number="createTripModal.form.plan_km" min="0" :disabled="createTripModal.saving">
+                        </div>
+                        <template x-if="showRevenue">
+                            <div class="form-group">
+                                <label class="form-label">Выручка, ₽</label>
+                                <input type="number" class="form-input" x-model.number="createTripModal.form.revenue" min="0" :disabled="createTripModal.saving">
+                            </div>
+                        </template>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Комментарий</label>
+                        <input type="text" class="form-input" x-model="createTripModal.form.comment" placeholder="Необязательно" :disabled="createTripModal.saving">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @click="closeCreateTripModal()" :disabled="createTripModal.saving">Отмена</button>
+                <button class="btn btn-primary" @click="saveNewTripAndAssign()" :disabled="createTripModal.saving">
+                    <span x-show="!createTripModal.saving">Создать рейс</span>
+                    <span x-show="createTripModal.saving" x-cloak>Создание...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         function incomingPage() {
             return {
@@ -733,58 +886,48 @@
                 failedOrders: [],
                 stats: { pending: 0, assigned: 0, rejected: 0 },
                 availableTrips: [],
+                vehicles: [],
+                drivers: [],
                 tab: 'pending',
                 loading: true,
                 error: '',
+                showRevenue: false,
 
                 selectedIds: [],
 
                 createModal: {
+                    open: false, saving: false, error: '', form: {}
+                },
+
+                assignModal: {
+                    open: false, saving: false, error: '',
+                    item: null, tripId: null, overloadWarning: ''
+                },
+
+                bulkAssignModal: {
+                    open: false, saving: false, error: '', tripId: null
+                },
+
+                bulkMoveModal: {
+                    open: false, saving: false, error: '',
+                    tripId: null, reason: ''
+                },
+
+                failedAssignModal: {
+                    open: false, saving: false, error: '',
+                    item: null, tripId: null, overloadWarning: ''
+                },
+
+                moveAssignedModal: {
+                    open: false, saving: false, error: '',
+                    item: null, tripId: null
+                },
+
+                createTripModal: {
                     open: false,
                     saving: false,
                     error: '',
                     form: {}
-                },
-
-                assignModal: {
-                    open: false,
-                    saving: false,
-                    error: '',
-                    item: null,
-                    tripId: null,
-                    overloadWarning: ''
-                },
-
-                bulkAssignModal: {
-                    open: false,
-                    saving: false,
-                    error: '',
-                    tripId: null
-                },
-
-                bulkMoveModal: {
-                    open: false,
-                    saving: false,
-                    error: '',
-                    tripId: null,
-                    reason: ''
-                },
-
-                failedAssignModal: {
-                    open: false,
-                    saving: false,
-                    error: '',
-                    item: null,
-                    tripId: null,
-                    overloadWarning: ''
-                },
-
-                moveAssignedModal: {
-                    open: false,
-                    saving: false,
-                    error: '',
-                    item: null,
-                    tripId: null
                 },
 
                 get userInitials() {
@@ -819,6 +962,29 @@
                     }
                     if (!window.AUTH.requireLogin()) return;
                     this.user = window.API.getUser();
+
+                    // Настройки (show_revenue)
+                    try {
+                        const settings = await window.API.api('/api/settings');
+                        const arr = settings.settings || [];
+                        const getVal = (k) => arr.find(s => s.key === k)?.value;
+                        this.showRevenue = getVal('show_revenue') === 'true';
+                    } catch (e) {
+                        this.showRevenue = false;
+                    }
+
+                    // Справочники
+                    try {
+                        const [v, d] = await Promise.all([
+                            window.API.api('/api/vehicles'),
+                            window.API.api('/api/drivers')
+                        ]);
+                        this.vehicles = v.vehicles || [];
+                        this.drivers = d.drivers || [];
+                    } catch (e) {
+                        console.error('Ошибка загрузки справочников:', e);
+                    }
+
                     await Promise.all([
                         this.loadAssignedOrders(),
                         this.loadFailedOrders()
@@ -930,6 +1096,182 @@
                     return many;
                 },
 
+                // ============ СОЗДАНИЕ РЕЙСА ИЗ ВХОДЯЩИХ ============
+
+                openCreateTripFromIncoming() {
+                    if (this.selectedIds.length === 0) return;
+
+                    const today = new Date();
+                    const y = today.getFullYear();
+                    const m = String(today.getMonth() + 1).padStart(2, '0');
+                    const day = String(today.getDate()).padStart(2, '0');
+
+                    this.createTripModal = {
+                        open: true,
+                        saving: false,
+                        error: '',
+                        form: {
+                            trip_date: y + '-' + m + '-' + day,
+                            trip_type: 'city',
+                            vehicle_mode: 'own',
+                            vehicle_id: null,
+                            hired_vehicle_info: '',
+                            vehicle_volume: 0,
+                            driver_mode: 'own',
+                            driver_id: null,
+                            hired_driver_info: '',
+                            driver_rate: 0,
+                            plan_km: 100,
+                            revenue: 0,
+                            comment: ''
+                        }
+                    };
+                },
+
+                closeCreateTripModal() {
+                    if (this.createTripModal.saving) return;
+                    this.createTripModal.open = false;
+                },
+
+                setCreateTripVehicleMode(mode) {
+                    this.createTripModal.form.vehicle_mode = mode;
+                    // Синхронизируем водителя: своя → свой, наёмная → наёмный
+                    this.createTripModal.form.driver_mode = mode;
+                    if (mode === 'own') {
+                        this.createTripModal.form.hired_vehicle_info = '';
+                        this.createTripModal.form.vehicle_volume = 0;
+                        this.createTripModal.form.hired_driver_info = '';
+                        this.createTripModal.form.driver_rate = 0;
+                    } else {
+                        this.createTripModal.form.vehicle_id = null;
+                        this.createTripModal.form.driver_id = null;
+                    }
+                },
+
+                setCreateTripDriverMode(mode) {
+                    this.createTripModal.form.driver_mode = mode;
+                    // Синхронизируем машину: свой → своя, наёмный → наёмная
+                    this.createTripModal.form.vehicle_mode = mode;
+                    if (mode === 'own') {
+                        this.createTripModal.form.hired_driver_info = '';
+                        this.createTripModal.form.driver_rate = 0;
+                        this.createTripModal.form.hired_vehicle_info = '';
+                        this.createTripModal.form.vehicle_volume = 0;
+                    } else {
+                        this.createTripModal.form.driver_id = null;
+                        this.createTripModal.form.vehicle_id = null;
+                    }
+                },
+
+                async saveNewTripAndAssign() {
+                    const f = this.createTripModal.form;
+                    this.createTripModal.error = '';
+
+                    // Валидация
+                    if (!f.trip_date) {
+                        this.createTripModal.error = 'Укажите дату рейса';
+                        return;
+                    }
+                    if (f.vehicle_mode === 'own' && !f.vehicle_id) {
+                        this.createTripModal.error = 'Выберите машину';
+                        return;
+                    }
+                    if (f.vehicle_mode === 'hired' && (!f.hired_vehicle_info || !f.hired_vehicle_info.trim())) {
+                        this.createTripModal.error = 'Укажите марку/госномер наёмной машины';
+                        return;
+                    }
+                    if (f.vehicle_mode === 'hired' && !f.vehicle_volume) {
+                        this.createTripModal.error = 'Укажите объём наёмной машины';
+                        return;
+                    }
+                    if (f.driver_mode === 'own' && !f.driver_id) {
+                        this.createTripModal.error = 'Выберите водителя';
+                        return;
+                    }
+                    if (f.driver_mode === 'hired' && (!f.hired_driver_info || !f.hired_driver_info.trim())) {
+                        this.createTripModal.error = 'Укажите ФИО наёмного водителя';
+                        return;
+                    }
+
+                    this.createTripModal.saving = true;
+
+                    // 1. Создаём рейс
+                    const payload = {
+                        trip_date: f.trip_date,
+                        trip_type: f.trip_type,
+                        plan_km: f.plan_km || 0,
+                        revenue: f.revenue || 0,
+                        comment: f.comment || null,
+                        addresses: []  // адреса добавим через bulk-assign
+                    };
+
+                    if (f.vehicle_mode === 'own') {
+                        payload.vehicle_id = f.vehicle_id;
+                    } else {
+                        payload.hired_vehicle_info = f.hired_vehicle_info.trim();
+                        payload.vehicle_volume = f.vehicle_volume;
+                    }
+
+                    if (f.driver_mode === 'own') {
+                        payload.driver_id = f.driver_id;
+                    } else {
+                        payload.hired_driver_info = f.hired_driver_info.trim();
+                        payload.driver_rate = f.driver_rate || 0;
+                    }
+
+                    let newTripId = null;
+                    let newTripNumber = null;
+
+                    try {
+                        const tripData = await window.API.api('/api/trips', {
+                            method: 'POST',
+                            body: JSON.stringify(payload)
+                        });
+
+                        newTripId = tripData.trip?.id;
+                        newTripNumber = tripData.trip?.trip_number;
+
+                        if (!newTripId) {
+                            throw new Error('Рейс создан, но ID не получен');
+                        }
+                    } catch (e) {
+                        this.createTripModal.error = 'Ошибка создания рейса: ' + e.message;
+                        this.createTripModal.saving = false;
+                        return;
+                    }
+
+                    // 2. Назначаем заказы (bulk-assign)
+                    try {
+                        const assignData = await window.API.api('/api/incoming?action=bulk-assign', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                ids: this.selectedIds,
+                                trip_id: newTripId
+                            })
+                        });
+
+                        this.createTripModal.open = false;
+                        this.clearSelection();
+                        await this.loadData();
+
+                        alert('Рейс ' + newTripNumber + ' создан.\n' +
+                            (assignData.message || 'Заказы назначены.'));
+
+                    } catch (e) {
+                        // Рейс создан, но назначить не удалось
+                        console.error('bulk-assign error после создания рейса:', e);
+                        this.createTripModal.open = false;
+                        this.clearSelection();
+                        await this.loadData();
+
+                        alert('Рейс ' + newTripNumber + ' создан, НО назначить заказы не удалось.\n\n' +
+                            'Причина: ' + e.message + '\n\n' +
+                            'Откройте рейс и добавьте адреса вручную.');
+                    } finally {
+                        this.createTripModal.saving = false;
+                    }
+                },
+
                 // ============ BULK REJECT ============
 
                 async bulkReject() {
@@ -1025,7 +1367,6 @@
                         this.bulkAssignModal.open = false;
                         this.clearSelection();
                         await this.loadData();
-
                         if (data.message) setTimeout(() => alert(data.message), 100);
                     } catch (e) {
                         this.bulkAssignModal.error = e.message;
@@ -1039,10 +1380,7 @@
                 async openBulkMoveModal() {
                     if (this.selectedIds.length === 0) return;
                     this.bulkMoveModal = {
-                        open: true,
-                        saving: false,
-                        error: '',
-                        tripId: null,
+                        open: true, saving: false, error: '', tripId: null,
                         reason: this.tab === 'failed' ? 'Возврат после неудачной доставки' : ''
                     };
                     await this.loadAvailableTrips();
@@ -1140,13 +1478,11 @@
                     window.open('/trip.html?id=' + tripId, '_blank');
                 },
 
-                // ============ СОЗДАНИЕ ============
+                // ============ СОЗДАНИЕ ВХОДЯЩЕГО ============
 
                 openCreateModal() {
                     this.createModal = {
-                        open: true,
-                        saving: false,
-                        error: '',
+                        open: true, saving: false, error: '',
                         form: {
                             external_id: '', address: '', contact_name: '',
                             phone: '', volume: 0, note: ''
