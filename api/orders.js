@@ -83,6 +83,43 @@ async function handler(req, res) {
     }
   }
 
+  // ============ LIST-ASSIGNED: список заказов в рейсах ============
+  if (action === "list-assigned") {
+    if (req.method !== "GET")
+      return res.status(405).json({ error: "Method not allowed" });
+
+    try {
+      const result = await query(
+        `SELECT 
+                    o.id, o.trip_id, o.external_id, o.address,
+                    o.contact_name, o.phone, o.volume, o.sequence_num,
+                    o.note, o.status,
+                    o.delivery_status, o.delivery_note,
+                    o.updated_at,
+                    t.trip_number,
+                    t.trip_date,
+                    t.status AS trip_status,
+                    v.plate AS vehicle_plate,
+                    d.full_name AS driver_name
+                 FROM orders o
+                 JOIN trips t ON t.id = o.trip_id
+                 LEFT JOIN vehicles v ON v.id = t.vehicle_id
+                 LEFT JOIN drivers d ON d.id = t.driver_id
+                 WHERE o.trip_id IS NOT NULL
+                   AND t.status NOT IN ('done', 'cancelled')
+                 ORDER BY t.trip_date DESC, o.sequence_num ASC NULLS LAST, o.id ASC
+                 LIMIT 500`,
+      );
+
+      return res.json({ orders: result.rows });
+    } catch (e) {
+      console.error("GET /api/orders?action=list-assigned error:", e);
+      return res
+        .status(500)
+        .json({ error: "Ошибка сервера", details: e.message });
+    }
+  }
+
   // ============ CREATE ============
   if (action === "create") {
     if (req.method !== "POST")
