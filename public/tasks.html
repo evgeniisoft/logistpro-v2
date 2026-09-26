@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Задачи · ЛогистПро</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/styles.css">
+    <script src="/assets/app.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/mask@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body x-data="tasksPage()" x-init="$nextTick(() => init())">
+
+    <header class="app-header">
+        <div class="app-header-left">
+            <a href="/" class="app-logo">
+                <span class="app-logo-mark">LP</span>
+                <span>ЛогистПро</span>
+            </a>
+            <nav class="app-nav">
+                <a href="/" class="app-nav-link">Рейсы</a>
+                <a href="/incoming.html" class="app-nav-link">Входящие</a>
+                <a href="/reports.html" class="app-nav-link">Отчёты</a>
+                <a href="/references.html" class="app-nav-link">Справочники</a>
+                <a href="/journal.html" class="app-nav-link">Журнал</a>
+                <a href="/tasks.html" class="app-nav-link app-nav-bell active">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                    </svg>
+                    Задачи
+                    <span class="app-nav-bell-count" x-show="tasksCount > 0" x-text="tasksCount"></span>
+                </a>
+            </nav>
+        </div>
+        <div class="app-header-right">
+            <div class="user-badge">
+                <div class="user-avatar" x-text="userInitials"></div>
+                <div>
+                    <div x-text="user?.full_name || ''" style="font-weight:500;"></div>
+                    <div x-text="roleLabel" style="font-size:11px;opacity:0.7;"></div>
+                </div>
+            </div>
+            <button class="btn btn-ghost btn-sm" @click="logout()" style="color:rgba(255,255,255,0.85);" title="Выйти">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <main class="app-main">
+        <div class="container">
+
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+                <div>
+                    <h1 style="font-size:24px;font-weight:600;margin:0 0 4px 0;">Задачи</h1>
+                    <p style="font-size:13px;color:var(--text-secondary);margin:0;">
+                        Новые заказы и изменения из Битрикс24, требующие внимания
+                    </p>
+                </div>
+                <button class="btn btn-secondary" @click="loadAll()" :disabled="loading">
+                    Обновить
+                </button>
+            </div>
+
+            <!-- Ошибка -->
+            <div x-show="error" x-cloak class="alert alert-error" x-text="error"></div>
+
+            <!-- Табы -->
+            <div class="tasks-tabs">
+                <button class="tasks-tab" :class="tab === 'all' ? 'active' : ''" @click="tab = 'all'">
+                    Все
+                    <span class="count" x-text="totalCount"></span>
+                </button>
+                <button class="tasks-tab" :class="tab === 'new_orders' ? 'active' : ''" @click="tab = 'new_orders'">
+                    Новые заказы
+                    <span class="count" x-text="newOrders.length"></span>
+                </button>
+                <button class="tasks-tab" :class="tab === 'changes' ? 'active' : ''" @click="tab = 'changes'">
+                    Изменения
+                    <span class="count" x-text="changes.length"></span>
+                </button>
+            </div>
+
+            <!-- Загрузка -->
+            <div x-show="loading" class="skeleton" style="height:300px;"></div>
+
+            <!-- Пусто -->
+            <div x-show="!loading && totalCount === 0" class="empty-state">
+                <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+                <h3 class="empty-title">Все задачи закрыты</h3>
+                <p class="empty-description">Новые заказы и изменения появятся здесь</p>
+            </div>
+
+            <!-- ============ ИЗМЕНЕНИЯ ============ -->
+            <template x-if="!loading && (tab === 'all' || tab === 'changes') && changes.length > 0">
+                <div style="margin-bottom:24px;">
+                    <h3 class="task-section-title">
+                        ⚠ Изменения
+                        <span class="task-section-title-count" x-text="changes.length"></span>
+                    </h3>
+
+                    <template x-for="change in changes" :key="'change-' + change.id">
+                        <div class="task-card" :class="'task-' + (change.change_type === 'cancelled' || change.change_type === 'deleted' ? 'cancelled' : 'updated')">
+                            <div class="task-card-header">
+                                <span class="task-card-icon" x-text="changeIcon(change)"></span>
+                                <span class="task-card-title" x-text="changeTitle(change)"></span>
+                                <span class="task-card-time" x-text="formatDateTime(change.created_at)"></span>
+                            </div>
+
+                            <div class="task-card-body">
+                                <!-- Место заказа -->
+                                <div style="margin-bottom:6px;">
+                                    <template x-if="change.trip_number">
+                                        <span>Заказ <strong x-text="'#' + change.external_id"></strong> 
+                                            в рейсе <strong x-text="change.trip_number"></strong></span>
+                                    </template>
+                                    <template x-if="!change.trip_number">
+                                        <span>Заказ <strong x-text="'#' + change.external_id"></strong></span>
+                                    </template>
+                                </div>
+
+                                <!-- Адрес заказа -->
+                                <template x-if="change.order_address">
+                                    <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;" x-text="change.order_address"></div>
+                                </template>
+
+                                <!-- Что изменилось -->
+                                <template x-if="change.change_type === 'updated' && change.field_name">
+                                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                                        <span style="font-weight:600;" x-text="fieldLabel(change.field_name) + ':'"></span>
+                                        <span class="task-card-change">
+                                            <span class="task-card-change-old" x-text="change.old_value || '—'"></span>
+                                            <span class="task-card-change-arrow">→</span>
+                                            <span class="task-card-change-new" x-text="change.new_value || '—'"></span>
+                                        </span>
+                                    </div>
+                                </template>
+
+                                <template x-if="change.change_type === 'cancelled'">
+                                    <div style="color:#991B1B;">Клиент отменил заказ в Битриксе</div>
+                                </template>
+                                <template x-if="change.change_type === 'deleted'">
+                                    <div style="color:#991B1B;">Заказ удалён в Битриксе</div>
+                                </template>
+                            </div>
+
+                            <div class="task-card-actions">
+                                <button class="btn btn-primary btn-sm" @click="applyChange(change)">
+                                    <template x-if="change.change_type === 'cancelled'"><span>Убрать из рейса</span></template>
+                                    <template x-if="change.change_type === 'deleted'"><span>Удалить из рейса</span></template>
+                                    <template x-if="change.change_type === 'updated'"><span>Применить</span></template>
+                                </button>
+                                <button class="btn btn-secondary btn-sm" @click="ignoreChange(change)">
+                                    Оставить как есть
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </template>
+
+            <!-- ============ НОВЫЕ ЗАКАЗЫ ============ -->
+            <template x-if="!loading && (tab === 'all' || tab === 'new_orders') && newOrders.length > 0">
+                <div>
+                    <h3 class="task-section-title">
+                        📦 Новые заказы
+                        <span class="task-section-title-count" x-text="newOrders.length"></span>
+                    </h3>
+
+                    <template x-for="order in newOrders" :key="'order-' + order.id">
+                        <div class="task-card task-new">
+                            <div class="task-card-header">
+                                <span class="task-card-icon">📦</span>
+                                <span class="task-card-title" x-text="'Заказ ' + (order.external_id || ('#' + order.id))"></span>
+                                <span class="task-card-time" x-text="formatDateTime(order.created_at)"></span>
+                            </div>
+
+                            <div class="task-card-body">
+                                <div style="font-weight:500;color:var(--text-primary);margin-bottom:4px;" x-text="order.address"></div>
+                                <div style="font-size:12px;">
+                                    <template x-if="order.contact_name">
+                                        <span x-text="order.contact_name"></span>
+                                    </template>
+                                    <template x-if="order.contact_name && order.phone">
+                                        <span> · </span>
+                                    </template>
+                                    <template x-if="order.phone">
+                                        <span x-text="order.phone"></span>
+                                    </template>
+                                    <template x-if="order.volume">
+                                        <span x-text="' · ' + order.volume + ' м³'"></span>
+                                    </template>
+                                </div>
+                                <template x-if="order.note">
+                                    <div style="font-size:12px;font-style:italic;margin-top:6px;" x-text="order.note"></div>
+                                </template>
+                            </div>
+
+                            <div class="task-card-actions">
+                                <button class="btn btn-primary btn-sm" @click="assignOrder(order)">На рейс</button>
+                                <button class="btn btn-danger btn-sm" @click="rejectOrder(order)">Отклонить</button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </template>
+
+        </div>
+
+        <!-- МОДАЛКА: НАЗНАЧИТЬ НА РЕЙС -->
+        <div x-show="assignModal.open" x-cloak class="modal-backdrop" @click.self="closeAssignModal()">
+            <div class="modal-window" @click.stop>
+                <div class="modal-header">
+                    <h2 class="modal-title">Назначить на рейс</h2>
+                    <button class="modal-close" @click="closeAssignModal()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div x-show="assignModal.error" class="alert alert-error" x-text="assignModal.error"></div>
+
+                    <div x-show="assignModal.item" style="padding:12px 14px;background:var(--bg-muted);border-radius:6px;margin-bottom:16px;">
+                        <div style="font-size:13px;font-weight:500;" x-text="assignModal.item?.address"></div>
+                        <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;" x-text="(assignModal.item?.volume || 0) + ' м³ · ' + (assignModal.item?.contact_name || '—')"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Выберите рейс *</label>
+                    </div>
+
+                    <div x-show="availableTrips.length === 0" class="trip-select-empty">
+                        Нет доступных рейсов
+                    </div>
+
+                    <div x-show="availableTrips.length > 0" class="assign-trip-list">
+                        <template x-for="t in availableTrips" :key="t.id">
+                            <div class="assign-trip-item" :class="assignModal.tripId === t.id ? 'selected' : ''" @click="assignModal.tripId = t.id">
+                                <div class="assign-trip-info">
+                                    <div class="assign-trip-title" x-text="'Рейс ' + t.trip_number"></div>
+                                    <div class="assign-trip-sub" x-text="formatDate(t.trip_date) + ' · ' + (t.vehicle_plate || '—') + ' · ' + (t.driver_name || '—')"></div>
+                                </div>
+                                <div class="assign-trip-load">
+                                    <div x-text="(Number(t.total_volume) || 0) + ' / ' + (Number(t.vehicle_volume_at_time) || Number(t.vehicle_volume) || '?') + ' м³'"></div>
+                                    <div x-text="t.orders_count + ' адресов'"></div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @click="closeAssignModal()" :disabled="assignModal.saving">Отмена</button>
+                    <button class="btn btn-primary" @click="submitAssign()" :disabled="assignModal.saving || !assignModal.tripId">
+                        <span x-show="!assignModal.saving">Назначить</span>
+                        <span x-show="assignModal.saving" x-cloak>Назначение...</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        function tasksPage() {
+            return {
+                user: null,
+                loading: true,
+                error: '',
+                tab: 'all',
+
+                newOrders: [],
+                changes: [],
+                tasksCount: 0,
+
+                availableTrips: [],
+
+                assignModal: {
+                    open: false,
+                    saving: false,
+                    error: '',
+                    item: null,
+                    tripId: null
+                },
+
+                get userInitials() {
+                    if (!this.user?.full_name) return '?';
+                    return this.user.full_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+                },
+
+                get roleLabel() {
+                    const roles = { 'admin': 'Администратор', 'senior_logist': 'Ст. логист', 'logist': 'Логист', 'manager': 'Руководитель', 'viewer': 'Наблюдатель' };
+                    return roles[this.user?.role] || this.user?.role || '';
+                },
+
+                get totalCount() {
+                    return this.newOrders.length + this.changes.length;
+                },
+
+                async init() {
+                    if (!window.AUTH) {
+                        setTimeout(() => this.init(), 50);
+                        return;
+                    }
+                    if (!window.AUTH.requireLogin()) return;
+                    this.user = window.API.getUser();
+                    await this.loadAll();
+                },
+
+                async loadAll() {
+                    this.loading = true;
+                    this.error = '';
+                    try {
+                        const data = await window.API.api('/api/incoming?action=tasks-list');
+                        this.newOrders = data.new_orders || [];
+                        this.changes = data.changes || [];
+                        this.tasksCount = this.totalCount;
+                    } catch (e) {
+                        this.error = e.message;
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                // ============ ФОРМУЛИРОВКИ ============
+
+                changeIcon(change) {
+                    if (change.change_type === 'cancelled') return '⚠';
+                    if (change.change_type === 'deleted') return '🗑';
+                    if (change.change_type === 'updated') return '🔔';
+                    return '📌';
+                },
+
+                changeTitle(change) {
+                    if (change.change_type === 'cancelled') return 'Заказ отменён в Битриксе';
+                    if (change.change_type === 'deleted') return 'Заказ удалён в Битриксе';
+                    if (change.change_type === 'updated') return 'Заказ изменён в Битриксе';
+                    return 'Изменение';
+                },
+
+                fieldLabel(field) {
+                    const labels = {
+                        'address': 'Адрес',
+                        'contact_name': 'Контакт',
+                        'phone': 'Телефон',
+                        'volume': 'Объём',
+                        'delivery_date': 'Дата доставки',
+                        'note': 'Примечание'
+                    };
+                    return labels[field] || field;
+                },
+
+                formatDate(d) {
+                    if (!d) return '—';
+                    return window.HELPERS.formatDate(d);
+                },
+
+                formatDateTime(d) {
+                    if (!d) return '—';
+                    const date = new Date(d);
+                    return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) + ' ' + 
+                           date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+                },
+
+                // ============ ОБРАБОТКА ИЗМЕНЕНИЙ ============
+
+                async applyChange(change) {
+                    const label = change.change_type === 'cancelled' ? 'Убрать заказ из рейса?' :
+                                  change.change_type === 'deleted' ? 'Удалить заказ из рейса?' :
+                                  'Применить изменение?';
+                    if (!confirm(label)) return;
+
+                    try {
+                        await window.API.api('/api/incoming?action=change-apply&id=' + change.id, {
+                            method: 'POST'
+                        });
+                        await this.loadAll();
+                    } catch (e) {
+                        alert('Ошибка: ' + e.message);
+                    }
+                },
+
+                async ignoreChange(change) {
+                    if (!confirm('Оставить как есть?')) return;
+
+                    try {
+                        await window.API.api('/api/incoming?action=change-ignore&id=' + change.id, {
+                            method: 'POST'
+                        });
+                        await this.loadAll();
+                    } catch (e) {
+                        alert('Ошибка: ' + e.message);
+                    }
+                },
+
+                // ============ НАЗНАЧЕНИЕ ЗАКАЗА ============
+
+                async assignOrder(order) {
+                    this.assignModal = {
+                        open: true,
+                        saving: false,
+                        error: '',
+                        item: order,
+                        tripId: null
+                    };
+                    await this.loadAvailableTrips();
+                },
+
+                closeAssignModal() {
+                    if (this.assignModal.saving) return;
+                    this.assignModal.open = false;
+                    this.assignModal.item = null;
+                },
+
+                async loadAvailableTrips() {
+                    try {
+                        const data = await window.API.api('/api/trips');
+                        this.availableTrips = (data.trips || []).filter(t => 
+                            t.status !== 'done' && t.status !== 'cancelled'
+                        );
+                    } catch (e) {
+                        console.error(e);
+                        this.availableTrips = [];
+                    }
+                },
+
+                async submitAssign() {
+                    if (!this.assignModal.tripId) {
+                        this.assignModal.error = 'Выберите рейс';
+                        return;
+                    }
+
+                    this.assignModal.saving = true;
+                    this.assignModal.error = '';
+
+                    try {
+                        await window.API.api('/api/incoming?action=assign&id=' + this.assignModal.item.id, {
+                            method: 'POST',
+                            body: JSON.stringify({ trip_id: this.assignModal.tripId })
+                        });
+                        this.assignModal.open = false;
+                        await this.loadAll();
+                    } catch (e) {
+                        this.assignModal.error = e.message;
+                    } finally {
+                        this.assignModal.saving = false;
+                    }
+                },
+
+                async rejectOrder(order) {
+                    if (!confirm('Отклонить заказ "' + (order.address || '') + '"?')) return;
+
+                    try {
+                        await window.API.api('/api/incoming?action=reject&id=' + order.id, {
+                            method: 'POST',
+                            body: JSON.stringify({})
+                        });
+                        await this.loadAll();
+                    } catch (e) {
+                        alert('Ошибка: ' + e.message);
+                    }
+                },
+
+                logout() {
+                    if (!confirm('Выйти из системы?')) return;
+                    window.API.clearAuth();
+                    window.location.href = '/login.html';
+                }
+            };
+        }
+    </script>
+</body>
+</html>
