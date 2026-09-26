@@ -2,12 +2,24 @@ const { query } = require("./_lib/db");
 const { requireAuth } = require("./_lib/auth");
 const { logChange } = require("./_lib/journal");
 
+const BULK_LIMIT = 100;
+
+function parseIds(raw) {
+  if (!Array.isArray(raw)) return null;
+  const ids = raw
+    .map((x) => parseInt(x, 10))
+    .filter((x) => Number.isInteger(x) && x > 0);
+  if (ids.length === 0) return null;
+  if (ids.length > BULK_LIMIT) return null;
+  return ids;
+}
+
 async function handler(req, res) {
   const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
   const action = req.query.action || "get";
   const id = req.query.id;
 
-  // ============ ALL: список всех заказов (для поиска на доске) ============
+  // ============ ALL ============
   if (action === "all") {
     if (req.method !== "GET")
       return res.status(405).json({ error: "Method not allowed" });
@@ -31,15 +43,12 @@ async function handler(req, res) {
     }
   }
 
-  // ============ LIST-FAILED: список неудавшихся доставок ============
+  // ============ LIST-FAILED ============
   if (action === "list-failed") {
     if (req.method !== "GET")
       return res.status(405).json({ error: "Method not allowed" });
 
     try {
-      // Заказы с delivery_status = 'failed', которые:
-      //   - либо вне рейса (trip_id IS NULL)
-      //   - либо в закрытом рейсе (done)
       const result = await query(
         `SELECT 
                     o.id, o.trip_id, o.external_id, o.address,
@@ -74,7 +83,7 @@ async function handler(req, res) {
     }
   }
 
-  // ============ CREATE (добавить заказ в рейс) ============
+  // ============ CREATE ============
   if (action === "create") {
     if (req.method !== "POST")
       return res.status(405).json({ error: "Method not allowed" });
@@ -138,7 +147,7 @@ async function handler(req, res) {
   }
 
   // Для всех остальных actions нужен id
-  if (!id) {
+  if (!id && action !== "bulk-move" && action !== "bulk-cancel") {
     return res.status(400).json({ error: "ID заказа не указан" });
   }
 
@@ -226,7 +235,7 @@ async function handler(req, res) {
     }
   }
 
-  // ============ UPDATE-DELIVERY-STATUS (смена статуса доставки) ============
+  // ============ UPDATE-DELIVERY-STATUS ============
   if (action === "update-delivery-status") {
     if (req.method !== "POST" && req.method !== "PUT") {
       return res.status(405).json({ error: "Method not allowed" });
@@ -265,7 +274,6 @@ async function handler(req, res) {
         );
       }
 
-      // delivery_note — сохраняем только если передан (даже пустой)
       if (delivery_note !== undefined) {
         const newNote = delivery_note ? String(delivery_note) : null;
         if (String(order.delivery_note || "") !== String(newNote || "")) {
@@ -302,7 +310,7 @@ async function handler(req, res) {
     }
   }
 
-  // ============ RETURN-TO-POOL (вернуть в пул) ============
+  // ============ RETURN-TO-POOL ============
   if (action === "return-to-pool") {
     if (req.method !== "POST")
       return res.status(405).json({ error: "Method not allowed" });
@@ -324,7 +332,6 @@ async function handler(req, res) {
         return res.status(400).json({ error: "Заказ уже вне рейса" });
       }
 
-      // Очищаем trip_id и sequence_num
       await query(
         `UPDATE orders 
          SET trip_id = NULL, sequence_num = NULL, updated_at = NOW() 
@@ -332,7 +339,6 @@ async function handler(req, res) {
         [id],
       );
 
-      // Пересчитываем очерёдность в исходном рейсе
       await renumberOrders(order.trip_id);
 
       await logChange(
@@ -354,7 +360,7 @@ async function handler(req, res) {
     }
   }
 
-  // ============ CANCEL (отменить заказ) ============
+  // ============ CANCEL ============
   if (action === "cancel") {
     if (req.method !== "POST")
       return res.status(405).json({ error: "Method not allowed" });
@@ -392,6 +398,175 @@ async function handler(req, res) {
     }
   }
 
+  // ============ BULK-MOVE ============
+  if (action === "bulk-move") {
+    if (req.method !== "POST")
+      return res.status(405).json({ error: "Method not allowed" });
+
+    const { ids, to_trip_id, reason } = req.body || {};
+    const parsedIds = parseIds(ids);
+
+    if (!parsedIds) {
+      return res.status(400).json({
+        error: "Передайте массив ids (1–" + BULK_LIMIT + " элементов)",
+      });
+    }
+    if (!to_trip_id) {
+      return res.status(400).json({ error: "Не указан to_trip_id" });
+    }
+
+    try {
+      // Проверка целевого рейса
+      const targetTrip = await query(
+        "SELECT id, trip_number FROM trips WHERE id = $1",
+        [to_trip_id],
+      );
+      if (targetTrip.rows.length === 0) {
+        return res.status(404).json({ error: "Целевой рейс не найден" });
+      }
+
+      // Загружаем заказы, исключая уже находящиеся в целевом рейсе
+      const ordersResult = await query(
+        `SELECT id, trip_id, address
+         FROM orders
+         WHERE id = ANY($1) AND (trip_id IS NULL OR trip_id != $2)`,
+        [parsedIds, to_trip_id],
+      );
+
+      if (ordersResult.rows.length === 0) {
+        return res.status(400).json({
+          error: "Нет подходящих заказов (все уже в целевом рейсе)",
+        });
+      }
+
+      const orders = ordersResult.rows;
+      const skipped = parsedIds.length - orders.length;
+
+      // Определяем следующий sequence_num
+      const maxSeq = await query(
+        "SELECT COALESCE(MAX(sequence_num), 0) AS max FROM orders WHERE trip_id = $1",
+        [to_trip_id],
+      );
+      let nextSeq = maxSeq.rows[0].max + 1;
+
+      // Запоминаем исходные рейсы для перенумерации
+      const sourceTripIds = new Set();
+      orders.forEach((o) => {
+        if (o.trip_id) sourceTripIds.add(o.trip_id);
+      });
+
+      // Переносим по одному
+      for (const order of orders) {
+        await query(
+          `UPDATE orders 
+           SET trip_id = $1, sequence_num = $2, 
+               delivery_status = 'pending', delivery_note = NULL,
+               updated_at = NOW() 
+           WHERE id = $3`,
+          [to_trip_id, nextSeq, order.id],
+        );
+
+        await query(
+          `INSERT INTO order_history (order_id, from_trip_id, to_trip_id, reason, moved_by)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            order.id,
+            order.trip_id,
+            to_trip_id,
+            reason || "Массовый перенос",
+            req.user.id,
+          ],
+        );
+
+        nextSeq++;
+      }
+
+      // Перенумерация исходных рейсов
+      for (const sourceId of sourceTripIds) {
+        await renumberOrders(sourceId);
+      }
+
+      await logChange(
+        req.user.id,
+        "orders",
+        orders.map((o) => o.id).join(","),
+        "Массовый перенос",
+        orders.length + " заказов",
+        "Рейс " + targetTrip.rows[0].trip_number,
+        ip,
+      );
+
+      return res.json({
+        success: true,
+        moved_count: orders.length,
+        skipped_count: skipped,
+        trip_number: targetTrip.rows[0].trip_number,
+        message:
+          "Перенесено " +
+          orders.length +
+          " заказов в рейс " +
+          targetTrip.rows[0].trip_number +
+          (skipped > 0 ? ". Пропущено: " + skipped : ""),
+      });
+    } catch (e) {
+      console.error("bulk-move error:", e);
+      return res
+        .status(500)
+        .json({ error: "Ошибка сервера", details: e.message });
+    }
+  }
+
+  // ============ BULK-CANCEL ============
+  if (action === "bulk-cancel") {
+    if (req.method !== "POST")
+      return res.status(405).json({ error: "Method not allowed" });
+
+    const { ids } = req.body || {};
+    const parsedIds = parseIds(ids);
+
+    if (!parsedIds) {
+      return res.status(400).json({
+        error: "Передайте массив ids (1–" + BULK_LIMIT + " элементов)",
+      });
+    }
+
+    try {
+      const result = await query(
+        `UPDATE orders 
+         SET delivery_status = 'cancelled', updated_at = NOW() 
+         WHERE id = ANY($1)
+           AND (delivery_status IS NULL OR delivery_status = 'failed' OR delivery_status = 'pending')
+         RETURNING id`,
+        [parsedIds],
+      );
+
+      const cancelledCount = result.rows.length;
+
+      if (cancelledCount > 0) {
+        await logChange(
+          req.user.id,
+          "orders",
+          result.rows.map((r) => r.id).join(","),
+          "Массовая отмена",
+          cancelledCount + " заказов",
+          "cancelled",
+          ip,
+        );
+      }
+
+      return res.json({
+        success: true,
+        cancelled_count: cancelledCount,
+        message: "Отменено " + cancelledCount + " заказов",
+      });
+    } catch (e) {
+      console.error("bulk-cancel error:", e);
+      return res
+        .status(500)
+        .json({ error: "Ошибка сервера", details: e.message });
+    }
+  }
+
   // ============ DELETE ============
   if (action === "delete") {
     if (req.method !== "DELETE")
@@ -416,7 +591,6 @@ async function handler(req, res) {
         ip,
       );
 
-      // Пересчёт очерёдности в исходном рейсе
       if (oldTripId) await renumberOrders(oldTripId);
 
       return res.json({ success: true });
@@ -425,7 +599,7 @@ async function handler(req, res) {
     }
   }
 
-  // ============ MOVE ============
+  // ============ MOVE (один) ============
   if (action === "move") {
     if (req.method !== "POST")
       return res.status(405).json({ error: "Method not allowed" });
@@ -464,7 +638,6 @@ async function handler(req, res) {
         newSequence = maxSeq.rows[0].max + 1;
       }
 
-      // Сбрасываем delivery_status в pending и delivery_note в NULL
       await query(
         `UPDATE orders 
          SET trip_id = $1, sequence_num = $2, 
