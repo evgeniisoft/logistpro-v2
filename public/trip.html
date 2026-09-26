@@ -584,6 +584,59 @@
                                             </td>
                                         </tr>
                                     </template>
+
+                                    <!-- Плашка изменений из Битрикса -->
+                                    <template x-if="order.pending_changes && order.pending_changes.length > 0">
+                                        <tr class="changes-row">
+                                            <td :colspan="9" style="padding:0;border-top:none;">
+                                                <div class="changes-panel" :class="hasCancelChange(order) ? 'changes-panel-danger' : 'changes-panel-warning'">
+                                                    <div class="changes-panel-info">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                                                            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                                                        </svg>
+                                                        <span x-text="changesHeaderText(order)"></span>
+                                                    </div>
+
+                                                    <div class="changes-panel-list">
+                                                        <template x-for="change in order.pending_changes" :key="change.id">
+                                                            <div class="changes-panel-item">
+                                                                <template x-if="change.change_type === 'cancelled'">
+                                                                    <span><strong>Заказ отменён в Битриксе</strong></span>
+                                                                </template>
+                                                                <template x-if="change.change_type === 'deleted'">
+                                                                    <span><strong>Заказ удалён в Битриксе</strong></span>
+                                                                </template>
+                                                                <template x-if="change.change_type === 'updated'">
+                                                                    <span>
+                                                                        <strong x-text="fieldLabel(change.field_name) + ':'"></strong>
+                                                                        <span class="changes-panel-old" x-text="change.old_value || '—'"></span>
+                                                                        <span class="changes-panel-arrow">→</span>
+                                                                        <span class="changes-panel-new" x-text="change.new_value || '—'"></span>
+                                                                    </span>
+                                                                </template>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+
+                                                    <div class="changes-panel-actions">
+                                                        <template x-for="change in order.pending_changes" :key="'btn-' + change.id">
+                                                            <div style="display:flex;gap:6px;align-items:center;">
+                                                                <button class="btn btn-primary btn-sm" @click="applyChangeInline(change, order)">
+                                                                    <template x-if="change.change_type === 'cancelled'"><span>Убрать из рейса</span></template>
+                                                                    <template x-if="change.change_type === 'deleted'"><span>Удалить из рейса</span></template>
+                                                                    <template x-if="change.change_type === 'updated'"><span>Применить</span></template>
+                                                                </button>
+                                                                <button class="btn btn-secondary btn-sm" @click="ignoreChangeInline(change, order)">
+                                                                    Оставить как есть
+                                                                </button>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </template>
                                 </template>
                 
                                 <template x-if="newOrderRow">
@@ -1820,6 +1873,89 @@
 
                     try {
                         await this.saveDeliveryStatus(order.id, 'cancelled', null);
+                    } catch (e) {
+                        alert('Ошибка: ' + e.message);
+                    }
+                },
+
+                // ============ ИЗМЕНЕНИЯ ИЗ БИТРИКСА ============
+
+                hasCancelChange(order) {
+                    if (!order.pending_changes) return false;
+                    return order.pending_changes.some(c =>
+                        c.change_type === 'cancelled' || c.change_type === 'deleted'
+                    );
+                },
+
+                changesHeaderText(order) {
+                    if (!order.pending_changes || order.pending_changes.length === 0) return '';
+                    const hasCancel = this.hasCancelChange(order);
+                    const count = order.pending_changes.length;
+                    const word = count === 1 ? 'изменение' : (count < 5 ? 'изменения' : 'изменений');
+                    if (hasCancel) {
+                        return 'Изменения из Битрикса, требующие внимания:';
+                    }
+                    return 'Изменения из Битрикса (' + count + ' ' + word + '):';
+                },
+
+                fieldLabel(field) {
+                    const labels = {
+                        'address': 'Адрес',
+                        'contact_name': 'Контакт',
+                        'phone': 'Телефон',
+                        'volume': 'Объём',
+                        'delivery_date': 'Дата доставки',
+                        'note': 'Примечание'
+                    };
+                    return labels[field] || field;
+                },
+
+                async applyChangeInline(change, order) {
+                    const label = change.change_type === 'cancelled' ? 'Убрать заказ из рейса?' :
+                                  change.change_type === 'deleted' ? 'Удалить заказ из рейса?' :
+                                  'Применить изменение?';
+                    if (!confirm(label)) return;
+
+                    try {
+                        await window.API.api('/api/incoming?action=change-apply&id=' + change.id, {
+                            method: 'POST'
+                        });
+
+                        if (change.change_type === 'cancelled') {
+                            // Отмена — просто помечаем delivered_status, не убираем из рейса
+                            order.delivery_status = 'cancelled';
+                            order.delivery_note = 'Отменён в Битриксе';
+                        } else if (change.change_type === 'deleted') {
+                            // Удаление — убираем из рейса
+                            this.orders = this.orders.filter(o => o.id !== order.id);
+                        } else if (change.change_type === 'updated') {
+                            // Обновление — меняем поле
+                            if (change.field_name === 'volume') {
+                                order.volume = Number(change.new_value) || 0;
+                            } else {
+                                order[change.field_name] = change.new_value;
+                            }
+                        }
+
+                        // Убираем change из pending_changes
+                        order.pending_changes = order.pending_changes.filter(c => c.id !== change.id);
+
+                    } catch (e) {
+                        alert('Ошибка: ' + e.message);
+                    }
+                },
+
+                async ignoreChangeInline(change, order) {
+                    if (!confirm('Оставить как есть?')) return;
+
+                    try {
+                        await window.API.api('/api/incoming?action=change-ignore&id=' + change.id, {
+                            method: 'POST'
+                        });
+
+                        // Убираем change из pending_changes
+                        order.pending_changes = order.pending_changes.filter(c => c.id !== change.id);
+
                     } catch (e) {
                         alert('Ошибка: ' + e.message);
                     }
