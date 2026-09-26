@@ -3528,3 +3528,85 @@ body {
     gap: 8px;
     flex-wrap: wrap;
 }
+/* ============ БЛОК 12: ПЛАШКА ИЗМЕНЕНИЙ В trip.html ============ */
+
+.changes-row td {
+    padding: 0 !important;
+    border-top: none !important;
+}
+
+.changes-panel {
+    padding: 12px 20px;
+    border-top: 1px dashed;
+}
+
+.changes-panel-warning {
+    background: #FFFBEB;
+    border-top-color: #FCD34D;
+}
+
+.changes-panel-danger {
+    background: #FEF2F2;
+    border-top-color: #FECACA;
+}
+
+.changes-panel-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.changes-panel-warning .changes-panel-info {
+    color: #92400E;
+}
+
+.changes-panel-danger .changes-panel-info {
+    color: #991B1B;
+}
+
+.changes-panel-info svg {
+    flex-shrink: 0;
+}
+
+.changes-panel-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 10px;
+}
+
+.changes-panel-item {
+    font-size: 12px;
+    color: var(--text-primary);
+}
+
+.changes-panel-item strong {
+    font-weight: 600;
+}
+
+.changes-panel-old {
+    color: var(--text-secondary);
+    text-decoration: line-through;
+    font-family: 'SF Mono', Consolas, monospace;
+    margin-left: 4px;
+}
+
+.changes-panel-arrow {
+    color: var(--text-muted);
+    margin: 0 4px;
+}
+
+.changes-panel-new {
+    color: var(--text-primary);
+    font-weight: 600;
+    font-family: 'SF Mono', Consolas, monospace;
+}
+
+.changes-panel-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
