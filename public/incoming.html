@@ -61,13 +61,13 @@
                     <button class="btn btn-secondary" @click="loadData()" :disabled="loading">
                         Обновить
                     </button>
-                    <button class="btn btn-primary" @click="openCreateModal()" x-show="tab !== 'failed'">
+                    <button class="btn btn-primary" @click="openCreateModal()" x-show="tab !== 'failed' && tab !== 'assigned'">
                         + Добавить вручную
                     </button>
                 </div>
             </div>
 
-            <!-- Статистика (только для не-failed вкладок) -->
+            <!-- Статистика -->
             <div class="stats-grid" x-show="tab !== 'failed'">
                 <div class="stat-card stat-card-pending">
                     <div class="stat-card-label">Ожидают распределения</div>
@@ -83,7 +83,6 @@
                 </div>
             </div>
 
-            <!-- Статистика для failed -->
             <div class="stats-grid" x-show="tab === 'failed'" x-cloak>
                 <div class="stat-card" style="background:#FEF2F2;border-color:#FECACA;">
                     <div class="stat-card-label" style="color:#991B1B;">Неудавшиеся доставки</div>
@@ -99,7 +98,7 @@
                 </button>
                 <button class="incoming-tab" :class="tab === 'assigned' ? 'active' : ''" @click="switchTab('assigned')">
                     Назначены
-                    <span class="count" x-text="stats.assigned || 0"></span>
+                    <span class="count" x-text="assignedOrders.length"></span>
                 </button>
                 <button class="incoming-tab" :class="tab === 'rejected' ? 'active' : ''" @click="switchTab('rejected')">
                     Отклонены
@@ -117,50 +116,34 @@
             <!-- Ошибка -->
             <div x-show="error" x-cloak class="alert alert-error" x-text="error"></div>
 
-            <!-- Панель массовых действий -->
+            <!-- Панель массовых действий (x-show вместо x-if — убирает Alpine-ошибки) -->
             <div x-show="selectedIds.length > 0" x-cloak class="bulk-actions-bar">
                 <div class="bulk-actions-info">
                     Выбрано: <strong x-text="selectedIds.length"></strong>
                     <span x-text="pluralize(selectedIds.length, 'заказ', 'заказа', 'заказов')"></span>
                 </div>
                 <div class="bulk-actions-buttons">
-                    <!-- Ожидают -->
-                    <template x-if="tab === 'pending'">
-                        <button class="btn btn-primary btn-sm" @click="openBulkAssignModal()">
-                            Назначить на рейс
-                        </button>
-                    </template>
-                    <template x-if="tab === 'pending'">
-                        <button class="btn btn-danger btn-sm" @click="bulkReject()">
-                            Отклонить
-                        </button>
-                    </template>
+                    <button class="btn btn-primary btn-sm" x-show="tab === 'pending'" @click="openBulkAssignModal()">
+                        Назначить на рейс
+                    </button>
+                    <button class="btn btn-danger btn-sm" x-show="tab === 'pending'" @click="bulkReject()">
+                        Отклонить
+                    </button>
 
-                    <!-- Назначенные -->
-                    <template x-if="tab === 'assigned'">
-                        <button class="btn btn-primary btn-sm" @click="openBulkMoveModal()">
-                            Перенести в другой рейс
-                        </button>
-                    </template>
+                    <button class="btn btn-primary btn-sm" x-show="tab === 'assigned'" @click="openBulkMoveModal()">
+                        Перенести в другой рейс
+                    </button>
 
-                    <!-- Неудавшиеся -->
-                    <template x-if="tab === 'failed'">
-                        <button class="btn btn-primary btn-sm" @click="openBulkMoveModal()">
-                            В рейс
-                        </button>
-                    </template>
-                    <template x-if="tab === 'failed'">
-                        <button class="btn btn-danger btn-sm" @click="bulkCancelFailed()">
-                            Отменить заказ
-                        </button>
-                    </template>
+                    <button class="btn btn-primary btn-sm" x-show="tab === 'failed'" @click="openBulkMoveModal()">
+                        В рейс
+                    </button>
+                    <button class="btn btn-danger btn-sm" x-show="tab === 'failed'" @click="bulkCancelFailed()">
+                        Отменить заказ
+                    </button>
 
-                    <!-- Удалить из incoming (для pending / rejected / assigned) -->
-                    <template x-if="tab === 'pending' || tab === 'rejected' || tab === 'assigned'">
-                        <button class="btn btn-secondary btn-sm" @click="bulkDelete()">
-                            Удалить из входящих
-                        </button>
-                    </template>
+                    <button class="btn btn-secondary btn-sm" x-show="tab === 'pending' || tab === 'rejected'" @click="bulkDelete()">
+                        Удалить из входящих
+                    </button>
 
                     <button class="btn btn-ghost btn-sm" @click="clearSelection()" title="Снять выделение">
                         ×
@@ -245,8 +228,83 @@
                 </div>
             </template>
 
-            <!-- ============ ДРУГИЕ ВКЛАДКИ ============ -->
-            <template x-if="tab !== 'failed'">
+            <!-- ============ ВКЛАДКА: НАЗНАЧЕННЫЕ ============ -->
+            <template x-if="tab === 'assigned'">
+                <div>
+                    <div x-show="!loading && assignedOrders.length === 0" class="empty-state">
+                        <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 12h-6l-2 3h-4l-2-3H2"></path>
+                            <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
+                        </svg>
+                        <h3 class="empty-title">Нет назначенных заказов</h3>
+                        <p class="empty-description">Заказы, распределённые по активным рейсам</p>
+                    </div>
+
+                    <div x-show="!loading && assignedOrders.length > 0" style="background:#fff;border:1px solid var(--border-light);border-radius:12px;overflow:hidden;">
+                        <div style="overflow-x:auto;">
+                            <table class="incoming-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width:40px;">
+                                            <input type="checkbox" class="row-checkbox"
+                                                :checked="allAssignedSelected"
+                                                @change="toggleAllAssigned($event.target.checked)">
+                                        </th>
+                                        <th class="col-date">Рейс</th>
+                                        <th class="col-date">Дата рейса</th>
+                                        <th class="col-address">Адрес</th>
+                                        <th class="col-contact">Контакт</th>
+                                        <th class="col-phone">Телефон</th>
+                                        <th class="col-volume text-right">м³</th>
+                                        <th class="col-status">Статус доставки</th>
+                                        <th class="col-actions"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="item in assignedOrders" :key="item.id">
+                                        <tr :class="{ 'row-selected': isSelected(item.id) }">
+                                            <td>
+                                                <input type="checkbox" class="row-checkbox"
+                                                    :checked="isSelected(item.id)"
+                                                    @change="toggleOne(item.id, $event.target.checked)">
+                                            </td>
+                                            <td class="col-date">
+                                                <span style="font-family:monospace;font-size:12px;" x-text="item.trip_number || '—'"></span>
+                                            </td>
+                                            <td class="col-date" x-text="formatShortDate(item.trip_date)"></td>
+                                            <td class="col-address" x-text="item.address || '—'"></td>
+                                            <td class="col-contact" x-text="item.contact_name || '—'"></td>
+                                            <td class="col-phone" x-text="item.phone || '—'"></td>
+                                            <td class="col-volume" x-text="item.volume || '—'"></td>
+                                            <td class="col-status">
+                                                <span class="delivery-badge"
+                                                    :class="'delivery-' + (item.delivery_status || 'pending')"
+                                                    x-text="deliveryStatusLabel(item.delivery_status)">
+                                                </span>
+                                            </td>
+                                            <td class="col-actions">
+                                                <div style="display:flex;gap:6px;justify-content:flex-end;">
+                                                    <button class="btn-assign" @click="openMoveAssignedModal(item)">Перенести</button>
+                                                    <button class="btn-action" @click="goToTrip(item.trip_id)" title="Открыть рейс">
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                                            <polyline points="15 3 21 3 21 9"></polyline>
+                                                            <line x1="10" y1="14" x2="21" y2="3"></line>
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </template>
+
+            <!-- ============ ДРУГИЕ ВКЛАДКИ (pending, rejected, all) ============ -->
+            <template x-if="tab !== 'failed' && tab !== 'assigned'">
                 <div>
                     <div x-show="!loading && !error && incoming.length === 0" class="empty-state">
                         <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -255,10 +313,9 @@
                         </svg>
                         <h3 class="empty-title">Нет входящих заказов</h3>
                         <p class="empty-description">
-                            <template x-if="tab === 'pending'">Заказы из Битрикс24 появятся здесь автоматически</template>
-                            <template x-if="tab === 'assigned'">Здесь будут заказы, назначенные на рейсы</template>
-                            <template x-if="tab === 'rejected'">Здесь будут отклонённые заказы</template>
-                            <template x-if="tab === 'all'">Пока нет ни одного входящего заказа</template>
+                            <span x-show="tab === 'pending'">Заказы из Битрикс24 появятся здесь автоматически</span>
+                            <span x-show="tab === 'rejected'">Здесь будут отклонённые заказы</span>
+                            <span x-show="tab === 'all'">Пока нет ни одного входящего заказа</span>
                         </p>
                     </div>
 
@@ -300,28 +357,24 @@
                                             <td class="col-volume" x-text="item.volume || '—'"></td>
                                             <td class="col-date" x-text="formatDateTime(item.created_at)"></td>
                                             <td class="col-actions">
-                                                <template x-if="item.status === 'pending'">
-                                                    <div style="display:flex;gap:6px;justify-content:flex-end;">
-                                                        <button class="btn-assign" @click="openAssignModal(item)">На рейс</button>
-                                                        <button class="btn-action danger" @click="rejectItem(item)" title="Отклонить">
-                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                                                            </svg>
-                                                        </button>
-                                                    </div>
-                                                </template>
-                                                <template x-if="item.status !== 'pending'">
-                                                    <div style="display:flex;gap:6px;justify-content:flex-end;">
-                                                        <span class="status-badge" :class="'status-' + item.status" x-text="statusLabel(item.status)"></span>
-                                                        <button class="btn-action danger" @click="deleteItem(item)" title="Удалить">
-                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                                <polyline points="3 6 5 6 21 6"></polyline>
-                                                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                                            </svg>
-                                                        </button>
-                                                    </div>
-                                                </template>
+                                                <div style="display:flex;gap:6px;justify-content:flex-end;" x-show="item.status === 'pending'">
+                                                    <button class="btn-assign" @click="openAssignModal(item)">На рейс</button>
+                                                    <button class="btn-action danger" @click="rejectItem(item)" title="Отклонить">
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                                <div style="display:flex;gap:6px;justify-content:flex-end;" x-show="item.status !== 'pending'">
+                                                    <span class="status-badge" :class="'status-' + item.status" x-text="statusLabel(item.status)"></span>
+                                                    <button class="btn-action danger" @click="deleteItem(item)" title="Удалить">
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                            <polyline points="3 6 5 6 21 6"></polyline>
+                                                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                                        </svg>
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     </template>
@@ -617,11 +670,66 @@
         </div>
     </div>
 
+    <!-- МОДАЛКА: ПЕРЕНОС ИЗ "НАЗНАЧЕННЫХ" (один) -->
+    <div x-show="moveAssignedModal.open" x-cloak class="modal-backdrop" @click.self="closeMoveAssignedModal()">
+        <div class="modal-window" @click.stop>
+            <div class="modal-header">
+                <h2 class="modal-title">Перенести заказ</h2>
+                <button class="modal-close" @click="closeMoveAssignedModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div x-show="moveAssignedModal.error" class="alert alert-error" x-text="moveAssignedModal.error"></div>
+
+                <div x-show="moveAssignedModal.item" style="padding:12px 14px;background:var(--bg-muted);border-radius:6px;margin-bottom:16px;">
+                    <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Заказ</div>
+                    <div style="font-size:13px;font-weight:500;" x-text="moveAssignedModal.item?.address"></div>
+                    <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;" x-text="'Рейс ' + (moveAssignedModal.item?.trip_number || '—') + ' · ' + (moveAssignedModal.item?.volume || 0) + ' м³'"></div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Куда перенести? *</label>
+                </div>
+
+                <div x-show="availableTrips.length === 0" class="trip-select-empty">
+                    Нет доступных рейсов
+                </div>
+
+                <div x-show="availableTrips.length > 0" class="assign-trip-list">
+                    <template x-for="t in availableTrips" :key="t.id">
+                        <div class="assign-trip-item" :class="moveAssignedModal.tripId === t.id ? 'selected' : ''" @click="selectMoveAssignedTrip(t)">
+                            <div class="assign-trip-info">
+                                <div class="assign-trip-title" x-text="'Рейс ' + t.trip_number"></div>
+                                <div class="assign-trip-sub" x-text="formatDate(t.trip_date) + ' · ' + (t.vehicle_plate || '—') + ' · ' + (t.driver_name || '—')"></div>
+                            </div>
+                            <div class="assign-trip-load">
+                                <div x-text="(Number(t.total_volume) || 0) + ' / ' + (Number(t.vehicle_volume_at_time) || Number(t.vehicle_volume) || '?') + ' м³'"></div>
+                                <div x-text="t.orders_count + ' адресов'"></div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @click="closeMoveAssignedModal()" :disabled="moveAssignedModal.saving">Отмена</button>
+                <button class="btn btn-primary" @click="submitMoveAssigned()" :disabled="moveAssignedModal.saving || !moveAssignedModal.tripId">
+                    <span x-show="!moveAssignedModal.saving">Перенести</span>
+                    <span x-show="moveAssignedModal.saving" x-cloak>Перенос...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         function incomingPage() {
             return {
                 user: null,
                 incoming: [],
+                assignedOrders: [],
                 failedOrders: [],
                 stats: { pending: 0, assigned: 0, rejected: 0 },
                 availableTrips: [],
@@ -671,6 +779,14 @@
                     overloadWarning: ''
                 },
 
+                moveAssignedModal: {
+                    open: false,
+                    saving: false,
+                    error: '',
+                    item: null,
+                    tripId: null
+                },
+
                 get userInitials() {
                     if (!this.user?.full_name) return '?';
                     return this.user.full_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
@@ -691,6 +807,11 @@
                     return this.failedOrders.every(i => this.selectedIds.includes(i.id));
                 },
 
+                get allAssignedSelected() {
+                    if (this.assignedOrders.length === 0) return false;
+                    return this.assignedOrders.every(i => this.selectedIds.includes(i.id));
+                },
+
                 async init() {
                     if (!window.AUTH) {
                         setTimeout(() => this.init(), 50);
@@ -698,7 +819,10 @@
                     }
                     if (!window.AUTH.requireLogin()) return;
                     this.user = window.API.getUser();
-                    await this.loadFailedOrders();
+                    await Promise.all([
+                        this.loadAssignedOrders(),
+                        this.loadFailedOrders()
+                    ]);
                     await this.loadData();
                 },
 
@@ -707,6 +831,10 @@
 
                     if (this.tab === 'failed') {
                         await this.loadFailedOrders();
+                        return;
+                    }
+                    if (this.tab === 'assigned') {
+                        await this.loadAssignedOrders();
                         return;
                     }
 
@@ -721,6 +849,16 @@
                         this.error = e.message;
                     } finally {
                         this.loading = false;
+                    }
+                },
+
+                async loadAssignedOrders() {
+                    try {
+                        const data = await window.API.api('/api/orders?action=list-assigned');
+                        this.assignedOrders = data.orders || [];
+                    } catch (e) {
+                        console.error('Ошибка загрузки назначенных:', e);
+                        this.assignedOrders = [];
                     }
                 },
 
@@ -740,7 +878,7 @@
                     await this.loadData();
                 },
 
-                // ============ МАССОВЫЕ ОПЕРАЦИИ ============
+                // ============ ВЫДЕЛЕНИЕ ============
 
                 isSelected(id) {
                     return this.selectedIds.includes(id);
@@ -772,6 +910,14 @@
                     }
                 },
 
+                toggleAllAssigned(checked) {
+                    if (checked) {
+                        this.selectedIds = this.assignedOrders.map(i => i.id);
+                    } else {
+                        this.selectedIds = [];
+                    }
+                },
+
                 clearSelection() {
                     this.selectedIds = [];
                 },
@@ -797,9 +943,7 @@
                         });
                         this.clearSelection();
                         await this.loadData();
-                        if (data.message) {
-                            setTimeout(() => alert(data.message), 100);
-                        }
+                        if (data.message) setTimeout(() => alert(data.message), 100);
                     } catch (e) {
                         alert('Ошибка: ' + e.message);
                     }
@@ -818,15 +962,13 @@
                         });
                         this.clearSelection();
                         await this.loadData();
-                        if (data.message) {
-                            setTimeout(() => alert(data.message), 100);
-                        }
+                        if (data.message) setTimeout(() => alert(data.message), 100);
                     } catch (e) {
                         alert('Ошибка: ' + e.message);
                     }
                 },
 
-                // ============ BULK CANCEL (неудавшиеся) ============
+                // ============ BULK CANCEL ============
 
                 async bulkCancelFailed() {
                     if (this.selectedIds.length === 0) return;
@@ -839,26 +981,17 @@
                         });
                         this.clearSelection();
                         await this.loadFailedOrders();
-                        if (data.message) {
-                            setTimeout(() => alert(data.message), 100);
-                        }
+                        if (data.message) setTimeout(() => alert(data.message), 100);
                     } catch (e) {
                         alert('Ошибка: ' + e.message);
                     }
                 },
 
-                // ============ BULK ASSIGN (ожидают) ============
+                // ============ BULK ASSIGN ============
 
                 async openBulkAssignModal() {
                     if (this.selectedIds.length === 0) return;
-
-                    this.bulkAssignModal = {
-                        open: true,
-                        saving: false,
-                        error: '',
-                        tripId: null
-                    };
-
+                    this.bulkAssignModal = { open: true, saving: false, error: '', tripId: null };
                     await this.loadAvailableTrips();
                 },
 
@@ -893,10 +1026,7 @@
                         this.clearSelection();
                         await this.loadData();
 
-                        if (data.message) {
-                            setTimeout(() => alert(data.message), 100);
-                        }
-
+                        if (data.message) setTimeout(() => alert(data.message), 100);
                     } catch (e) {
                         this.bulkAssignModal.error = e.message;
                     } finally {
@@ -904,11 +1034,10 @@
                     }
                 },
 
-                // ============ BULK MOVE (назначенные + неудавшиеся) ============
+                // ============ BULK MOVE ============
 
                 async openBulkMoveModal() {
                     if (this.selectedIds.length === 0) return;
-
                     this.bulkMoveModal = {
                         open: true,
                         saving: false,
@@ -916,7 +1045,6 @@
                         tripId: null,
                         reason: this.tab === 'failed' ? 'Возврат после неудачной доставки' : ''
                     };
-
                     await this.loadAvailableTrips();
                 },
 
@@ -953,14 +1081,13 @@
 
                         if (this.tab === 'failed') {
                             await this.loadFailedOrders();
+                        } else if (this.tab === 'assigned') {
+                            await this.loadAssignedOrders();
                         } else {
                             await this.loadData();
                         }
 
-                        if (data.message) {
-                            setTimeout(() => alert(data.message), 100);
-                        }
-
+                        if (data.message) setTimeout(() => alert(data.message), 100);
                     } catch (e) {
                         this.bulkMoveModal.error = e.message;
                     } finally {
@@ -968,7 +1095,7 @@
                     }
                 },
 
-                // ============ ОДИНОЧНЫЕ ОПЕРАЦИИ ============
+                // ============ ХЕЛПЕРЫ ============
 
                 sourceLabel(source) {
                     const labels = { 'bitrix': 'Битрикс', 'manual': 'Вручную' };
@@ -980,9 +1107,25 @@
                     return labels[status] || status;
                 },
 
+                deliveryStatusLabel(status) {
+                    const labels = {
+                        'pending': 'Ожидает',
+                        'delivered': 'Доставлено',
+                        'failed': 'Не доставлено',
+                        'cancelled': 'Отменён'
+                    };
+                    return labels[status || 'pending'] || 'Ожидает';
+                },
+
                 formatDate(d) {
                     if (!d) return '—';
                     return window.HELPERS.formatDate(d);
+                },
+
+                formatShortDate(d) {
+                    if (!d) return '—';
+                    const date = new Date(d);
+                    return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
                 },
 
                 formatDateTime(d) {
@@ -992,18 +1135,21 @@
                            date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
                 },
 
+                goToTrip(tripId) {
+                    if (!tripId) return;
+                    window.open('/trip.html?id=' + tripId, '_blank');
+                },
+
+                // ============ СОЗДАНИЕ ============
+
                 openCreateModal() {
                     this.createModal = {
                         open: true,
                         saving: false,
                         error: '',
                         form: {
-                            external_id: '',
-                            address: '',
-                            contact_name: '',
-                            phone: '',
-                            volume: 0,
-                            note: ''
+                            external_id: '', address: '', contact_name: '',
+                            phone: '', volume: 0, note: ''
                         }
                     };
                 },
@@ -1027,10 +1173,8 @@
                             method: 'POST',
                             body: JSON.stringify(this.createModal.form)
                         });
-
                         this.createModal.open = false;
                         await this.loadData();
-
                     } catch (e) {
                         this.createModal.error = e.message;
                     } finally {
@@ -1038,16 +1182,13 @@
                     }
                 },
 
+                // ============ НАЗНАЧЕНИЕ ОДИНОЧНОЕ ============
+
                 async openAssignModal(item) {
                     this.assignModal = {
-                        open: true,
-                        saving: false,
-                        error: '',
-                        item: item,
-                        tripId: null,
-                        overloadWarning: ''
+                        open: true, saving: false, error: '',
+                        item: item, tripId: null, overloadWarning: ''
                     };
-
                     await this.loadAvailableTrips();
                 },
 
@@ -1071,15 +1212,12 @@
 
                 selectAssignTrip(trip) {
                     this.assignModal.tripId = trip.id;
-
                     const orderVolume = Number(this.assignModal.item?.volume) || 0;
                     const currentVolume = Number(trip.total_volume) || 0;
                     const capacity = Number(trip.vehicle_volume_at_time) || Number(trip.vehicle_volume) || 0;
                     const newVolume = currentVolume + orderVolume;
-
                     if (capacity > 0 && newVolume > capacity) {
-                        this.assignModal.overloadWarning = 
-                            'Превышение объёма: ' + newVolume.toFixed(1) + ' м³ из ' + capacity + ' м³';
+                        this.assignModal.overloadWarning = 'Превышение объёма: ' + newVolume.toFixed(1) + ' м³ из ' + capacity + ' м³';
                     } else {
                         this.assignModal.overloadWarning = '';
                     }
@@ -1099,10 +1237,8 @@
                             method: 'POST',
                             body: JSON.stringify({ trip_id: this.assignModal.tripId })
                         });
-
                         this.assignModal.open = false;
                         await this.loadData();
-
                     } catch (e) {
                         this.assignModal.error = e.message;
                     } finally {
@@ -1110,18 +1246,13 @@
                     }
                 },
 
-                // ============ НЕУДАВШИЕСЯ (один) ============
+                // ============ НЕУДАВШИЕСЯ (одиночное) ============
 
                 async openFailedAssignModal(item) {
                     this.failedAssignModal = {
-                        open: true,
-                        saving: false,
-                        error: '',
-                        item: item,
-                        tripId: null,
-                        overloadWarning: ''
+                        open: true, saving: false, error: '',
+                        item: item, tripId: null, overloadWarning: ''
                     };
-
                     await this.loadAvailableTrips();
                 },
 
@@ -1152,10 +1283,8 @@
                                 reason: 'Возврат после неудачной доставки'
                             })
                         });
-
                         this.failedAssignModal.open = false;
                         await this.loadFailedOrders();
-
                     } catch (e) {
                         this.failedAssignModal.error = e.message;
                     } finally {
@@ -1165,14 +1294,57 @@
 
                 async cancelFailedOrder(item) {
                     if (!confirm('Отменить заказ "' + (item.address || 'без адреса') + '"?')) return;
-
                     try {
-                        await window.API.api('/api/orders?action=cancel&id=' + item.id, {
-                            method: 'POST'
-                        });
+                        await window.API.api('/api/orders?action=cancel&id=' + item.id, { method: 'POST' });
                         await this.loadFailedOrders();
                     } catch (e) {
                         alert('Ошибка: ' + e.message);
+                    }
+                },
+
+                // ============ ПЕРЕНОС ИЗ "НАЗНАЧЕННЫХ" (одиночный) ============
+
+                async openMoveAssignedModal(item) {
+                    this.moveAssignedModal = {
+                        open: true, saving: false, error: '',
+                        item: item, tripId: null
+                    };
+                    await this.loadAvailableTrips();
+                },
+
+                closeMoveAssignedModal() {
+                    if (this.moveAssignedModal.saving) return;
+                    this.moveAssignedModal.open = false;
+                    this.moveAssignedModal.item = null;
+                },
+
+                selectMoveAssignedTrip(trip) {
+                    this.moveAssignedModal.tripId = trip.id;
+                },
+
+                async submitMoveAssigned() {
+                    if (!this.moveAssignedModal.tripId) {
+                        this.moveAssignedModal.error = 'Выберите рейс';
+                        return;
+                    }
+
+                    this.moveAssignedModal.saving = true;
+                    this.moveAssignedModal.error = '';
+
+                    try {
+                        await window.API.api('/api/orders?action=move&id=' + this.moveAssignedModal.item.id, {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                to_trip_id: this.moveAssignedModal.tripId,
+                                reason: 'Перенос из раздела «Назначенные»'
+                            })
+                        });
+                        this.moveAssignedModal.open = false;
+                        await this.loadAssignedOrders();
+                    } catch (e) {
+                        this.moveAssignedModal.error = e.message;
+                    } finally {
+                        this.moveAssignedModal.saving = false;
                     }
                 },
 
@@ -1180,11 +1352,9 @@
 
                 async rejectItem(item) {
                     if (!confirm('Отклонить заказ "' + (item.address || 'без адреса') + '"?')) return;
-
                     try {
                         await window.API.api('/api/incoming?action=reject&id=' + item.id, {
-                            method: 'POST',
-                            body: JSON.stringify({})
+                            method: 'POST', body: JSON.stringify({})
                         });
                         await this.loadData();
                     } catch (e) {
@@ -1194,11 +1364,8 @@
 
                 async deleteItem(item) {
                     if (!confirm('Удалить заказ "' + (item.address || 'без адреса') + '" из истории?')) return;
-
                     try {
-                        await window.API.api('/api/incoming?action=delete&id=' + item.id, {
-                            method: 'DELETE'
-                        });
+                        await window.API.api('/api/incoming?action=delete&id=' + item.id, { method: 'DELETE' });
                         await this.loadData();
                     } catch (e) {
                         alert('Ошибка: ' + e.message);
