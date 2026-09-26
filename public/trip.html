@@ -27,15 +27,7 @@
                 <a href="/reports.html" class="app-nav-link">Отчёты</a>
                 <a href="/references.html" class="app-nav-link">Справочники</a>
                 <a href="/journal.html" class="app-nav-link">Журнал</a>
-                <a href="/tasks.html" class="app-nav-link app-nav-bell" :class="tab === 'tasks' ? 'active' : ''" x-data="{ tasksCount: 0 }" x-init="
-                    (async () => {
-                        if (!window.AUTH) { setTimeout(() => $el._x_dataStack[0].loadTasksCount?.(), 50); return; }
-                        try {
-                            const data = await window.API.api('/api/incoming?action=tasks-count');
-                            tasksCount = data.total || 0;
-                        } catch (e) { console.error('tasks-count error:', e); }
-                    })()
-                ">
+                <a href="/tasks.html" class="app-nav-link app-nav-bell">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
                         <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
@@ -384,185 +376,186 @@
                                     <th class="col-actions">Действия</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                <template x-for="(order, index) in orders" :key="order.id">
-                                    <template x-if="true">
-                                        <tr :class="{
-                                            'dragging': draggedOrderId === order.id,
-                                            'drag-over': dragOverOrderIndex === index && draggedOrderId !== order.id,
-                                            'row-editing': editingOrderId === order.id
-                                        }" :draggable="editingOrderId !== order.id && !reorderSaving"
-                                            @dragstart="onDragStart(order.id, index)" @dragover.prevent="onDragOver(index)"
-                                            @dragleave="onDragLeave(index)" @drop.prevent="onDrop(index)" @dragend="onDragEnd()">
-                    
-                                            <template x-if="editingOrderId !== order.id">
-                                                <td class="col-seq-with-handle">
-                                                    <span class="drag-handle" title="Перетащите для изменения порядка">
-                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                            <circle cx="9" cy="6" r="1"></circle>
-                                                            <circle cx="9" cy="12" r="1"></circle>
-                                                            <circle cx="9" cy="18" r="1"></circle>
-                                                            <circle cx="15" cy="6" r="1"></circle>
-                                                            <circle cx="15" cy="12" r="1"></circle>
-                                                            <circle cx="15" cy="18" r="1"></circle>
-                                                        </svg>
-                                                    </span>
-                                                    <span class="seq-number" x-text="index + 1"></span>
-                                                </td>
-                                            </template>
-                                            <template x-if="editingOrderId === order.id">
-                                                <td class="col-seq">
-                                                    <span x-text="index + 1"></span>
-                                                </td>
-                                            </template>
-                    
-                                            <template x-if="editingOrderId !== order.id">
-                                                <td class="col-id">
-                                                    <span x-text="order.external_id || ('#' + order.id)"></span>
-                                                </td>
-                                            </template>
-                                            <template x-if="editingOrderId === order.id">
-                                                <td class="col-id">
-                                                    <input type="text" x-model="editForm.external_id" placeholder="#12345">
-                                                </td>
-                                            </template>
-                    
-                                            <template x-if="editingOrderId !== order.id">
-                                                <td class="col-address" x-text="order.address"></td>
-                                            </template>
-                                            <template x-if="editingOrderId === order.id">
-                                                <td class="col-address">
-                                                    <input type="text" x-model="editForm.address" placeholder="ул. Ленина, 15">
-                                                </td>
-                                            </template>
-                    
-                                            <template x-if="editingOrderId !== order.id">
-                                                <td class="col-contact" x-text="order.contact_name || '—'"></td>
-                                            </template>
-                                            <template x-if="editingOrderId === order.id">
-                                                <td class="col-contact">
-                                                    <input type="text" x-model="editForm.contact_name" placeholder="Иванов И.И.">
-                                                </td>
-                                            </template>
-                    
-                                            <template x-if="editingOrderId !== order.id">
-                                                <td class="col-phone" x-text="order.phone || '—'"></td>
-                                            </template>
-                                            <template x-if="editingOrderId === order.id">
-                                                <td class="col-phone">
-                                                    <input type="text" class="addr-phone" x-model="editForm.phone" x-mask="+7 (999) 999-99-99">
-                                                </td>
-                                            </template>
-                    
-                                            <template x-if="editingOrderId !== order.id">
-                                                <td class="col-volume" x-text="order.volume || '—'"></td>
-                                            </template>
-                                            <template x-if="editingOrderId === order.id">
-                                                <td class="col-volume">
-                                                    <input type="number" x-model.number="editForm.volume" step="0.1" min="0">
-                                                </td>
-                                            </template>
+                            <!-- Каждый заказ в своём <tbody> — это требование Alpine для x-for с несколькими строками -->
+                            <template x-for="(order, index) in orders" :key="order.id">
+                                <tbody>
+                                    <tr :class="{
+                                        'dragging': draggedOrderId === order.id,
+                                        'drag-over': dragOverOrderIndex === index && draggedOrderId !== order.id,
+                                        'row-editing': editingOrderId === order.id
+                                    }" :draggable="editingOrderId !== order.id && !reorderSaving"
+                                        @dragstart="onDragStart(order.id, index)" @dragover.prevent="onDragOver(index)"
+                                        @dragleave="onDragLeave(index)" @drop.prevent="onDrop(index)" @dragend="onDragEnd()">
 
-                                            <td class="col-status">
-                                                <span class="delivery-badge" 
-                                                    :class="'delivery-' + (order.delivery_status || 'pending')"
-                                                    @click="openStatusMenu(order)"
-                                                    :title="order.delivery_note || deliveryStatusLabel(order.delivery_status)"
-                                                    x-text="deliveryStatusLabel(order.delivery_status)">
+                                        <template x-if="editingOrderId !== order.id">
+                                            <td class="col-seq-with-handle">
+                                                <span class="drag-handle" title="Перетащите для изменения порядка">
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                        <circle cx="9" cy="6" r="1"></circle>
+                                                        <circle cx="9" cy="12" r="1"></circle>
+                                                        <circle cx="9" cy="18" r="1"></circle>
+                                                        <circle cx="15" cy="6" r="1"></circle>
+                                                        <circle cx="15" cy="12" r="1"></circle>
+                                                        <circle cx="15" cy="18" r="1"></circle>
+                                                    </svg>
                                                 </span>
+                                                <span class="seq-number" x-text="index + 1"></span>
                                             </td>
-                    
+                                        </template>
+                                        <template x-if="editingOrderId === order.id">
+                                            <td class="col-seq">
+                                                <span x-text="index + 1"></span>
+                                            </td>
+                                        </template>
+
+                                        <template x-if="editingOrderId !== order.id">
+                                            <td class="col-id">
+                                                <span x-text="order.external_id || ('#' + order.id)"></span>
+                                            </td>
+                                        </template>
+                                        <template x-if="editingOrderId === order.id">
+                                            <td class="col-id">
+                                                <input type="text" x-model="editForm.external_id" placeholder="#12345">
+                                            </td>
+                                        </template>
+
+                                        <template x-if="editingOrderId !== order.id">
+                                            <td class="col-address" x-text="order.address"></td>
+                                        </template>
+                                        <template x-if="editingOrderId === order.id">
+                                            <td class="col-address">
+                                                <input type="text" x-model="editForm.address" placeholder="ул. Ленина, 15">
+                                            </td>
+                                        </template>
+
+                                        <template x-if="editingOrderId !== order.id">
+                                            <td class="col-contact" x-text="order.contact_name || '—'"></td>
+                                        </template>
+                                        <template x-if="editingOrderId === order.id">
+                                            <td class="col-contact">
+                                                <input type="text" x-model="editForm.contact_name" placeholder="Иванов И.И.">
+                                            </td>
+                                        </template>
+
+                                        <template x-if="editingOrderId !== order.id">
+                                            <td class="col-phone" x-text="order.phone || '—'"></td>
+                                        </template>
+                                        <template x-if="editingOrderId === order.id">
+                                            <td class="col-phone">
+                                                <input type="text" class="addr-phone" x-model="editForm.phone" x-mask="+7 (999) 999-99-99">
+                                            </td>
+                                        </template>
+
+                                        <template x-if="editingOrderId !== order.id">
+                                            <td class="col-volume" x-text="order.volume || '—'"></td>
+                                        </template>
+                                        <template x-if="editingOrderId === order.id">
+                                            <td class="col-volume">
+                                                <input type="number" x-model.number="editForm.volume" step="0.1" min="0">
+                                            </td>
+                                        </template>
+
+                                        <td class="col-status">
+                                            <span class="delivery-badge" 
+                                                :class="'delivery-' + (order.delivery_status || 'pending')"
+                                                @click="openStatusMenu(order)"
+                                                :title="order.delivery_note || deliveryStatusLabel(order.delivery_status)"
+                                                x-text="deliveryStatusLabel(order.delivery_status)">
+                                            </span>
+                                        </td>
+
+                                        <template x-if="editingOrderId !== order.id">
+                                            <td class="col-note">
+                                                <template x-if="order.note">
+                                                    <span class="addr-note-preview" :title="order.note" x-text="order.note"></span>
+                                                </template>
+                                                <template x-if="!order.note">
+                                                    <span style="color:var(--text-muted);">—</span>
+                                                </template>
+                                            </td>
+                                        </template>
+                                        <template x-if="editingOrderId === order.id">
+                                            <td class="col-note">
+                                                <textarea x-model="editForm.note" placeholder="Примечание"></textarea>
+                                            </td>
+                                        </template>
+
+                                        <td class="col-actions">
                                             <template x-if="editingOrderId !== order.id">
-                                                <td class="col-note">
-                                                    <template x-if="order.note">
-                                                        <span class="addr-note-preview" :title="order.note" x-text="order.note"></span>
-                                                    </template>
-                                                    <template x-if="!order.note">
-                                                        <span style="color:var(--text-muted);">—</span>
-                                                    </template>
-                                                </td>
+                                                <div style="display:flex;gap:2px;justify-content:flex-end;">
+                                                    <button class="btn-action" @click="moveUp(index)"
+                                                        :disabled="index === 0 || reorderSaving" title="Выше">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                            stroke-linejoin="round">
+                                                            <line x1="12" y1="19" x2="12" y2="5"></line>
+                                                            <polyline points="5 12 12 5 19 12"></polyline>
+                                                        </svg>
+                                                    </button>
+                                                    <button class="btn-action" @click="moveDown(index)"
+                                                        :disabled="index === orders.length - 1 || reorderSaving" title="Ниже">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                            stroke-linejoin="round">
+                                                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                                                            <polyline points="19 12 12 19 5 12"></polyline>
+                                                        </svg>
+                                                    </button>
+                                                    <button class="btn-action" @click="openMoveOrderModal(order)" title="Перенести в другой рейс">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                            <polyline points="5 9 2 12 5 15"></polyline>
+                                                            <polyline points="9 5 12 2 15 5"></polyline>
+                                                            <line x1="2" y1="12" x2="22" y2="12"></line>
+                                                            <polyline points="15 19 12 22 9 19"></polyline>
+                                                            <polyline points="19 15 22 12 19 9"></polyline>
+                                                        </svg>
+                                                    </button>
+                                                    <button class="btn-action" @click="startEdit(order)" title="Редактировать">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                            stroke-linejoin="round">
+                                                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                                        </svg>
+                                                    </button>
+                                                    <button class="btn-action danger" @click="deleteOrder(order)" title="Удалить">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                            stroke-linejoin="round">
+                                                            <polyline points="3 6 5 6 21 6"></polyline>
+                                                            <path
+                                                                d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+                                                            </path>
+                                                        </svg>
+                                                    </button>
+                                                </div>
                                             </template>
                                             <template x-if="editingOrderId === order.id">
-                                                <td class="col-note">
-                                                    <textarea x-model="editForm.note" placeholder="Примечание"></textarea>
-                                                </td>
+                                                <div style="display:flex;gap:2px;justify-content:flex-end;">
+                                                    <button class="btn-action success" @click="saveEdit()" :disabled="savingEdit"
+                                                        title="Сохранить">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                            stroke-linejoin="round">
+                                                            <polyline points="20 6 9 17 4 12"></polyline>
+                                                        </svg>
+                                                    </button>
+                                                    <button class="btn-action" @click="cancelEdit()" :disabled="savingEdit"
+                                                        title="Отмена">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                            stroke-linejoin="round">
+                                                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                        </svg>
+                                                    </button>
+                                                </div>
                                             </template>
-                    
-                                            <td class="col-actions">
-                                                <template x-if="editingOrderId !== order.id">
-                                                    <div style="display:flex;gap:2px;justify-content:flex-end;">
-                                                        <button class="btn-action" @click="moveUp(index)"
-                                                            :disabled="index === 0 || reorderSaving" title="Выше">
-                                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                                                                stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                                stroke-linejoin="round">
-                                                                <line x1="12" y1="19" x2="12" y2="5"></line>
-                                                                <polyline points="5 12 12 5 19 12"></polyline>
-                                                            </svg>
-                                                        </button>
-                                                        <button class="btn-action" @click="moveDown(index)"
-                                                            :disabled="index === orders.length - 1 || reorderSaving" title="Ниже">
-                                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                                                                stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                                stroke-linejoin="round">
-                                                                <line x1="12" y1="5" x2="12" y2="19"></line>
-                                                                <polyline points="19 12 12 19 5 12"></polyline>
-                                                            </svg>
-                                                        </button>
-                                                        <button class="btn-action" @click="openMoveOrderModal(order)" title="Перенести в другой рейс">
-                                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                                <polyline points="5 9 2 12 5 15"></polyline>
-                                                                <polyline points="9 5 12 2 15 5"></polyline>
-                                                                <line x1="2" y1="12" x2="22" y2="12"></line>
-                                                                <polyline points="15 19 12 22 9 19"></polyline>
-                                                                <polyline points="19 15 22 12 19 9"></polyline>
-                                                            </svg>
-                                                        </button>
-                                                        <button class="btn-action" @click="startEdit(order)" title="Редактировать">
-                                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                                                                stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                                stroke-linejoin="round">
-                                                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                                                            </svg>
-                                                        </button>
-                                                        <button class="btn-action danger" @click="deleteOrder(order)" title="Удалить">
-                                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                                                                stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                                stroke-linejoin="round">
-                                                                <polyline points="3 6 5 6 21 6"></polyline>
-                                                                <path
-                                                                    d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
-                                                                </path>
-                                                            </svg>
-                                                        </button>
-                                                    </div>
-                                                </template>
-                                                <template x-if="editingOrderId === order.id">
-                                                    <div style="display:flex;gap:2px;justify-content:flex-end;">
-                                                        <button class="btn-action success" @click="saveEdit()" :disabled="savingEdit"
-                                                            title="Сохранить">
-                                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                                                                stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                                stroke-linejoin="round">
-                                                                <polyline points="20 6 9 17 4 12"></polyline>
-                                                            </svg>
-                                                        </button>
-                                                        <button class="btn-action" @click="cancelEdit()" :disabled="savingEdit"
-                                                            title="Отмена">
-                                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                                                                stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                                stroke-linejoin="round">
-                                                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                                                            </svg>
-                                                        </button>
-                                                    </div>
-                                                </template>
-                                            </td>
-                                        </tr>
-                                    </template>
+                                        </td>
+                                    </tr>
+
+                                    <!-- Плашка failed -->
                                     <template x-if="order.delivery_status === 'failed'">
                                         <tr class="failed-row">
                                             <td :colspan="9" style="padding:0;border-top:none;">
@@ -635,9 +628,12 @@
                                             </td>
                                         </tr>
                                     </template>
-                                </template>
-                
-                                <template x-if="newOrderRow">
+                                </tbody>
+                            </template>
+
+                            <!-- Строка добавления нового адреса -->
+                            <template x-if="newOrderRow">
+                                <tbody>
                                     <tr class="row-editing">
                                         <td class="col-seq">
                                             <span x-text="orders.length + 1"></span>
@@ -683,8 +679,8 @@
                                             </div>
                                         </td>
                                     </tr>
-                                </template>
-                            </tbody>
+                                </tbody>
+                            </template>
                         </table>
                     </div>
                 </div>
@@ -1412,6 +1408,7 @@
                 routes: [],
                 loading: true,
                 error: '',
+                tasksCount: 0,
 
                 editingTrip: false,
                 editTripForm: {},
@@ -1542,6 +1539,14 @@
                         this.showRevenue = setting?.value === 'true';
                     } catch (e) {
                         this.showRevenue = false;
+                    }
+
+                    // Загружаем счётчик задач
+                    try {
+                        const tc = await window.API.api('/api/incoming?action=tasks-count');
+                        this.tasksCount = tc.total || 0;
+                    } catch (e) {
+                        this.tasksCount = 0;
                     }
 
                     const params = new URLSearchParams(window.location.search);
@@ -1920,14 +1925,11 @@
                         });
 
                         if (change.change_type === 'cancelled') {
-                            // Отмена — просто помечаем delivered_status, не убираем из рейса
                             order.delivery_status = 'cancelled';
                             order.delivery_note = 'Отменён в Битриксе';
                         } else if (change.change_type === 'deleted') {
-                            // Удаление — убираем из рейса
                             this.orders = this.orders.filter(o => o.id !== order.id);
                         } else if (change.change_type === 'updated') {
-                            // Обновление — меняем поле
                             if (change.field_name === 'volume') {
                                 order.volume = Number(change.new_value) || 0;
                             } else {
@@ -1935,7 +1937,6 @@
                             }
                         }
 
-                        // Убираем change из pending_changes
                         order.pending_changes = order.pending_changes.filter(c => c.id !== change.id);
 
                     } catch (e) {
@@ -1951,7 +1952,6 @@
                             method: 'POST'
                         });
 
-                        // Убираем change из pending_changes
                         order.pending_changes = order.pending_changes.filter(c => c.id !== change.id);
 
                     } catch (e) {
