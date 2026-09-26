@@ -324,7 +324,10 @@
                             <button class="btn btn-secondary btn-sm" @click="addNewOrder()" :disabled="reorderSaving || editingOrderId">
                                 + Добавить адрес
                             </button>
-                            <button class="btn btn-secondary btn-sm" disabled title="Будет добавлено на следующем этапе">
+                            <button class="btn btn-secondary btn-sm"
+                                @click="openIncomingSelectModal()"
+                                :disabled="reorderSaving || editingOrderId || trip.status === 'cancelled'"
+                                title="Добавить адреса из входящих заказов">
                                 + Из входящих
                             </button>
                             <template x-if="orders.length > 0 && trip.status !== 'done' && trip.status !== 'cancelled'">
@@ -445,7 +448,6 @@
                                                 </td>
                                             </template>
 
-                                            <!-- СТАТУС ДОСТАВКИ -->
                                             <td class="col-status">
                                                 <span class="delivery-badge" 
                                                     :class="'delivery-' + (order.delivery_status || 'pending')"
@@ -568,7 +570,6 @@
                                     </template>
                                 </template>
                 
-                                <!-- Новая строка добавления -->
                                 <template x-if="newOrderRow">
                                     <tr class="row-editing">
                                         <td class="col-seq">
@@ -1193,12 +1194,96 @@
                     </div>
                 </div>
 
+                <!-- МОДАЛКА: ВЫБОР ИЗ ВХОДЯЩИХ -->
+                <div x-show="incomingSelectModal.open" x-cloak class="modal-backdrop" @click.self="closeIncomingSelectModal()">
+                    <div class="modal-window modal-window-wide" @click.stop>
+                        <div class="modal-header">
+                            <h2 class="modal-title">
+                                Добавить из входящих
+                                <span style="font-weight:400;color:var(--text-secondary);font-size:13px;margin-left:8px;"
+                                    x-text="incomingSelectModal.items.length > 0 ? '(' + incomingSelectModal.items.length + ' доступно)' : ''"></span>
+                            </h2>
+                            <button class="modal-close" @click="closeIncomingSelectModal()">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            <div x-show="incomingSelectModal.error" class="alert alert-error" x-text="incomingSelectModal.error"></div>
+
+                            <div x-show="incomingSelectModal.loading" style="padding:40px;text-align:center;color:var(--text-secondary);font-size:13px;">
+                                Загрузка...
+                            </div>
+
+                            <div x-show="!incomingSelectModal.loading && incomingSelectModal.items.length === 0" class="empty-state">
+                                <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M22 12h-6l-2 3h-4l-2-3H2"></path>
+                                    <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
+                                </svg>
+                                <h3 class="empty-title">Нет входящих заказов</h3>
+                                <p class="empty-description">Все входящие уже назначены на рейсы</p>
+                            </div>
+
+                            <div x-show="!incomingSelectModal.loading && incomingSelectModal.items.length > 0" style="overflow-x:auto;max-height:400px;">
+                                <table class="incoming-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width:40px;">
+                                                <input type="checkbox" class="row-checkbox"
+                                                    :checked="incomingSelectModal.allSelected"
+                                                    @change="toggleAllIncomingSelect($event.target.checked)">
+                                            </th>
+                                            <th class="col-external-id">ID</th>
+                                            <th class="col-address">Адрес</th>
+                                            <th class="col-contact">Контакт</th>
+                                            <th class="col-phone">Телефон</th>
+                                            <th class="col-volume text-right">м³</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template x-for="item in incomingSelectModal.items" :key="item.id">
+                                            <tr :class="{ 'row-selected': incomingSelectModal.selectedIds.includes(item.id) }">
+                                                <td>
+                                                    <input type="checkbox" class="row-checkbox"
+                                                        :checked="incomingSelectModal.selectedIds.includes(item.id)"
+                                                        @change="toggleIncomingSelect(item.id, $event.target.checked)">
+                                                </td>
+                                                <td class="col-external-id" x-text="item.external_id || '—'"></td>
+                                                <td class="col-address" x-text="item.address || '—'"></td>
+                                                <td class="col-contact" x-text="item.contact_name || '—'"></td>
+                                                <td class="col-phone" x-text="item.phone || '—'"></td>
+                                                <td class="col-volume" x-text="item.volume || '—'"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <div style="margin-right:auto;font-size:13px;color:var(--text-secondary);">
+                                Выбрано: <strong x-text="incomingSelectModal.selectedIds.length"></strong>
+                            </div>
+                            <button class="btn btn-secondary" @click="closeIncomingSelectModal()" :disabled="incomingSelectModal.saving">Отмена</button>
+                            <button class="btn btn-primary" @click="submitIncomingSelect()"
+                                :disabled="incomingSelectModal.saving || incomingSelectModal.selectedIds.length === 0">
+                                <span x-show="!incomingSelectModal.saving">
+                                    Добавить <span x-text="incomingSelectModal.selectedIds.length"></span>
+                                </span>
+                                <span x-show="incomingSelectModal.saving" x-cloak>Добавление...</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 
             </div>
             </div>
         </template>
         </div>
     </main>
+
     <!-- ПУТЕВОЙ ЛИСТ (для печати) -->
     <div id="waybillPrint" class="waybill-print">
         <h1>ПУТЕВОЙ ЛИСТ № <span x-text="trip?.trip_number || '—'"></span></h1>
@@ -1266,7 +1351,6 @@
                 savingTrip: false,
                 showRevenue: false,
 
-                // Модалки
                 tripStatusModal: { open: false, saving: false, error: '' },
                 problemModal: { open: false, comment: '', saving: false, error: '' },
                 resolveProblemModal: { open: false, newStatus: 'forming', saving: false, error: '' },
@@ -1275,6 +1359,15 @@
                 statusMenuModal: { open: false, order: null },
                 moveOrderModal: { open: false, order: null, toTripId: null, saving: false, error: '', overloadWarning: '' },
                 moveAllModal: { open: false, toTripId: null, reason: '', saving: false, error: '' },
+
+                incomingSelectModal: {
+                    open: false,
+                    loading: false,
+                    saving: false,
+                    error: '',
+                    items: [],
+                    selectedIds: []
+                },
 
                 availableTrips: [],
 
@@ -1421,6 +1514,186 @@
                     }
                 },
 
+                // ============ ВЫБОР ИЗ ВХОДЯЩИХ ============
+
+                async openIncomingSelectModal() {
+                    this.incomingSelectModal = {
+                        open: true,
+                        loading: true,
+                        saving: false,
+                        error: '',
+                        items: [],
+                        selectedIds: []
+                    };
+
+                    try {
+                        const data = await window.API.api('/api/incoming?status=pending');
+                        this.incomingSelectModal.items = data.incoming || [];
+                    } catch (e) {
+                        this.incomingSelectModal.error = e.message;
+                    } finally {
+                        this.incomingSelectModal.loading = false;
+                    }
+                },
+
+                closeIncomingSelectModal() {
+                    if (this.incomingSelectModal.saving) return;
+                    this.incomingSelectModal.open = false;
+                },
+
+                toggleIncomingSelect(id, checked) {
+                    if (checked) {
+                        if (!this.incomingSelectModal.selectedIds.includes(id)) {
+                            this.incomingSelectModal.selectedIds.push(id);
+                        }
+                    } else {
+                        this.incomingSelectModal.selectedIds = this.incomingSelectModal.selectedIds.filter(x => x !== id);
+                    }
+                },
+
+                toggleAllIncomingSelect(checked) {
+                    if (checked) {
+                        this.incomingSelectModal.selectedIds = this.incomingSelectModal.items.map(i => i.id);
+                    } else {
+                        this.incomingSelectModal.selectedIds = [];
+                    }
+                },
+
+                async submitIncomingSelect() {
+                    if (this.incomingSelectModal.selectedIds.length === 0) return;
+
+                    this.incomingSelectModal.saving = true;
+                    this.incomingSelectModal.error = '';
+
+                    try {
+                        const data = await window.API.api('/api/incoming?action=bulk-assign', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                ids: this.incomingSelectModal.selectedIds,
+                                trip_id: this.trip.id
+                            })
+                        });
+
+                        this.incomingSelectModal.open = false;
+                        await this.loadTrip(this.trip.id);
+
+                        if (data.message) {
+                            setTimeout(() => alert(data.message), 100);
+                        }
+                    } catch (e) {
+                        this.incomingSelectModal.error = e.message;
+                    } finally {
+                        this.incomingSelectModal.saving = false;
+                    }
+                },
+
+                // ============ СМЕНА СТАТУСА РЕЙСА ============
+
+                openTripStatusModal() {
+                    if (this.trip?.status === 'problem' || this.trip?.status === 'cancelled') {
+                        return;
+                    }
+                    this.tripStatusModal = {
+                        open: true,
+                        saving: false,
+                        error: ''
+                    };
+                },
+
+                closeTripStatusModal() {
+                    if (this.tripStatusModal.saving) return;
+                    this.tripStatusModal.open = false;
+                },
+
+                async changeTripStatus(newStatus) {
+                    if (!this.trip) return;
+                    if (newStatus === this.trip.status) {
+                        this.tripStatusModal.open = false;
+                        return;
+                    }
+
+                    if (newStatus === 'done') {
+                        const ok = this.confirmCloseTrip();
+                        if (!ok) return;
+                    }
+
+                    this.tripStatusModal.saving = true;
+                    this.tripStatusModal.error = '';
+
+                    try {
+                        await window.API.api('/api/trips?action=update&id=' + this.trip.id, {
+                            method: 'PUT',
+                            body: JSON.stringify({ status: newStatus })
+                        });
+
+                        this.tripStatusModal.open = false;
+                        await this.loadTrip(this.trip.id);
+
+                    } catch (e) {
+                        this.tripStatusModal.error = e.message;
+                    } finally {
+                        this.tripStatusModal.saving = false;
+                    }
+                },
+
+                confirmCloseTrip() {
+                    const trip = this.trip;
+                    const orders = this.orders || [];
+                    const costs = this.costs || [];
+                    const autoCosts = this.autoCosts || [];
+
+                    const factKm = Number(trip.fact_km) || 0;
+                    const pendingOrders = orders.filter(o =>
+                        !o.delivery_status || o.delivery_status === 'pending'
+                    ).length;
+                    const failedOrders = orders.filter(o =>
+                        o.delivery_status === 'failed'
+                    ).length;
+                    const deliveredOrders = orders.filter(o =>
+                        o.delivery_status === 'delivered'
+                    ).length;
+
+                    const lines = ['Рейс ' + trip.trip_number + '.'];
+
+                    if (factKm > 0) {
+                        lines.push('Пробег факт: ' + factKm + ' км');
+                    } else {
+                        lines.push('Пробег факт: не заполнен (0 км)');
+                    }
+
+                    const totalCostsCount = costs.length + autoCosts.length;
+                    if (totalCostsCount === 0) {
+                        lines.push('Затраты: нет');
+                    } else if (costs.length === 0 && autoCosts.length > 0) {
+                        lines.push('Затраты: ' + autoCosts.length + ' (только авто)');
+                    } else {
+                        lines.push('Затраты: ' + costs.length + ' ручных' +
+                            (autoCosts.length > 0 ? ' + ' + autoCosts.length + ' авто' : ''));
+                    }
+
+                    if (orders.length === 0) {
+                        lines.push('Заказов: нет');
+                    } else {
+                        let orderLine = 'Заказов: ' + orders.length;
+                        const parts = [];
+                        if (deliveredOrders > 0) parts.push('доставлено ' + deliveredOrders);
+                        if (failedOrders > 0) parts.push('не доставлено ' + failedOrders);
+                        if (pendingOrders > 0) parts.push('без статуса ' + pendingOrders);
+                        if (parts.length > 0) orderLine += ' (' + parts.join(', ') + ')';
+                        lines.push(orderLine);
+                    }
+
+                    if (pendingOrders > 0) {
+                        lines.push('');
+                        lines.push('Заказы без статуса будут помечены как «Доставлено».');
+                    }
+
+                    lines.push('');
+                    lines.push('Закрыть рейс?');
+
+                    return confirm(lines.join('\n'));
+                },
+
                 // ============ СТАТУС ДОСТАВКИ ============
 
                 deliveryStatusLabel(status) {
@@ -1450,7 +1723,6 @@
                     const order = this.statusMenuModal.order;
                     if (!order) return;
 
-                    // failed — открыть модалку причины
                     if (status === 'failed') {
                         this.statusMenuModal.open = false;
                         this.failedModal = {
@@ -1663,17 +1935,11 @@
                     }
                 },
 
-                // ============ ДОБАВЛЕНИЕ ============
-
                 addNewOrder() {
                     this.newOrderRow = true;
                     this.newOrderForm = {
-                        external_id: '',
-                        address: '',
-                        contact_name: '',
-                        phone: '',
-                        volume: 0,
-                        note: ''
+                        external_id: '', address: '', contact_name: '',
+                        phone: '', volume: 0, note: ''
                     };
                 },
 
@@ -1721,7 +1987,6 @@
                         await window.API.api('/api/orders?action=delete&id=' + order.id, {
                             method: 'DELETE'
                         });
-
                         this.orders = this.orders.filter(o => o.id !== order.id);
                     } catch (e) {
                         alert('Ошибка удаления: ' + e.message);
@@ -1757,11 +2022,7 @@
 
                 addNewCost() {
                     this.newCostRow = true;
-                    this.newCostForm = {
-                        category: 'fuel',
-                        amount: 0,
-                        note: ''
-                    };
+                    this.newCostForm = { category: 'fuel', amount: 0, note: '' };
                 },
 
                 cancelNewCost() {
@@ -1853,9 +2114,7 @@
                         await window.API.api('/api/costs?action=delete&id=' + cost.id, {
                             method: 'DELETE'
                         });
-
                         this.costs = this.costs.filter(c => c.id !== cost.id);
-
                     } catch (e) {
                         alert('Ошибка: ' + e.message);
                     }
@@ -1961,124 +2220,10 @@
                     }
                 },
 
-                // ============ СМЕНА СТАТУСА РЕЙСА ============
-
-                openTripStatusModal() {
-                    if (this.trip?.status === 'problem' || this.trip?.status === 'cancelled') {
-                        return;
-                    }
-                    this.tripStatusModal = {
-                        open: true,
-                        saving: false,
-                        error: ''
-                    };
-                },
-
-                closeTripStatusModal() {
-                    if (this.tripStatusModal.saving) return;
-                    this.tripStatusModal.open = false;
-                },
-
-                async changeTripStatus(newStatus) {
-                    if (!this.trip) return;
-                    if (newStatus === this.trip.status) {
-                        this.tripStatusModal.open = false;
-                        return;
-                    }
-
-                    // Перед закрытием — мягкая проверка со сводкой
-                    if (newStatus === 'done') {
-                        const ok = this.confirmCloseTrip();
-                        if (!ok) return;
-                    }
-
-                    this.tripStatusModal.saving = true;
-                    this.tripStatusModal.error = '';
-
-                    try {
-                        await window.API.api('/api/trips?action=update&id=' + this.trip.id, {
-                            method: 'PUT',
-                            body: JSON.stringify({ status: newStatus })
-                        });
-
-                        this.tripStatusModal.open = false;
-                        await this.loadTrip(this.trip.id);
-
-                    } catch (e) {
-                        this.tripStatusModal.error = e.message;
-                    } finally {
-                        this.tripStatusModal.saving = false;
-                    }
-                },
-
-                // Мягкая проверка перед закрытием рейса (в карточке)
-                confirmCloseTrip() {
-                    const trip = this.trip;
-                    const orders = this.orders || [];
-                    const costs = this.costs || [];
-                    const autoCosts = this.autoCosts || [];
-
-                    const factKm = Number(trip.fact_km) || 0;
-                    const pendingOrders = orders.filter(o =>
-                        !o.delivery_status || o.delivery_status === 'pending'
-                    ).length;
-                    const failedOrders = orders.filter(o =>
-                        o.delivery_status === 'failed'
-                    ).length;
-                    const deliveredOrders = orders.filter(o =>
-                        o.delivery_status === 'delivered'
-                    ).length;
-
-                    const lines = ['Рейс ' + trip.trip_number + '.'];
-
-                    if (factKm > 0) {
-                        lines.push('Пробег факт: ' + factKm + ' км');
-                    } else {
-                        lines.push('Пробег факт: не заполнен (0 км)');
-                    }
-
-                    const totalCostsCount = costs.length + autoCosts.length;
-                    if (totalCostsCount === 0) {
-                        lines.push('Затраты: нет');
-                    } else if (costs.length === 0 && autoCosts.length > 0) {
-                        lines.push('Затраты: ' + autoCosts.length + ' (только авто)');
-                    } else {
-                        lines.push('Затраты: ' + costs.length + ' ручных' +
-                            (autoCosts.length > 0 ? ' + ' + autoCosts.length + ' авто' : ''));
-                    }
-
-                    if (orders.length === 0) {
-                        lines.push('Заказов: нет');
-                    } else {
-                        let orderLine = 'Заказов: ' + orders.length;
-                        const parts = [];
-                        if (deliveredOrders > 0) parts.push('доставлено ' + deliveredOrders);
-                        if (failedOrders > 0) parts.push('не доставлено ' + failedOrders);
-                        if (pendingOrders > 0) parts.push('без статуса ' + pendingOrders);
-                        if (parts.length > 0) orderLine += ' (' + parts.join(', ') + ')';
-                        lines.push(orderLine);
-                    }
-
-                    if (pendingOrders > 0) {
-                        lines.push('');
-                        lines.push('Заказы без статуса будут помечены как «Доставлено».');
-                    }
-
-                    lines.push('');
-                    lines.push('Закрыть рейс?');
-
-                    return confirm(lines.join('\n'));
-                },
-
                 // ============ ПРОБЛЕМА ============
 
                 openProblemModal() {
-                    this.problemModal = {
-                        open: true,
-                        comment: '',
-                        saving: false,
-                        error: ''
-                    };
+                    this.problemModal = { open: true, comment: '', saving: false, error: '' };
                 },
 
                 async submitProblem() {
@@ -2264,7 +2409,6 @@
                         });
 
                         this.orders = this.orders.filter(o => o.id !== this.moveOrderModal.order.id);
-
                         this.moveOrderModal.open = false;
                         this.moveOrderModal.order = null;
 
@@ -2322,7 +2466,6 @@
 
                         this.orders = [];
                         this.moveAllModal.open = false;
-
                         alert(result.message || 'Заказы перенесены');
 
                     } catch (e) {
