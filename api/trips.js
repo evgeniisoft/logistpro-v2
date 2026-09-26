@@ -40,6 +40,30 @@ async function handler(req, res) {
         [id],
       );
 
+      // Загружаем pending-изменения из Битрикса для заказов этого рейса
+      const changesResult = await query(
+        `SELECT 
+           ic.id, ic.external_id, ic.change_type, ic.field_name,
+           ic.old_value, ic.new_value, ic.order_id, ic.created_at
+         FROM incoming_changes ic
+         WHERE ic.order_id = ANY($1) AND ic.status = 'pending'
+         ORDER BY ic.created_at DESC`,
+        [ordersResult.rows.map((o) => o.id)],
+      );
+
+      // Группируем изменения по order_id
+      const changesByOrder = {};
+      changesResult.rows.forEach((c) => {
+        if (!changesByOrder[c.order_id]) changesByOrder[c.order_id] = [];
+        changesByOrder[c.order_id].push(c);
+      });
+
+      // Прикрепляем changes к каждому order
+      const ordersWithChanges = ordersResult.rows.map((o) => ({
+        ...o,
+        pending_changes: changesByOrder[o.id] || [],
+      }));
+
       const costsResult = await query(
         "SELECT * FROM costs WHERE trip_id = $1 ORDER BY created_at DESC",
         [id],
@@ -93,7 +117,7 @@ async function handler(req, res) {
 
       return res.json({
         trip: trip,
-        orders: ordersResult.rows,
+        orders: ordersWithChanges,
         costs: costs,
         auto_costs: autoCosts,
       });
