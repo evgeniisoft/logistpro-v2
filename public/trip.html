@@ -601,20 +601,18 @@
                                                     <div class="changes-panel-list">
                                                         <template x-for="change in order.pending_changes" :key="change.id">
                                                             <div class="changes-panel-item">
-                                                                <template x-if="change.change_type === 'cancelled'">
-                                                                    <span><strong>Заказ отменён в Битриксе</strong></span>
-                                                                </template>
-                                                                <template x-if="change.change_type === 'deleted'">
-                                                                    <span><strong>Заказ удалён в Битриксе</strong></span>
-                                                                </template>
-                                                                <template x-if="change.change_type === 'updated'">
-                                                                    <span>
-                                                                        <strong x-text="fieldLabel(change.field_name) + ':'"></strong>
-                                                                        <span class="changes-panel-old" x-text="change.old_value || '—'"></span>
-                                                                        <span class="changes-panel-arrow">→</span>
-                                                                        <span class="changes-panel-new" x-text="change.new_value || '—'"></span>
-                                                                    </span>
-                                                                </template>
+                                                                <span x-show="change.change_type === 'cancelled'">
+                                                                    <strong>Заказ отменён в Битриксе</strong>
+                                                                </span>
+                                                                <span x-show="change.change_type === 'deleted'">
+                                                                    <strong>Заказ удалён в Битриксе</strong>
+                                                                </span>
+                                                                <span x-show="change.change_type === 'updated'">
+                                                                    <strong x-text="fieldLabel(change.field_name) + ':'"></strong>
+                                                                    <span class="changes-panel-old" x-text="change.old_value || '—'"></span>
+                                                                    <span class="changes-panel-arrow">→</span>
+                                                                    <span class="changes-panel-new" x-text="change.new_value || '—'"></span>
+                                                                </span>
                                                             </div>
                                                         </template>
                                                     </div>
@@ -623,9 +621,9 @@
                                                         <template x-for="change in order.pending_changes" :key="'btn-' + change.id">
                                                             <div style="display:flex;gap:6px;align-items:center;">
                                                                 <button class="btn btn-primary btn-sm" @click="applyChangeInline(change, order)">
-                                                                    <template x-if="change.change_type === 'cancelled'"><span>Убрать из рейса</span></template>
-                                                                    <template x-if="change.change_type === 'deleted'"><span>Удалить из рейса</span></template>
-                                                                    <template x-if="change.change_type === 'updated'"><span>Применить</span></template>
+                                                                    <span x-show="change.change_type === 'cancelled'">Убрать из рейса</span>
+                                                                    <span x-show="change.change_type === 'deleted'">Удалить из рейса</span>
+                                                                    <span x-show="change.change_type === 'updated'">Применить</span>
                                                                 </button>
                                                                 <button class="btn btn-secondary btn-sm" @click="ignoreChangeInline(change, order)">
                                                                     Оставить как есть
