@@ -3257,3 +3257,58 @@ body {
     cursor: not-allowed;
     opacity: 0.5;
 }
+/* ============ БЛОК 10: МАССОВЫЕ ОПЕРАЦИИ В ВХОДЯЩИХ ============ */
+
+/* Панель массовых действий */
+.bulk-actions-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 16px;
+    background: #EFF6FF;
+    border: 1px solid #BFDBFE;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.bulk-actions-info {
+    font-size: 13px;
+    color: #1E40AF;
+}
+
+.bulk-actions-info strong {
+    font-weight: 700;
+}
+
+.bulk-actions-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* Чекбоксы в таблице */
+.row-checkbox {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--color-accent);
+}
+
+/* Подсветка выбранной строки */
+.incoming-table tbody tr.row-selected {
+    background: #EFF6FF;
+}
+
+.incoming-table tbody tr.row-selected:hover {
+    background: #DBEAFE;
+}
+
+/* Колонка с чекбоксом */
+.incoming-table thead th:first-child,
+.incoming-table tbody td:first-child {
+    text-align: center;
+    padding-left: 12px;
+    padding-right: 8px;
+}
