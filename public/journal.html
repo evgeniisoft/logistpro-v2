@@ -25,7 +25,23 @@
                 <a href="/incoming.html" class="app-nav-link">Входящие</a>
                 <a href="/reports.html" class="app-nav-link">Отчёты</a>
                 <a href="/references.html" class="app-nav-link">Справочники</a>
-                <a href="/journal.html" class="app-nav-link active">Журнал</a>
+                <a href="/journal.html" class="app-nav-link">Журнал</a>
+                <a href="/tasks.html" class="app-nav-link app-nav-bell" :class="tab === 'tasks' ? 'active' : ''" x-data="{ tasksCount: 0 }" x-init="
+                    (async () => {
+                        if (!window.AUTH) { setTimeout(() => $el._x_dataStack[0].loadTasksCount?.(), 50); return; }
+                        try {
+                            const data = await window.API.api('/api/incoming?action=tasks-count');
+                            tasksCount = data.total || 0;
+                        } catch (e) { console.error('tasks-count error:', e); }
+                    })()
+                ">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                    </svg>
+                    Задачи
+                    <span class="app-nav-bell-count" x-show="tasksCount > 0" x-text="tasksCount"></span>
+                </a>
             </nav>
         </div>
         <div class="app-header-right">
