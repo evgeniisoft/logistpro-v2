@@ -3312,3 +3312,219 @@ body {
     padding-left: 12px;
     padding-right: 8px;
 }
+/* ============ БЛОК 11: КОЛОКОЛЬЧИК ЗАДАЧ + СТРАНИЦА ЗАДАЧ ============ */
+
+/* Колокольчик в хедере */
+.app-nav-bell {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.app-nav-bell-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    background: #DC2626;
+    color: #fff;
+    border-radius: 9px;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+/* Страница задач */
+.task-section-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0 0 12px 0;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.task-section-title-count {
+    display: inline-block;
+    padding: 1px 8px;
+    background: var(--bg-muted);
+    color: var(--text-secondary);
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+/* Карточка задачи */
+.task-card {
+    background: #fff;
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    transition: box-shadow 0.15s;
+}
+
+.task-card:hover {
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+.task-card.task-cancelled {
+    border-left: 4px solid #DC2626;
+}
+
+.task-card.task-updated {
+    border-left: 4px solid #D97706;
+}
+
+.task-card.task-new {
+    border-left: 4px solid #2563EB;
+}
+
+.task-card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.task-card-icon {
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.task-card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    flex: 1;
+    min-width: 0;
+}
+
+.task-card-time {
+    font-size: 11px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.task-card-body {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    line-height: 1.5;
+}
+
+.task-card-body strong {
+    color: var(--text-primary);
+}
+
+.task-card-change {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--bg-muted);
+    border-radius: 4px;
+    font-family: 'SF Mono', Consolas, monospace;
+    font-size: 11px;
+    margin: 4px 0;
+    flex-wrap: wrap;
+}
+
+.task-card-change-old {
+    color: var(--text-secondary);
+    text-decoration: line-through;
+}
+
+.task-card-change-arrow {
+    color: var(--text-muted);
+}
+
+.task-card-change-new {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.task-card-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* Табы задач */
+.tasks-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--border-light);
+    margin-bottom: 20px;
+}
+
+.tasks-tab {
+    padding: 10px 16px;
+    background: transparent;
+    border: none;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: color 0.15s, border-color 0.15s;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tasks-tab:hover {
+    color: var(--text-primary);
+}
+
+.tasks-tab.active {
+    color: var(--color-accent);
+    border-bottom-color: var(--color-accent);
+}
+
+.tasks-tab .count {
+    display: inline-block;
+    padding: 1px 7px;
+    background: var(--bg-muted);
+    color: var(--text-secondary);
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.tasks-tab.active .count {
+    background: rgba(37, 99, 235, 0.1);
+    color: var(--color-accent);
+}
+
+/* Панель массовых действий на странице задач */
+.tasks-bulk-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 16px;
+    background: #EFF6FF;
+    border: 1px solid #BFDBFE;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.tasks-bulk-info {
+    font-size: 13px;
+    color: #1E40AF;
+}
+
+.tasks-bulk-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
