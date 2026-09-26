@@ -496,6 +496,181 @@
                     </div>
                 </div>
 
+                <!-- Маппинг полей Битрикс24 -->
+                <div class="section-card" style="margin-bottom:20px;">
+                    <div class="section-card-header">
+                        <h2 class="section-card-title">Маппинг полей Битрикс24</h2>
+                        <button class="btn btn-primary btn-sm" @click="saveFieldMapping()" :disabled="savingMapping">
+                            <span x-show="!savingMapping">Сохранить маппинг</span>
+                            <span x-show="savingMapping" x-cloak>Сохранение...</span>
+                        </button>
+                    </div>
+                    <div style="padding:20px 24px;">
+                        <div x-show="mappingError" x-cloak class="alert alert-error" x-text="mappingError"></div>
+                        <div x-show="mappingSuccess" x-cloak style="padding:12px 14px;background:#D1FAE5;border:1px solid #A7F3D0;border-radius:6px;color:#065F46;font-size:13px;margin-bottom:16px;" x-text="mappingSuccess"></div>
+
+                        <p style="font-size:13px;color:var(--text-secondary);margin:0 0 16px 0;">
+                            Укажите, какие поля сделки из Битрикс24 соответствуют нашим полям.
+                            Значения — это ID полей (например, <code style="background:var(--bg-muted);padding:2px 6px;border-radius:3px;">UF_CRM_1234567890</code> или <code style="background:var(--bg-muted);padding:2px 6px;border-radius:3px;">COMMENTS</code>).
+                            Если поле не используется — оставьте пустым.
+                        </p>
+
+                        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                            <thead>
+                                <tr style="border-bottom:1px solid var(--border-light);background:#FAFBFC;">
+                                    <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;width:200px;">Наше поле</th>
+                                    <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;">ID поля в Битриксе</th>
+                                    <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.5px;width:200px;">Пример значения</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr style="border-bottom:1px solid var(--border-light);">
+                                    <td style="padding:10px 14px;font-weight:500;">ID сделки <span style="color:#DC2626;">*</span></td>
+                                    <td style="padding:10px 14px;">
+                                        <input type="text" class="form-input" x-model="fieldMapping.external_id" placeholder="ID" style="font-family:monospace;font-size:12px;">
+                                    </td>
+                                    <td style="padding:10px 14px;color:var(--text-secondary);font-size:12px;">12345</td>
+                                </tr>
+                                <tr style="border-bottom:1px solid var(--border-light);">
+                                    <td style="padding:10px 14px;font-weight:500;">Адрес <span style="color:#DC2626;">*</span></td>
+                                    <td style="padding:10px 14px;">
+                                        <input type="text" class="form-input" x-model="fieldMapping.address" placeholder="UF_CRM_..." style="font-family:monospace;font-size:12px;">
+                                    </td>
+                                    <td style="padding:10px 14px;color:var(--text-secondary);font-size:12px;">г. Москва, ул. Ленина, 15</td>
+                                </tr>
+                                <tr style="border-bottom:1px solid var(--border-light);">
+                                    <td style="padding:10px 14px;font-weight:500;">Контактное лицо</td>
+                                    <td style="padding:10px 14px;">
+                                        <input type="text" class="form-input" x-model="fieldMapping.contact_name" placeholder="UF_CRM_..." style="font-family:monospace;font-size:12px;">
+                                    </td>
+                                    <td style="padding:10px 14px;color:var(--text-secondary);font-size:12px;">Иванов И.И.</td>
+                                </tr>
+                                <tr style="border-bottom:1px solid var(--border-light);">
+                                    <td style="padding:10px 14px;font-weight:500;">Телефон</td>
+                                    <td style="padding:10px 14px;">
+                                        <input type="text" class="form-input" x-model="fieldMapping.phone" placeholder="UF_CRM_..." style="font-family:monospace;font-size:12px;">
+                                    </td>
+                                    <td style="padding:10px 14px;color:var(--text-secondary);font-size:12px;">+7 916 123-45-67</td>
+                                </tr>
+                                <tr style="border-bottom:1px solid var(--border-light);">
+                                    <td style="padding:10px 14px;font-weight:500;">Объём, м³</td>
+                                    <td style="padding:10px 14px;">
+                                        <input type="text" class="form-input" x-model="fieldMapping.volume" placeholder="UF_CRM_..." style="font-family:monospace;font-size:12px;">
+                                    </td>
+                                    <td style="padding:10px 14px;color:var(--text-secondary);font-size:12px;">3.5</td>
+                                </tr>
+                                <tr style="border-bottom:1px solid var(--border-light);">
+                                    <td style="padding:10px 14px;font-weight:500;">Дата доставки</td>
+                                    <td style="padding:10px 14px;">
+                                        <input type="text" class="form-input" x-model="fieldMapping.delivery_date" placeholder="UF_CRM_..." style="font-family:monospace;font-size:12px;">
+                                    </td>
+                                    <td style="padding:10px 14px;color:var(--text-secondary);font-size:12px;">2026-09-27</td>
+                                </tr>
+                                <tr style="border-bottom:1px solid var(--border-light);">
+                                    <td style="padding:10px 14px;font-weight:500;">Примечание</td>
+                                    <td style="padding:10px 14px;">
+                                        <input type="text" class="form-input" x-model="fieldMapping.note" placeholder="COMMENTS" style="font-family:monospace;font-size:12px;">
+                                    </td>
+                                    <td style="padding:10px 14px;color:var(--text-secondary);font-size:12px;">Звонить за час</td>
+                                </tr>
+                                <tr style="border-bottom:1px solid var(--border-light);">
+                                    <td style="padding:10px 14px;font-weight:500;">Название сделки</td>
+                                    <td style="padding:10px 14px;">
+                                        <input type="text" class="form-input" x-model="fieldMapping.title" placeholder="TITLE" style="font-family:monospace;font-size:12px;">
+                                    </td>
+                                    <td style="padding:10px 14px;color:var(--text-secondary);font-size:12px;">Заказ №12345</td>
+                                </tr>
+                                <tr style="border-bottom:1px solid var(--border-light);">
+                                    <td style="padding:10px 14px;font-weight:500;">Стадия сделки</td>
+                                    <td style="padding:10px 14px;">
+                                        <input type="text" class="form-input" x-model="fieldMapping.stage" placeholder="STAGE_ID" style="font-family:monospace;font-size:12px;">
+                                    </td>
+                                    <td style="padding:10px 14px;color:var(--text-secondary);font-size:12px;">NEW, PREPARATION, LOSE</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <div class="form-group" style="margin-top:20px;">
+                            <label class="form-label">Стадии, означающие отмену сделки</label>
+                            <input type="text" class="form-input" x-model="cancelStages" placeholder="LOSE, CANCELLED" style="max-width:400px;font-family:monospace;font-size:12px;">
+                            <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">
+                                Через запятую. Если у сделки стадия из этого списка — считаем её отменённой.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Тест webhook -->
+                <div class="section-card" style="margin-bottom:20px;">
+                    <div class="section-card-header">
+                        <h2 class="section-card-title">Тест webhook</h2>
+                    </div>
+                    <div style="padding:20px 24px;">
+                        <p style="font-size:13px;color:var(--text-secondary);margin:0 0 12px 0;">
+                            Вставьте пример JSON от Битрикс24 и нажмите «Проверить разбор», чтобы увидеть,
+                            какие поля распознаны по текущему маппингу.
+                        </p>
+
+                        <div class="form-group">
+                            <label class="form-label">JSON от Битрикс24</label>
+                            <textarea class="form-input" x-model="testWebhook.payload" rows="10" style="font-family:monospace;font-size:12px;" placeholder='{"event": "ONCRMDEALADD", "data": {"FIELDS": {"ID": "12345", "COMMENTS": "..."}}}'></textarea>
+                        </div>
+
+                        <div style="display:flex;gap:8px;margin-bottom:16px;">
+                            <button class="btn btn-primary" @click="runTestWebhook()" :disabled="testWebhook.loading">
+                                <span x-show="!testWebhook.loading">Проверить разбор</span>
+                                <span x-show="testWebhook.loading" x-cloak>Проверка...</span>
+                            </button>
+                            <button class="btn btn-secondary" @click="clearTestWebhook()" :disabled="testWebhook.loading">
+                                Очистить
+                            </button>
+                        </div>
+
+                        <div x-show="testWebhook.error" x-cloak class="alert alert-error" x-text="testWebhook.error"></div>
+
+                        <template x-if="testWebhook.result">
+                            <div>
+                                <h4 style="font-size:13px;font-weight:600;margin:0 0 10px 0;">Результат разбора</h4>
+
+                                <div style="padding:12px 14px;background:var(--bg-muted);border-radius:6px;font-family:monospace;font-size:12px;margin-bottom:12px;">
+                                    <div><strong>Event:</strong> <span x-text="testWebhook.result.event || '(нет)'"></span></div>
+                                    <template x-if="testWebhook.result.is_cancelled">
+                                        <div style="color:#DC2626;margin-top:4px;"><strong>⚠ Это отмена (стадия в списке)</strong></div>
+                                    </template>
+                                </div>
+
+                                <table class="report-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Поле</th>
+                                            <th>Значение</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template x-for="(val, key) in testWebhook.result.recognized" :key="key">
+                                            <tr>
+                                                <td class="col-name" x-text="key"></td>
+                                                <td style="font-family:monospace;font-size:12px;" x-text="val"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+
+                                <template x-if="Object.keys(testWebhook.result.recognized || {}).length === 0">
+                                    <div style="padding:20px;text-align:center;color:var(--text-secondary);font-size:13px;">
+                                        Ни одно поле не распознано. Проверьте маппинг.
+                                    </div>
+                                </template>
+
+                                <details style="margin-top:12px;">
+                                    <summary style="cursor:pointer;font-size:12px;color:var(--text-secondary);">Показать исходные FIELDS</summary>
+                                    <pre style="padding:12px;background:var(--bg-muted);border-radius:6px;font-size:11px;overflow-x:auto;margin-top:8px;" x-text="JSON.stringify(testWebhook.result.raw_fields, null, 2)"></pre>
+                                </details>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
                 <!-- Журнал событий -->
                 <div class="section-card">
                     <div class="section-card-header">
@@ -919,12 +1094,57 @@
                     bitrix_active: 'false',
                     bitrix_active_value: false
                 },
+                // Маппинг полей Битрикс24
+                fieldMapping: {
+                    external_id: '',
+                    address: '',
+                    contact_name: '',
+                    phone: '',
+                    volume: '',
+                    delivery_date: '',
+                    note: '',
+                    title: '',
+                    stage: ''
+                },
+                cancelStages: 'LOSE, CANCELLED',
+                // Тест webhook
+                testWebhook: {
+                    payload: '',
+                    result: null,
+                    error: '',
+                    loading: false
+                },
                 integrationError: '',
                 integrationSuccess: '',
                 savingIntegration: false,
                 testingBitrix: false,
                 generatingSecret: false,
                 bitrixLog: [],
+
+                // Маппинг полей Битрикс24
+                fieldMapping: {
+                    external_id: '',
+                    address: '',
+                    contact_name: '',
+                    phone: '',
+                    volume: '',
+                    delivery_date: '',
+                    note: '',
+                    title: '',
+                    stage: ''
+                },
+                cancelStages: 'LOSE, CANCELLED',
+                savingMapping: false,
+                mappingError: '',
+                mappingSuccess: '',
+
+                // Тест webhook
+                testWebhook: {
+                    payload: '',
+                    result: null,
+                    error: '',
+                    loading: false
+                },
                 // Настройки системы
                 settingsForm: {
                     show_revenue: false,
@@ -1189,9 +1409,106 @@
                         this.integrationForm.bitrix_webhook_url = settings['bitrix_webhook_url']?.value || '';
                         this.integrationForm.bitrix_active = settings['bitrix_active']?.value || 'false';
                         this.integrationForm.bitrix_active_value = this.integrationForm.bitrix_active === 'true';
+
+                        // Маппинг полей
+                        const mappingRaw = settings['bitrix_field_mapping']?.value;
+                        if (mappingRaw) {
+                            try {
+                                const m = JSON.parse(mappingRaw);
+                                this.fieldMapping = {
+                                    external_id: m.external_id || '',
+                                    address: m.address || '',
+                                    contact_name: m.contact_name || '',
+                                    phone: m.phone || '',
+                                    volume: m.volume || '',
+                                    delivery_date: m.delivery_date || '',
+                                    note: m.note || '',
+                                    title: m.title || '',
+                                    stage: m.stage || ''
+                                };
+                            } catch (e) {
+                                console.error('Ошибка парсинга маппинга:', e);
+                            }
+                        }
+
+                        this.cancelStages = settings['bitrix_cancel_stages']?.value || 'LOSE, CANCELLED';
+
                     } catch (e) {
                         this.integrationError = 'Ошибка загрузки настроек: ' + e.message;
                     }
+                },
+
+                // ============ МАППИНГ ПОЛЕЙ ============
+
+                async saveFieldMapping() {
+                    this.mappingError = '';
+                    this.mappingSuccess = '';
+                    this.savingMapping = true;
+
+                    try {
+                        const mappingJson = JSON.stringify(this.fieldMapping);
+
+                        await window.API.api('/api/settings?action=update', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                bitrix_field_mapping: mappingJson,
+                                bitrix_cancel_stages: this.cancelStages || ''
+                            })
+                        });
+
+                        this.mappingSuccess = 'Маппинг сохранён';
+                        setTimeout(() => this.mappingSuccess = '', 3000);
+                    } catch (e) {
+                        this.mappingError = e.message;
+                    } finally {
+                        this.savingMapping = false;
+                    }
+                },
+
+                // ============ ТЕСТ WEBHOOK ============
+
+                async runTestWebhook() {
+                    this.testWebhook.error = '';
+                    this.testWebhook.result = null;
+
+                    if (!this.testWebhook.payload || !this.testWebhook.payload.trim()) {
+                        this.testWebhook.error = 'Вставьте JSON';
+                        return;
+                    }
+
+                    let parsed;
+                    try {
+                        parsed = JSON.parse(this.testWebhook.payload);
+                    } catch (e) {
+                        this.testWebhook.error = 'Неверный JSON: ' + e.message;
+                        return;
+                    }
+
+                    this.testWebhook.loading = true;
+
+                    try {
+                        const data = await window.API.api('/api/incoming?action=test-webhook', {
+                            method: 'POST',
+                            body: JSON.stringify({ payload: parsed })
+                        });
+
+                        if (!data.success) {
+                            this.testWebhook.error = data.error || 'Ошибка разбора';
+                            return;
+                        }
+
+                        this.testWebhook.result = data;
+                    } catch (e) {
+                        this.testWebhook.error = e.message;
+                    } finally {
+                        this.testWebhook.loading = false;
+                    }
+                },
+
+                clearTestWebhook() {
+                    this.testWebhook.payload = '';
+                    this.testWebhook.result = null;
+                    this.testWebhook.error = '';
                 },
 
                 async saveIntegration() {
