@@ -301,13 +301,13 @@ async function handler(req, res) {
       }
 
       // Отдельная обработка vehicle_volume_at_time / driver_rate_at_time
-      if (
-        !vehicleVolumeSet &&
-        fields.vehicle_volume_at_time !== undefined
-      ) {
+      if (!vehicleVolumeSet && fields.vehicle_volume_at_time !== undefined) {
         updates.push(`vehicle_volume_at_time = $${paramIndex++}`);
         params.push(fields.vehicle_volume_at_time);
-        if (String(trip.vehicle_volume_at_time) !== String(fields.vehicle_volume_at_time)) {
+        if (
+          String(trip.vehicle_volume_at_time) !==
+          String(fields.vehicle_volume_at_time)
+        ) {
           await logChange(
             req.user.id,
             "trips",
@@ -323,7 +323,10 @@ async function handler(req, res) {
       if (!driverRateSet && fields.driver_rate_at_time !== undefined) {
         updates.push(`driver_rate_at_time = $${paramIndex++}`);
         params.push(fields.driver_rate_at_time);
-        if (String(trip.driver_rate_at_time) !== String(fields.driver_rate_at_time)) {
+        if (
+          String(trip.driver_rate_at_time) !==
+          String(fields.driver_rate_at_time)
+        ) {
           await logChange(
             req.user.id,
             "trips",
@@ -683,7 +686,14 @@ async function handler(req, res) {
   // ============ INDEX: список / создание ============
   if (req.method === "GET") {
     try {
-      const { status, month, driver_id, vehicle_id, limit, include_overdue_count } = req.query;
+      const {
+        status,
+        month,
+        driver_id,
+        vehicle_id,
+        limit,
+        include_overdue_count,
+      } = req.query;
 
       let sql = `
           SELECT 
@@ -886,8 +896,8 @@ async function handler(req, res) {
           if (!addr.address) continue;
 
           await query(
-            `INSERT INTO orders (trip_id, external_id, address, contact_name, phone, volume, sequence_num, note, source, delivery_status)
-                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'manual', 'pending')`,
+            `INSERT INTO orders (trip_id, external_id, address, contact_name, phone, volume, sequence_num, note, delivery_date, source, delivery_status)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'manual', 'pending')`,
             [
               tripId,
               addr.external_id || null,
@@ -897,6 +907,7 @@ async function handler(req, res) {
               addr.volume || 0,
               i + 1,
               addr.note || null,
+              addr.delivery_date || null,
             ],
           );
         }
