@@ -27,15 +27,7 @@
                 <a href="/reports.html" class="app-nav-link">Отчёты</a>
                 <a href="/references.html" class="app-nav-link">Справочники</a>
                 <a href="/journal.html" class="app-nav-link">Журнал</a>
-                <a href="/tasks.html" class="app-nav-link app-nav-bell" :class="tab === 'tasks' ? 'active' : ''" x-data="{ tasksCount: 0 }" x-init="
-                    (async () => {
-                        if (!window.AUTH) { setTimeout(() => $el._x_dataStack[0].loadTasksCount?.(), 50); return; }
-                        try {
-                            const data = await window.API.api('/api/incoming?action=tasks-count');
-                            tasksCount = data.total || 0;
-                        } catch (e) { console.error('tasks-count error:', e); }
-                    })()
-                ">
+                <a href="/tasks.html" class="app-nav-link app-nav-bell">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
                         <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
@@ -83,7 +75,7 @@
                 </div>
             </div>
 
-            <!-- Статистика -->
+            <!-- Статистика (глобальная, из API — не фильтруется) -->
             <div class="stats-grid" x-show="tab !== 'failed'">
                 <div class="stat-card stat-card-pending">
                     <div class="stat-card-label">Ожидают распределения</div>
@@ -106,26 +98,49 @@
                 </div>
             </div>
 
-            <!-- Табы -->
+            <!-- Табы (счётчики пересчитываются по фильтру) -->
             <div class="incoming-tabs">
                 <button class="incoming-tab" :class="tab === 'pending' ? 'active' : ''" @click="switchTab('pending')">
                     Ожидают
-                    <span class="count" x-text="stats.pending || 0"></span>
+                    <span class="count" x-text="countPending"></span>
                 </button>
                 <button class="incoming-tab" :class="tab === 'assigned' ? 'active' : ''" @click="switchTab('assigned')">
                     Назначены
-                    <span class="count" x-text="assignedOrders.length"></span>
+                    <span class="count" x-text="countAssigned"></span>
                 </button>
                 <button class="incoming-tab" :class="tab === 'rejected' ? 'active' : ''" @click="switchTab('rejected')">
                     Отклонены
-                    <span class="count" x-text="stats.rejected || 0"></span>
+                    <span class="count" x-text="countRejected"></span>
                 </button>
                 <button class="incoming-tab" :class="tab === 'failed' ? 'active' : ''" @click="switchTab('failed')">
                     Неудавшиеся
-                    <span class="count" x-text="failedOrders.length"></span>
+                    <span class="count" x-text="countFailed"></span>
                 </button>
                 <button class="incoming-tab" :class="tab === 'all' ? 'active' : ''" @click="switchTab('all')">
                     Все
+                </button>
+            </div>
+
+            <!-- Фильтр по дате доставки (клиентский) -->
+            <div class="incoming-filter-bar">
+                <div class="filter-group">
+                    <span class="filter-label">Дата доставки:</span>
+                    <input type="date"
+                        x-model="filter.date"
+                        :disabled="filter.noDate"
+                        @change="filter.noDate = false">
+                </div>
+                <label class="filter-checkbox">
+                    <input type="checkbox"
+                        x-model="filter.noDate"
+                        @change="filter.noDate && (filter.date = '')">
+                    Без даты
+                </label>
+                <button class="btn btn-ghost btn-sm filter-reset"
+                    x-show="filterActive"
+                    x-cloak
+                    @click="resetFilter()">
+                    Сбросить
                 </button>
             </div>
 
@@ -176,7 +191,7 @@
             <!-- ============ ВКЛАДКА: НЕУДАВШИЕСЯ ============ -->
             <template x-if="tab === 'failed'">
                 <div>
-                    <div x-show="!loading && failedOrders.length === 0" class="empty-state">
+                    <div x-show="!loading && filteredFailed.length === 0" class="empty-state">
                         <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
                             <polyline points="22 4 12 14.01 9 11.01"></polyline>
@@ -185,7 +200,7 @@
                         <p class="empty-description">Заказы с проваленной доставкой будут появляться здесь</p>
                     </div>
 
-                    <div x-show="!loading && failedOrders.length > 0" style="background:#fff;border:1px solid var(--border-light);border-radius:12px;overflow:hidden;">
+                    <div x-show="!loading && filteredFailed.length > 0" style="background:#fff;border:1px solid var(--border-light);border-radius:12px;overflow:hidden;">
                         <div style="overflow-x:auto;">
                             <table class="incoming-table">
                                 <thead>
@@ -197,6 +212,7 @@
                                         </th>
                                         <th class="col-date">Рейс</th>
                                         <th class="col-date">Дата попытки</th>
+                                        <th class="col-delivery-date">Дата доставки</th>
                                         <th class="col-address">Адрес</th>
                                         <th class="col-contact">Контакт</th>
                                         <th class="col-phone">Телефон</th>
@@ -206,7 +222,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <template x-for="item in failedOrders" :key="item.id">
+                                    <template x-for="item in filteredFailed" :key="item.id">
                                         <tr :class="{ 'row-selected': isSelected(item.id) }">
                                             <td>
                                                 <input type="checkbox" class="row-checkbox"
@@ -222,6 +238,7 @@
                                                 </template>
                                             </td>
                                             <td class="col-date" x-text="formatDateTime(item.updated_at)"></td>
+                                            <td class="col-delivery-date" :class="{ 'is-empty': !item.delivery_date }" x-text="item.delivery_date ? formatShortDate(item.delivery_date) : '—'"></td>
                                             <td class="col-address" x-text="item.address || '—'"></td>
                                             <td class="col-contact" x-text="item.contact_name || '—'"></td>
                                             <td class="col-phone" x-text="item.phone || '—'"></td>
@@ -250,7 +267,7 @@
             <!-- ============ ВКЛАДКА: НАЗНАЧЕННЫЕ ============ -->
             <template x-if="tab === 'assigned'">
                 <div>
-                    <div x-show="!loading && assignedOrders.length === 0" class="empty-state">
+                    <div x-show="!loading && filteredAssigned.length === 0" class="empty-state">
                         <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M22 12h-6l-2 3h-4l-2-3H2"></path>
                             <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
@@ -259,7 +276,7 @@
                         <p class="empty-description">Заказы, распределённые по активным рейсам</p>
                     </div>
 
-                    <div x-show="!loading && assignedOrders.length > 0" style="background:#fff;border:1px solid var(--border-light);border-radius:12px;overflow:hidden;">
+                    <div x-show="!loading && filteredAssigned.length > 0" style="background:#fff;border:1px solid var(--border-light);border-radius:12px;overflow:hidden;">
                         <div style="overflow-x:auto;">
                             <table class="incoming-table">
                                 <thead>
@@ -271,6 +288,7 @@
                                         </th>
                                         <th class="col-date">Рейс</th>
                                         <th class="col-date">Дата рейса</th>
+                                        <th class="col-delivery-date">Дата доставки</th>
                                         <th class="col-address">Адрес</th>
                                         <th class="col-contact">Контакт</th>
                                         <th class="col-phone">Телефон</th>
@@ -280,7 +298,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <template x-for="item in assignedOrders" :key="item.id">
+                                    <template x-for="item in filteredAssigned" :key="item.id">
                                         <tr :class="{ 'row-selected': isSelected(item.id) }">
                                             <td>
                                                 <input type="checkbox" class="row-checkbox"
@@ -291,6 +309,7 @@
                                                 <span style="font-family:monospace;font-size:12px;" x-text="item.trip_number || '—'"></span>
                                             </td>
                                             <td class="col-date" x-text="formatShortDate(item.trip_date)"></td>
+                                            <td class="col-delivery-date" :class="{ 'is-empty': !item.delivery_date }" x-text="item.delivery_date ? formatShortDate(item.delivery_date) : '—'"></td>
                                             <td class="col-address" x-text="item.address || '—'"></td>
                                             <td class="col-contact" x-text="item.contact_name || '—'"></td>
                                             <td class="col-phone" x-text="item.phone || '—'"></td>
@@ -325,7 +344,7 @@
             <!-- ============ ДРУГИЕ ВКЛАДКИ (pending, rejected, all) ============ -->
             <template x-if="tab !== 'failed' && tab !== 'assigned'">
                 <div>
-                    <div x-show="!loading && !error && incoming.length === 0" class="empty-state">
+                    <div x-show="!loading && !error && filteredIncoming.length === 0" class="empty-state">
                         <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M22 12h-6l-2 3h-4l-2-3H2"></path>
                             <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
@@ -338,7 +357,7 @@
                         </p>
                     </div>
 
-                    <div x-show="!loading && incoming.length > 0" style="background:#fff;border:1px solid var(--border-light);border-radius:12px;overflow:hidden;">
+                    <div x-show="!loading && filteredIncoming.length > 0" style="background:#fff;border:1px solid var(--border-light);border-radius:12px;overflow:hidden;">
                         <div style="overflow-x:auto;">
                             <table class="incoming-table">
                                 <thead>
@@ -350,6 +369,7 @@
                                         </th>
                                         <th class="col-source">Источник</th>
                                         <th class="col-external-id">ID заказа</th>
+                                        <th class="col-delivery-date">Дата доставки</th>
                                         <th class="col-address">Адрес</th>
                                         <th class="col-contact">Контакт</th>
                                         <th class="col-phone">Телефон</th>
@@ -359,7 +379,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <template x-for="item in incoming" :key="item.id">
+                                    <template x-for="item in filteredIncoming" :key="item.id">
                                         <tr :class="{ 'row-selected': isSelected(item.id) }">
                                             <td>
                                                 <input type="checkbox" class="row-checkbox"
@@ -370,6 +390,7 @@
                                                 <span class="source-badge" :class="'source-' + (item.source || 'manual')" x-text="sourceLabel(item.source)"></span>
                                             </td>
                                             <td class="col-external-id" x-text="item.external_id || '—'"></td>
+                                            <td class="col-delivery-date" :class="{ 'is-empty': !item.delivery_date }" x-text="item.delivery_date ? formatShortDate(item.delivery_date) : '—'"></td>
                                             <td class="col-address" x-text="item.address || '—'"></td>
                                             <td class="col-contact" x-text="item.contact_name || '—'"></td>
                                             <td class="col-phone" x-text="item.phone || '—'"></td>
@@ -446,9 +467,13 @@
                         <input type="number" class="form-input" x-model.number="createModal.form.volume" step="0.1" min="0" :disabled="createModal.saving">
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Примечание</label>
-                        <input type="text" class="form-input" x-model="createModal.form.note" placeholder="Необязательно" :disabled="createModal.saving">
+                        <label class="form-label">Дата доставки</label>
+                        <input type="date" class="form-input" x-model="createModal.form.delivery_date" :disabled="createModal.saving">
                     </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Примечание</label>
+                    <input type="text" class="form-input" x-model="createModal.form.note" placeholder="Необязательно" :disabled="createModal.saving">
                 </div>
             </div>
             <div class="modal-footer">
@@ -480,6 +505,9 @@
                     <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Заказ</div>
                     <div style="font-size:13px;font-weight:500;" x-text="assignModal.item?.address"></div>
                     <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;" x-text="(assignModal.item?.volume || 0) + ' м³ · ' + (assignModal.item?.contact_name || '—')"></div>
+                    <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;" x-show="assignModal.item?.delivery_date">
+                        <span>Дата доставки:</span> <strong x-text="formatDate(assignModal.item?.delivery_date)"></strong>
+                    </div>
                 </div>
 
                 <div x-show="assignModal.overloadWarning" class="overload-warning" style="margin-bottom:16px;">
@@ -654,6 +682,9 @@
                     <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Заказ</div>
                     <div style="font-size:13px;font-weight:500;" x-text="failedAssignModal.item?.address"></div>
                     <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;" x-text="(failedAssignModal.item?.volume || 0) + ' м³ · ' + (failedAssignModal.item?.contact_name || '—')"></div>
+                    <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;" x-show="failedAssignModal.item?.delivery_date">
+                        <span>Дата доставки:</span> <strong x-text="formatDate(failedAssignModal.item?.delivery_date)"></strong>
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -708,6 +739,9 @@
                     <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Заказ</div>
                     <div style="font-size:13px;font-weight:500;" x-text="moveAssignedModal.item?.address"></div>
                     <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;" x-text="'Рейс ' + (moveAssignedModal.item?.trip_number || '—') + ' · ' + (moveAssignedModal.item?.volume || 0) + ' м³'"></div>
+                    <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;" x-show="moveAssignedModal.item?.delivery_date">
+                        <span>Дата доставки:</span> <strong x-text="formatDate(moveAssignedModal.item?.delivery_date)"></strong>
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -836,7 +870,7 @@
                         </div>
                         <div x-show="(createTripModal.form.vehicle_mode === 'own' && createTripModal.form.driver_mode === 'hired') || (createTripModal.form.vehicle_mode === 'hired' && createTripModal.form.driver_mode === 'own')"
                             style="font-size:12px;color:#D97706;margin-top:6px;">
-                            ⚠ Наёмный транспорт = только с наёмным водителем. Выберите согласованно.
+                            Наёмный транспорт = только с наёмным водителем. Выберите согласованно.
                         </div>
                     </div>
 
@@ -908,8 +942,15 @@
                 loading: true,
                 error: '',
                 showRevenue: false,
+                tasksCount: 0,
 
                 selectedIds: [],
+
+                // Фильтр по дате доставки (клиентский)
+                filter: {
+                    date: '',
+                    noDate: false
+                },
 
                 createModal: {
                     open: false, saving: false, error: '', form: {}
@@ -956,19 +997,81 @@
                     return roles[this.user?.role] || this.user?.role || '';
                 },
 
+                // ============ ФИЛЬТР ПО ДАТЕ ============
+
+                get filterActive() {
+                    return !!(this.filter.date || this.filter.noDate);
+                },
+
+                // Общая проверка: проходит ли запись через фильтр
+                matchesFilter(item) {
+                    if (!this.filterActive) return true;
+                    if (this.filter.noDate) {
+                        return !item.delivery_date;
+                    }
+                    if (this.filter.date) {
+                        if (!item.delivery_date) return false;
+                        // delivery_date приходит как DATE → строка 'YYYY-MM-DD' или ISO
+                        const d = String(item.delivery_date).slice(0, 10);
+                        return d === this.filter.date;
+                    }
+                    return true;
+                },
+
+                resetFilter() {
+                    this.filter.date = '';
+                    this.filter.noDate = false;
+                },
+
+                // Отфильтрованные массивы (используются в таблицах и счётчиках табов)
+                get filteredIncoming() {
+                    return this.incoming.filter(i => this.matchesFilter(i));
+                },
+
+                get filteredAssigned() {
+                    return this.assignedOrders.filter(i => this.matchesFilter(i));
+                },
+
+                get filteredFailed() {
+                    return this.failedOrders.filter(i => this.matchesFilter(i));
+                },
+
+                // Счётчики табов — по отфильтрованным массивам
+                get countPending() {
+                    // Для pending: если вкладка активна — уже отфильтровано в filteredIncoming,
+                    // но если вкладка другая — считаем из всего массива incoming (он всегда = pending при этой вкладке)
+                    if (this.tab === 'pending') return this.filteredIncoming.length;
+                    return this.stats.pending || 0;
+                },
+
+                get countAssigned() {
+                    if (this.tab === 'assigned') return this.filteredAssigned.length;
+                    return this.assignedOrders.length;
+                },
+
+                get countRejected() {
+                    if (this.tab === 'rejected') return this.filteredIncoming.length;
+                    return this.stats.rejected || 0;
+                },
+
+                get countFailed() {
+                    if (this.tab === 'failed') return this.filteredFailed.length;
+                    return this.failedOrders.length;
+                },
+
                 get allIncomingSelected() {
-                    if (this.incoming.length === 0) return false;
-                    return this.incoming.every(i => this.selectedIds.includes(i.id));
+                    if (this.filteredIncoming.length === 0) return false;
+                    return this.filteredIncoming.every(i => this.selectedIds.includes(i.id));
                 },
 
                 get allFailedSelected() {
-                    if (this.failedOrders.length === 0) return false;
-                    return this.failedOrders.every(i => this.selectedIds.includes(i.id));
+                    if (this.filteredFailed.length === 0) return false;
+                    return this.filteredFailed.every(i => this.selectedIds.includes(i.id));
                 },
 
                 get allAssignedSelected() {
-                    if (this.assignedOrders.length === 0) return false;
-                    return this.assignedOrders.every(i => this.selectedIds.includes(i.id));
+                    if (this.filteredAssigned.length === 0) return false;
+                    return this.filteredAssigned.every(i => this.selectedIds.includes(i.id));
                 },
 
                 async init() {
@@ -987,6 +1090,14 @@
                         this.showRevenue = getVal('show_revenue') === 'true';
                     } catch (e) {
                         this.showRevenue = false;
+                    }
+
+                    // Счётчик задач в колокольчике
+                    try {
+                        const tc = await window.API.api('/api/incoming?action=tasks-count');
+                        this.tasksCount = tc.total || 0;
+                    } catch (e) {
+                        console.error('tasks-count error:', e);
                     }
 
                     // Справочники
@@ -1078,7 +1189,7 @@
 
                 toggleAllIncoming(checked) {
                     if (checked) {
-                        this.selectedIds = this.incoming.map(i => i.id);
+                        this.selectedIds = this.filteredIncoming.map(i => i.id);
                     } else {
                         this.selectedIds = [];
                     }
@@ -1086,7 +1197,7 @@
 
                 toggleAllFailed(checked) {
                     if (checked) {
-                        this.selectedIds = this.failedOrders.map(i => i.id);
+                        this.selectedIds = this.filteredFailed.map(i => i.id);
                     } else {
                         this.selectedIds = [];
                     }
@@ -1094,7 +1205,7 @@
 
                 toggleAllAssigned(checked) {
                     if (checked) {
-                        this.selectedIds = this.assignedOrders.map(i => i.id);
+                        this.selectedIds = this.filteredAssigned.map(i => i.id);
                     } else {
                         this.selectedIds = [];
                     }
@@ -1151,7 +1262,6 @@
 
                 setCreateTripVehicleMode(mode) {
                     this.createTripModal.form.vehicle_mode = mode;
-                    // Синхронизируем водителя: своя → свой, наёмная → наёмный
                     this.createTripModal.form.driver_mode = mode;
                     if (mode === 'own') {
                         this.createTripModal.form.hired_vehicle_info = '';
@@ -1166,7 +1276,6 @@
 
                 setCreateTripDriverMode(mode) {
                     this.createTripModal.form.driver_mode = mode;
-                    // Синхронизируем машину: свой → своя, наёмный → наёмная
                     this.createTripModal.form.vehicle_mode = mode;
                     if (mode === 'own') {
                         this.createTripModal.form.hired_driver_info = '';
@@ -1183,7 +1292,6 @@
                     const f = this.createTripModal.form;
                     this.createTripModal.error = '';
 
-                    // Валидация
                     if (!f.trip_date) {
                         this.createTripModal.error = 'Укажите дату рейса';
                         return;
@@ -1211,14 +1319,13 @@
 
                     this.createTripModal.saving = true;
 
-                    // 1. Создаём рейс
                     const payload = {
                         trip_date: f.trip_date,
                         trip_type: f.trip_type,
                         plan_km: f.plan_km || 0,
                         revenue: f.revenue || 0,
                         comment: f.comment || null,
-                        addresses: []  // адреса добавим через bulk-assign
+                        addresses: []
                     };
 
                     if (f.vehicle_mode === 'own') {
@@ -1256,7 +1363,6 @@
                         return;
                     }
 
-                    // 2. Назначаем заказы (bulk-assign)
                     try {
                         const assignData = await window.API.api('/api/incoming?action=bulk-assign', {
                             method: 'POST',
@@ -1274,7 +1380,6 @@
                             (assignData.message || 'Заказы назначены.'));
 
                     } catch (e) {
-                        // Рейс создан, но назначить не удалось
                         console.error('bulk-assign error после создания рейса:', e);
                         this.createTripModal.open = false;
                         this.clearSelection();
@@ -1501,7 +1606,7 @@
                         open: true, saving: false, error: '',
                         form: {
                             external_id: '', address: '', contact_name: '',
-                            phone: '', volume: 0, note: ''
+                            phone: '', volume: 0, note: '', delivery_date: ''
                         }
                     };
                 },
