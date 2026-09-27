@@ -371,6 +371,7 @@
                                     <th class="col-contact">Контакт</th>
                                     <th class="col-phone">Телефон</th>
                                     <th class="col-volume text-right">м³</th>
+                                    <th class="col-delivery-date">Дата доставки</th>
                                     <th class="col-status">Статус</th>
                                     <th class="col-note">Примечание</th>
                                     <th class="col-actions">Действия</th>
@@ -455,7 +456,23 @@
                                                 <input type="number" x-model.number="editForm.volume" step="0.1" min="0">
                                             </td>
                                         </template>
-
+                                        <!-- Дата доставки: подсветка несовпадения с trip_date -->
+                                        <template x-if="editingOrderId !== order.id">
+                                            <td class="col-delivery-date">
+                                                <span x-show="!order.delivery_date" style="color:var(--text-muted);">—</span>
+                                                <span x-show="order.delivery_date"
+                                                    class="delivery-date-badge"
+                                                    :class="deliveryDateClass(order)"
+                                                    :title="deliveryDateTitle(order)"
+                                                    x-text="formatShortDate(order.delivery_date)">
+                                                </span>
+                                            </td>
+                                        </template>
+                                        <template x-if="editingOrderId === order.id">
+                                            <td class="col-delivery-date">
+                                                <input type="date" x-model="editForm.delivery_date">
+                                            </td>
+                                        </template>
                                         <td class="col-status">
                                             <span class="delivery-badge" 
                                                 :class="'delivery-' + (order.delivery_status || 'pending')"
@@ -558,7 +575,7 @@
                                     <!-- Плашка failed -->
                                     <template x-if="order.delivery_status === 'failed'">
                                         <tr class="failed-row">
-                                            <td :colspan="9" style="padding:0;border-top:none;">
+                                            <td :colspan="10" style="padding:0;border-top:none;">
                                                 <div class="failed-panel">
                                                     <div class="failed-panel-info">
                                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -581,7 +598,7 @@
                                     <!-- Плашка изменений из Битрикса -->
                                     <template x-if="order.pending_changes && order.pending_changes.length > 0">
                                         <tr class="changes-row">
-                                            <td :colspan="9" style="padding:0;border-top:none;">
+                                            <td :colspan="10" style="padding:0;border-top:none;">
                                                 <div class="changes-panel" :class="hasCancelChange(order) ? 'changes-panel-danger' : 'changes-panel-warning'">
                                                     <div class="changes-panel-info">
                                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -652,6 +669,9 @@
                                         </td>
                                         <td class="col-volume">
                                             <input type="number" x-model.number="newOrderForm.volume" step="0.1" min="0">
+                                        </td>
+                                        <td class="col-delivery-date">
+                                            <input type="date" x-model="newOrderForm.delivery_date">
                                         </td>
                                         <td class="col-status">
                                             <span class="delivery-badge delivery-pending">Ожидает</span>
@@ -1175,7 +1195,12 @@
                                 <template x-for="t in availableTrips" :key="t.id">
                                     <div class="trip-select-item" :class="moveOrderModal.toTripId === t.id ? 'selected' : ''" @click="selectTargetTrip(t)">
                                         <div class="trip-select-item-info">
-                                            <div class="trip-select-item-title" x-text="'Рейс ' + t.trip_number"></div>
+                                            <div class="trip-select-item-title">
+                                                <span x-text="'Рейс ' + t.trip_number"></span>
+                                                <template x-if="isTripMatchingDate(t)">
+                                                    <span class="trip-date-match-badge">совпадает по дате</span>
+                                                </template>
+                                            </div>
                                             <div class="trip-select-item-sub" x-text="formatDate(t.trip_date) + ' · ' + (t.vehicle_plate || '—') + ' · ' + (t.driver_name || '—')"></div>
                                         </div>
                                         <div class="trip-select-item-load">
@@ -2037,7 +2062,8 @@
                         contact_name: order.contact_name || '',
                         phone: order.phone || '',
                         volume: order.volume || 0,
-                        note: order.note || ''
+                        note: order.note || '',
+                        delivery_date: order.delivery_date ? String(order.delivery_date).slice(0, 10) : ''
                     };
                 },
 
@@ -2062,7 +2088,8 @@
                                 contact_name: this.editForm.contact_name || null,
                                 phone: this.editForm.phone || null,
                                 volume: Number(this.editForm.volume) || 0,
-                                note: this.editForm.note || null
+                                note: this.editForm.note || null,
+                                delivery_date: this.editForm.delivery_date || null
                             })
                         });
 
@@ -2074,6 +2101,7 @@
                             order.phone = this.editForm.phone || null;
                             order.volume = Number(this.editForm.volume) || 0;
                             order.note = this.editForm.note || null;
+                            order.delivery_date = this.editForm.delivery_date || null;
                         }
 
                         this.editingOrderId = null;
@@ -2089,7 +2117,7 @@
                     this.newOrderRow = true;
                     this.newOrderForm = {
                         external_id: '', address: '', contact_name: '',
-                        phone: '', volume: 0, note: ''
+                        phone: '', volume: 0, note: '', delivery_date: ''
                     };
                 },
 
@@ -2115,7 +2143,8 @@
                                 contact_name: this.newOrderForm.contact_name || null,
                                 phone: this.newOrderForm.phone || null,
                                 volume: Number(this.newOrderForm.volume) || 0,
-                                note: this.newOrderForm.note || null
+                                note: this.newOrderForm.note || null,
+                                delivery_date: this.newOrderForm.delivery_date || null
                             })
                         });
 
@@ -2149,6 +2178,34 @@
                     if (!d) return '—';
                     return window.HELPERS.formatDate(d);
                 },
+                formatShortDate(d) {
+                    if (!d) return '—';
+                    const date = new Date(d);
+                    return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+                },
+
+                // Класс бейджа даты доставки: сопоставление с датой рейса
+                deliveryDateClass(order) {
+                    if (!order.delivery_date || !this.trip?.trip_date) return 'delivery-date-neutral';
+                    const dd = String(order.delivery_date).slice(0, 10);
+                    const td = String(this.trip.trip_date).slice(0, 10);
+                    if (dd === td) return 'delivery-date-neutral';
+                    if (dd > td) return 'delivery-date-wait';
+                    return 'delivery-date-overdue';
+                },
+
+                // Тултип на бейдже
+                deliveryDateTitle(order) {
+                    if (!order.delivery_date) return 'Дата доставки не указана';
+                    const dd = String(order.delivery_date).slice(0, 10);
+                    const td = this.trip?.trip_date ? String(this.trip.trip_date).slice(0, 10) : null;
+                    const ddFmt = window.HELPERS.formatDate(dd);
+                    if (!td) return 'Заказ ждёт ' + ddFmt;
+                    const tdFmt = window.HELPERS.formatDate(td);
+                    if (dd === td) return 'Дата доставки совпадает с датой рейса (' + ddFmt + ')';
+                    if (dd > td) return 'Заказ ждёт ' + ddFmt + ', рейс ' + tdFmt;
+                    return 'Просрочен: заказ ждал ' + ddFmt + ', рейс ' + tdFmt;
+                },
 
                 formatMoney(v) {
                     return window.HELPERS.formatMoney(v);
@@ -2167,7 +2224,11 @@
                     };
                     return labels[cat] || cat;
                 },
-
+                isTripMatchingDate(trip) {
+                    const targetDate = this.moveOrderModal.order?.delivery_date;
+                    if (!targetDate) return false;
+                    return String(targetDate).slice(0, 10) === String(trip.trip_date).slice(0, 10);
+                },
                 // ============ ЗАТРАТЫ ============
 
                 addNewCost() {
@@ -2633,6 +2694,36 @@
                             t.status !== 'done' && 
                             t.status !== 'cancelled'
                         );
+
+                        // Сортировка: если открыта модалка переноса одного заказа —
+                        // сначала рейсы с подходящей trip_date (=== delivery_date),
+                        // потом ±1 день, потом остальные. Внутри группы — по дате.
+                        const targetDate = this.moveOrderModal.order?.delivery_date
+                            ? String(this.moveOrderModal.order.delivery_date).slice(0, 10)
+                            : null;
+
+                        if (targetDate) {
+                            const targetTs = new Date(targetDate).getTime();
+                            const DAY_MS = 86400000;
+
+                            this.availableTrips.sort((a, b) => {
+                                const aDate = String(a.trip_date).slice(0, 10);
+                                const bDate = String(b.trip_date).slice(0, 10);
+                                const aTs = new Date(aDate).getTime();
+                                const bTs = new Date(bDate).getTime();
+                                const aDiff = Math.abs(aTs - targetTs);
+                                const bDiff = Math.abs(bTs - targetTs);
+                                const aGroup = aDiff === 0 ? 0 : (aDiff <= DAY_MS ? 1 : 2);
+                                const bGroup = bDiff === 0 ? 0 : (bDiff <= DAY_MS ? 1 : 2);
+                                if (aGroup !== bGroup) return aGroup - bGroup;
+                                return aTs - bTs;
+                            });
+                        } else {
+                            // Без целевой даты — просто по дате рейса
+                            this.availableTrips.sort((a, b) =>
+                                String(a.trip_date).localeCompare(String(b.trip_date))
+                            );
+                        }
                     } catch (e) {
                         console.error('Ошибка загрузки рейсов:', e);
                         this.availableTrips = [];
