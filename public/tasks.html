@@ -106,7 +106,7 @@
             <template x-if="!loading && (tab === 'all' || tab === 'changes') && changes.length > 0">
                 <div style="margin-bottom:24px;">
                     <h3 class="task-section-title">
-                        ⚠ Изменения
+                        Изменения
                         <span class="task-section-title-count" x-text="changes.length"></span>
                     </h3>
 
@@ -140,9 +140,9 @@
                                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                                         <span style="font-weight:600;" x-text="fieldLabel(change.field_name) + ':'"></span>
                                         <span class="task-card-change">
-                                            <span class="task-card-change-old" x-text="change.old_value || '—'"></span>
+                                            <span class="task-card-change-old" x-text="formatChangeValue(change, change.old_value)"></span>
                                             <span class="task-card-change-arrow">→</span>
-                                            <span class="task-card-change-new" x-text="change.new_value || '—'"></span>
+                                            <span class="task-card-change-new" x-text="formatChangeValue(change, change.new_value)"></span>
                                         </span>
                                     </div>
                                 </template>
@@ -174,14 +174,14 @@
             <template x-if="!loading && (tab === 'all' || tab === 'new_orders') && newOrders.length > 0">
                 <div>
                     <h3 class="task-section-title">
-                        📦 Новые заказы
+                        Новые заказы
                         <span class="task-section-title-count" x-text="newOrders.length"></span>
                     </h3>
 
                     <template x-for="order in newOrders" :key="'order-' + order.id">
                         <div class="task-card task-new">
                             <div class="task-card-header">
-                                <span class="task-card-icon">📦</span>
+                                <span class="task-card-icon">Новый</span>
                                 <span class="task-card-title" x-text="'Заказ ' + (order.external_id || ('#' + order.id))"></span>
                                 <span class="task-card-time" x-text="formatDateTime(order.created_at)"></span>
                             </div>
@@ -202,6 +202,13 @@
                                         <span x-text="' · ' + order.volume + ' м³'"></span>
                                     </template>
                                 </div>
+                                <!-- Дата доставки -->
+                                <template x-if="order.delivery_date">
+                                    <div style="font-size:12px;margin-top:6px;">
+                                        <span style="color:var(--text-secondary);">Дата доставки:</span>
+                                        <strong style="margin-left:4px;" x-text="formatDate(order.delivery_date)"></strong>
+                                    </div>
+                                </template>
                                 <template x-if="order.note">
                                     <div style="font-size:12px;font-style:italic;margin-top:6px;" x-text="order.note"></div>
                                 </template>
@@ -236,6 +243,9 @@
                     <div x-show="assignModal.item" style="padding:12px 14px;background:var(--bg-muted);border-radius:6px;margin-bottom:16px;">
                         <div style="font-size:13px;font-weight:500;" x-text="assignModal.item?.address"></div>
                         <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;" x-text="(assignModal.item?.volume || 0) + ' м³ · ' + (assignModal.item?.contact_name || '—')"></div>
+                        <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;" x-show="assignModal.item?.delivery_date">
+                            <span>Дата доставки:</span> <strong x-text="formatDate(assignModal.item?.delivery_date)"></strong>
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -336,10 +346,11 @@
                 // ============ ФОРМУЛИРОВКИ ============
 
                 changeIcon(change) {
-                    if (change.change_type === 'cancelled') return '⚠';
-                    if (change.change_type === 'deleted') return '🗑';
-                    if (change.change_type === 'updated') return '🔔';
-                    return '📌';
+                    // Без эмодзи — короткие текстовые метки
+                    if (change.change_type === 'cancelled') return 'Отмена';
+                    if (change.change_type === 'deleted') return 'Удаление';
+                    if (change.change_type === 'updated') return 'Изменение';
+                    return 'Задача';
                 },
 
                 changeTitle(change) {
@@ -359,6 +370,16 @@
                         'note': 'Примечание'
                     };
                     return labels[field] || field;
+                },
+
+                // Форматирование значения в карточке изменения:
+                // для delivery_date — человеческий формат, для остальных — как есть
+                formatChangeValue(change, value) {
+                    if (value === null || value === undefined || value === '') return '—';
+                    if (change.field_name === 'delivery_date') {
+                        return this.formatDate(value);
+                    }
+                    return value;
                 },
 
                 formatDate(d) {
