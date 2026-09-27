@@ -147,6 +147,13 @@
                                     </div>
                                 </template>
 
+                                <!-- Пояснение для смены даты доставки -->
+                                <template x-if="change.change_type === 'updated' && change.field_name === 'delivery_date'">
+                                    <div style="font-size:12px;color:var(--text-secondary);margin-top:8px;padding:8px 10px;background:#FEF3C7;border-radius:4px;">
+                                        Заказ ждёт другую дату. Откройте рейс и перенесите заказ в подходящий по дате.
+                                    </div>
+                                </template>
+
                                 <template x-if="change.change_type === 'cancelled'">
                                     <div style="color:#991B1B;">Клиент отменил заказ в Битриксе</div>
                                 </template>
@@ -156,11 +163,28 @@
                             </div>
 
                             <div class="task-card-actions">
-                                <button class="btn btn-primary btn-sm" @click="applyChange(change)">
-                                    <template x-if="change.change_type === 'cancelled'"><span>Убрать из рейса</span></template>
-                                    <template x-if="change.change_type === 'deleted'"><span>Удалить из рейса</span></template>
-                                    <template x-if="change.change_type === 'updated'"><span>Применить</span></template>
-                                </button>
+                                <!-- Отмена/удаление — стандартные действия -->
+                                <template x-if="change.change_type === 'cancelled' || change.change_type === 'deleted'">
+                                    <button class="btn btn-primary btn-sm" @click="applyChange(change)">
+                                        <span x-show="change.change_type === 'cancelled'">Убрать из рейса</span>
+                                        <span x-show="change.change_type === 'deleted'">Удалить из рейса</span>
+                                    </button>
+                                </template>
+
+                                <!-- Смена даты доставки — открыть рейс -->
+                                <template x-if="change.change_type === 'updated' && change.field_name === 'delivery_date'">
+                                    <button class="btn btn-primary btn-sm" @click="openTrip(change)" :disabled="!change.trip_id">
+                                        Открыть рейс
+                                    </button>
+                                </template>
+
+                                <!-- Прочие изменения — применить -->
+                                <template x-if="change.change_type === 'updated' && change.field_name !== 'delivery_date'">
+                                    <button class="btn btn-primary btn-sm" @click="applyChange(change)">
+                                        Применить
+                                    </button>
+                                </template>
+
                                 <button class="btn btn-secondary btn-sm" @click="ignoreChange(change)">
                                     Оставить как есть
                                 </button>
@@ -346,7 +370,6 @@
                 // ============ ФОРМУЛИРОВКИ ============
 
                 changeIcon(change) {
-                    // Без эмодзи — короткие текстовые метки
                     if (change.change_type === 'cancelled') return 'Отмена';
                     if (change.change_type === 'deleted') return 'Удаление';
                     if (change.change_type === 'updated') return 'Изменение';
@@ -423,6 +446,15 @@
                     } catch (e) {
                         alert('Ошибка: ' + e.message);
                     }
+                },
+
+                // Открыть карточку рейса в новой вкладке
+                openTrip(change) {
+                    if (!change.trip_id) {
+                        alert('Рейс не определён');
+                        return;
+                    }
+                    window.open('/trip.html?id=' + change.trip_id, '_blank');
                 },
 
                 // ============ НАЗНАЧЕНИЕ ЗАКАЗА ============
