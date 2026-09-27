@@ -3610,3 +3610,87 @@ body {
     gap: 8px;
     flex-wrap: wrap;
 }
+/* ============ ФИЛЬТР ПО ДАТЕ ДОСТАВКИ В INCOMING ============ */
+
+.incoming-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 16px;
+    background: #fff;
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.incoming-filter-bar .filter-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.incoming-filter-bar .filter-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.incoming-filter-bar input[type="date"] {
+    padding: 6px 10px;
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: inherit;
+    background: #fff;
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.incoming-filter-bar input[type="date"]:focus {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.incoming-filter-bar input[type="date"]:disabled {
+    background: var(--bg-muted);
+    color: var(--text-muted);
+    cursor: not-allowed;
+}
+
+.incoming-filter-bar .filter-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-primary);
+    cursor: pointer;
+    user-select: none;
+}
+
+.incoming-filter-bar .filter-checkbox input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+    accent-color: var(--color-accent);
+}
+
+.incoming-filter-bar .filter-reset {
+    margin-left: auto;
+}
+
+/* Колонка "Дата доставки" — акцентная, чтобы дата бросалась в глаза */
+.incoming-table .col-delivery-date {
+    width: 100px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+.incoming-table .col-delivery-date.is-empty {
+    color: var(--text-muted);
+    font-weight: 400;
+}
