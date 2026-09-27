@@ -103,7 +103,7 @@
                                     <div class="info-item-label">Тип рейса</div>
                                     <div class="info-item-value" x-text="trip.trip_type === 'city' ? 'Городской' : 'Междугородний'"></div>
                                 </div>
-                                
+
                                 <div class="info-item">
                                     <div class="info-item-label">Машина</div>
                                     <template x-if="trip.hired_vehicle_info">
@@ -125,7 +125,7 @@
                                         </div>
                                     </template>
                                 </div>
-                                
+
                                 <div class="info-item">
                                     <div class="info-item-label">Водитель</div>
                                     <template x-if="trip.hired_driver_info">
@@ -160,7 +160,7 @@
                                     <div class="info-item-label">Ставка за рейс</div>
                                     <div class="info-item-value" x-text="formatMoney(trip.driver_rate_at_time)"></div>
                                 </div>
-                                
+
                                 <div class="info-item" x-show="showRevenue">
                                     <div class="info-item-label">Выручка</div>
                                     <div class="info-item-value" x-text="formatMoney(trip.revenue)"></div>
@@ -355,12 +355,12 @@
                             <span>Отменено: <strong style="color:#6B7280;" x-text="cancelledCount"></strong></span>
                         </template>
                     </div>
-                
+
                     <div x-show="orders.length === 0 && !newOrderRow"
                         style="padding:40px;text-align:center;color:var(--text-secondary);font-size:13px;">
                         В рейсе пока нет адресов
                     </div>
-                
+
                     <div x-show="orders.length > 0 || newOrderRow" style="overflow-x:auto;">
                         <table class="address-table">
                             <thead>
@@ -456,6 +456,7 @@
                                                 <input type="number" x-model.number="editForm.volume" step="0.1" min="0">
                                             </td>
                                         </template>
+
                                         <!-- Дата доставки: подсветка несовпадения с trip_date -->
                                         <template x-if="editingOrderId !== order.id">
                                             <td class="col-delivery-date">
@@ -473,6 +474,7 @@
                                                 <input type="date" x-model="editForm.delivery_date">
                                             </td>
                                         </template>
+
                                         <td class="col-status">
                                             <span class="delivery-badge" 
                                                 :class="'delivery-' + (order.delivery_status || 'pending')"
@@ -619,9 +621,9 @@
                                                                 </span>
                                                                 <span x-show="change.change_type === 'updated'">
                                                                     <strong x-text="fieldLabel(change.field_name) + ':'"></strong>
-                                                                    <span class="changes-panel-old" x-text="change.old_value || '—'"></span>
+                                                                    <span class="changes-panel-old" x-text="formatChangeValue(change, change.old_value)"></span>
                                                                     <span class="changes-panel-arrow">→</span>
-                                                                    <span class="changes-panel-new" x-text="change.new_value || '—'"></span>
+                                                                    <span class="changes-panel-new" x-text="formatChangeValue(change, change.new_value)"></span>
                                                                 </span>
                                                             </div>
                                                         </template>
@@ -630,11 +632,29 @@
                                                     <div class="changes-panel-actions">
                                                         <template x-for="change in order.pending_changes" :key="'btn-' + change.id">
                                                             <div style="display:flex;gap:6px;align-items:center;">
-                                                                <button class="btn btn-primary btn-sm" @click="applyChangeInline(change, order)">
-                                                                    <span x-show="change.change_type === 'cancelled'">Убрать из рейса</span>
-                                                                    <span x-show="change.change_type === 'deleted'">Удалить из рейса</span>
-                                                                    <span x-show="change.change_type === 'updated'">Применить</span>
-                                                                </button>
+                                                                <!-- Отмена/удаление — стандартные действия -->
+                                                                <template x-if="change.change_type === 'cancelled'">
+                                                                    <button class="btn btn-primary btn-sm" @click="applyChangeInline(change, order)">
+                                                                        Убрать из рейса
+                                                                    </button>
+                                                                </template>
+                                                                <template x-if="change.change_type === 'deleted'">
+                                                                    <button class="btn btn-primary btn-sm" @click="applyChangeInline(change, order)">
+                                                                        Удалить из рейса
+                                                                    </button>
+                                                                </template>
+                                                                <!-- Изменение даты доставки — не "применить", а "перенести в другой рейс" -->
+                                                                <template x-if="change.change_type === 'updated' && change.field_name === 'delivery_date'">
+                                                                    <button class="btn btn-primary btn-sm" @click="openMoveOrderModal(order)">
+                                                                        Перенести в другой рейс
+                                                                    </button>
+                                                                </template>
+                                                                <!-- Прочие изменения — применить -->
+                                                                <template x-if="change.change_type === 'updated' && change.field_name !== 'delivery_date'">
+                                                                    <button class="btn btn-primary btn-sm" @click="applyChangeInline(change, order)">
+                                                                        Применить
+                                                                    </button>
+                                                                </template>
                                                                 <button class="btn btn-secondary btn-sm" @click="ignoreChangeInline(change, order)">
                                                                     Оставить как есть
                                                                 </button>
@@ -1172,6 +1192,9 @@
                                 <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Переносимый заказ</div>
                                 <div style="font-size:13px;font-weight:500;" x-text="moveOrderModal.order?.address"></div>
                                 <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;" x-text="(moveOrderModal.order?.volume || 0) + ' м³ · ' + (moveOrderModal.order?.contact_name || '—')"></div>
+                                <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;" x-show="moveOrderModal.order?.delivery_date">
+                                    <span>Ждёт доставки:</span> <strong x-text="formatDate(moveOrderModal.order?.delivery_date)"></strong>
+                                </div>
                             </div>
 
                             <div x-show="moveOrderModal.overloadWarning" class="overload-warning" style="margin-bottom:16px;">
@@ -1328,6 +1351,7 @@
                                             <th class="col-contact">Контакт</th>
                                             <th class="col-phone">Телефон</th>
                                             <th class="col-volume text-right">м³</th>
+                                            <th class="col-delivery-date">Дата доставки</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -1343,6 +1367,7 @@
                                                 <td class="col-contact" x-text="item.contact_name || '—'"></td>
                                                 <td class="col-phone" x-text="item.phone || '—'"></td>
                                                 <td class="col-volume" x-text="item.volume || '—'"></td>
+                                                <td class="col-delivery-date" :class="{ 'is-empty': !item.delivery_date }" x-text="item.delivery_date ? formatShortDate(item.delivery_date) : '—'"></td>
                                             </tr>
                                         </template>
                                     </tbody>
@@ -1365,7 +1390,7 @@
                     </div>
                 </div>
 
-                
+
             </div>
             </div>
         </template>
@@ -1938,6 +1963,16 @@
                     return labels[field] || field;
                 },
 
+                // Форматирование значения в плашке изменения:
+                // для delivery_date — человеческий формат, для остальных — как есть
+                formatChangeValue(change, value) {
+                    if (value === null || value === undefined || value === '') return '—';
+                    if (change.field_name === 'delivery_date') {
+                        return this.formatDate(value);
+                    }
+                    return value;
+                },
+
                 async applyChangeInline(change, order) {
                     const label = change.change_type === 'cancelled' ? 'Убрать заказ из рейса?' :
                                   change.change_type === 'deleted' ? 'Удалить заказ из рейса?' :
@@ -1957,6 +1992,8 @@
                         } else if (change.change_type === 'updated') {
                             if (change.field_name === 'volume') {
                                 order.volume = Number(change.new_value) || 0;
+                            } else if (change.field_name === 'delivery_date') {
+                                order.delivery_date = change.new_value || null;
                             } else {
                                 order[change.field_name] = change.new_value;
                             }
@@ -2178,6 +2215,7 @@
                     if (!d) return '—';
                     return window.HELPERS.formatDate(d);
                 },
+
                 formatShortDate(d) {
                     if (!d) return '—';
                     const date = new Date(d);
@@ -2194,7 +2232,7 @@
                     return 'delivery-date-overdue';
                 },
 
-                // Тултип на бейдже
+                // Тултип на бейдже даты доставки
                 deliveryDateTitle(order) {
                     if (!order.delivery_date) return 'Дата доставки не указана';
                     const dd = String(order.delivery_date).slice(0, 10);
@@ -2205,6 +2243,13 @@
                     if (dd === td) return 'Дата доставки совпадает с датой рейса (' + ddFmt + ')';
                     if (dd > td) return 'Заказ ждёт ' + ddFmt + ', рейс ' + tdFmt;
                     return 'Просрочен: заказ ждал ' + ddFmt + ', рейс ' + tdFmt;
+                },
+
+                // Подходит ли рейс по дате переносимому заказу
+                isTripMatchingDate(trip) {
+                    const targetDate = this.moveOrderModal.order?.delivery_date;
+                    if (!targetDate) return false;
+                    return String(targetDate).slice(0, 10) === String(trip.trip_date).slice(0, 10);
                 },
 
                 formatMoney(v) {
@@ -2224,11 +2269,7 @@
                     };
                     return labels[cat] || cat;
                 },
-                isTripMatchingDate(trip) {
-                    const targetDate = this.moveOrderModal.order?.delivery_date;
-                    if (!targetDate) return false;
-                    return String(targetDate).slice(0, 10) === String(trip.trip_date).slice(0, 10);
-                },
+
                 // ============ ЗАТРАТЫ ============
 
                 addNewCost() {
@@ -2338,16 +2379,16 @@
                     this.editTripForm = {
                         trip_date: this.trip.trip_date ? this.trip.trip_date.substring(0, 10) : '',
                         trip_type: this.trip.trip_type,
-                        
+
                         vehicle_mode: this.trip.hired_vehicle_info ? 'hired' : 'own',
                         vehicle_id: this.trip.vehicle_id,
                         hired_vehicle_info: this.trip.hired_vehicle_info || '',
                         vehicle_volume: Number(this.trip.vehicle_volume_at_time) || 0,
-                        
+
                         driver_mode: this.trip.hired_driver_info ? 'hired' : 'own',
                         driver_id: this.trip.driver_id,
                         hired_driver_info: this.trip.hired_driver_info || '',
-                        
+
                         route_id: this.trip.route_id || null,
                         plan_km: Number(this.trip.plan_km) || 0,
                         fact_km: Number(this.trip.fact_km) || 0,
@@ -2586,12 +2627,12 @@
 
                 selectTargetTrip(trip) {
                     this.moveOrderModal.toTripId = trip.id;
-                    
+
                     const orderVolume = Number(this.moveOrderModal.order?.volume) || 0;
                     const currentVolume = Number(trip.total_volume) || 0;
                     const capacity = Number(trip.vehicle_volume_at_time) || Number(trip.vehicle_volume) || 0;
                     const newVolume = currentVolume + orderVolume;
-                    
+
                     if (capacity > 0 && newVolume > capacity) {
                         this.moveOrderModal.overloadWarning = 
                             'Превышение объёма: ' + newVolume.toFixed(1) + ' м³ из ' + capacity + ' м³. ' +
