@@ -3694,3 +3694,70 @@ body {
     color: var(--text-muted);
     font-weight: 400;
 }
+/* ============ ДАТА ДОСТАВКИ В КАРТОЧКЕ РЕЙСА ============ */
+
+/* Колонка "Дата доставки" в таблице адресов */
+.address-table .col-delivery-date {
+    width: 110px;
+    white-space: nowrap;
+    font-size: 12px;
+}
+
+.address-table .col-delivery-date input[type="date"] {
+    width: 100%;
+    padding: 4px 6px;
+    border: 1px solid var(--border-light);
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: inherit;
+    outline: none;
+}
+
+.address-table .col-delivery-date input[type="date"]:focus {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+/* Бейдж даты доставки */
+.delivery-date-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: default;
+}
+
+/* Совпадает с датой рейса — нейтральный серый */
+.delivery-date-neutral {
+    background: var(--bg-muted);
+    color: var(--text-secondary);
+}
+
+/* Заказ ждёт будущей даты — жёлтый */
+.delivery-date-wait {
+    background: #FEF3C7;
+    color: #92400E;
+}
+
+/* Просрочен (дата в прошлом относительно рейса) — красный */
+.delivery-date-overdue {
+    background: #FEE2E2;
+    color: #991B1B;
+}
+
+/* Бейдж "совпадает по дате" в модалке переноса */
+.trip-date-match-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 6px;
+    background: #D1FAE5;
+    color: #065F46;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    vertical-align: middle;
+}
