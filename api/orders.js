@@ -94,7 +94,7 @@ async function handler(req, res) {
                     o.id, o.trip_id, o.external_id, o.address,
                     o.contact_name, o.phone, o.volume, o.sequence_num,
                     o.note, o.status,
-                    o.delivery_status, o.delivery_note,
+                    o.delivery_status, o.delivery_note, o.delivery_date,
                     o.updated_at,
                     t.trip_number,
                     t.trip_date,
@@ -125,8 +125,16 @@ async function handler(req, res) {
     if (req.method !== "POST")
       return res.status(405).json({ error: "Method not allowed" });
 
-    const { trip_id, external_id, address, contact_name, phone, volume, note } =
-      req.body;
+    const {
+      trip_id,
+      external_id,
+      address,
+      contact_name,
+      phone,
+      volume,
+      note,
+      delivery_date,
+    } = req.body;
 
     if (!trip_id) return res.status(400).json({ error: "Не указан trip_id" });
     if (!address || !address.trim())
@@ -149,8 +157,8 @@ async function handler(req, res) {
 
       const result = await query(
         `INSERT INTO orders (
-                    trip_id, external_id, address, contact_name, phone, volume, sequence_num, note, source, delivery_status
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'manual', 'pending')
+                    trip_id, external_id, address, contact_name, phone, volume, sequence_num, note, delivery_date, source, delivery_status
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'manual', 'pending')
                 RETURNING *`,
         [
           trip_id,
@@ -161,6 +169,7 @@ async function handler(req, res) {
           volume || 0,
           nextSeq,
           note || null,
+          delivery_date || null,
         ],
       );
 
@@ -224,6 +233,7 @@ async function handler(req, res) {
       "note",
       "sequence_num",
       "status",
+      "delivery_date",
     ];
 
     try {
