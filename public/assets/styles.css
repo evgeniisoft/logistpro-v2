@@ -3771,3 +3771,48 @@ body {
     letter-spacing: 0.3px;
     vertical-align: middle;
 }
+/* ============ ВЫБОР КОНКРЕТНОГО МЕСЯЦА НА ДОСКЕ ============ */
+
+.board-period-divider {
+    width: 1px;
+    height: 28px;
+    background: var(--border-light);
+    margin: 0 4px;
+    align-self: center;
+}
+
+.board-period-month {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.board-period-select {
+    padding: 7px 10px;
+    background: #fff;
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    outline: none;
+}
+
+.board-period-select:hover {
+    background: var(--bg-muted);
+    color: var(--text-primary);
+}
+
+.board-period-select.active {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: #fff;
+}
+
+.board-period-select:focus {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
