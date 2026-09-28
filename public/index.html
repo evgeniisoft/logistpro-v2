@@ -242,11 +242,11 @@
             <!-- Доска -->
             <div x-show="!loading && filterMode !== 'problem'" class="board">
                 <template x-for="col in columns" :key="col.status">
-                    <div class="board-column" :class="dragOverStatus === col.status ? 'drag-over' : ''"
+                    <div class="board-column" :class="[ 'board-column-' + col.status, dragOverStatus === col.status ? 'drag-over' : '' ]"
                          @dragover.prevent="dragOverStatus = col.status"
                          @dragleave="dragOverStatus = null"
                          @drop="dropTrip(col.status)">
-                        <div class="board-column-header">
+                        <div class="board-column-header" :class="'board-column-header-' + col.status">
                             <span x-text="col.title"></span>
                             <span style="display:flex;align-items:center;gap:6px;">
                                 <span class="board-column-count" x-text="filteredTripsByStatus(col.status).length"></span>
