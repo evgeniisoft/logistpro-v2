@@ -696,16 +696,16 @@
                         const y = now.getFullYear();
                         const m = now.getMonth();
                         return {
-                            from: new Date(y, m, 1),
-                            to: new Date(y, m + 1, 0)
+                            from: new Date(y, m, 1, 0, 0, 0),
+                            to: new Date(y, m + 1, 0, 23, 59, 59)
                         };
                     }
                     if (this.period === 'prev') {
                         const y = now.getFullYear();
                         const m = now.getMonth() - 1;
                         return {
-                            from: new Date(y, m, 1),
-                            to: new Date(y, m + 1, 0)
+                            from: new Date(y, m, 1, 0, 0, 0),
+                            to: new Date(y, m + 1, 0, 23, 59, 59)
                         };
                     }
                     if (this.period === 'custom' && this.customFrom && this.customTo) {
