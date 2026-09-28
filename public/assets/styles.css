@@ -687,12 +687,21 @@ body {
     background: #DBEAFE;
 }
 
+/* Сессия UI: цветная полоса сверху колонки по статусу + цвет заголовка */
+.board-column-forming { border-top: 3px solid #64748B; }
+.board-column-loading { border-top: 3px solid #2563EB; }
+.board-column-transit { border-top: 3px solid #059669; }
+.board-column-done    { border-top: 3px solid #0F172A; }
+
+.board-column-header-forming { color: #64748B; }
+.board-column-header-loading { color: #2563EB; }
+.board-column-header-transit { color: #059669; }
+.board-column-header-done    { color: #0F172A; }
+
 .board-column-header {
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
-    text-transform: uppercase;
     color: var(--text-secondary);
-    letter-spacing: 0.5px;
     margin-bottom: 12px;
     padding: 6px 8px;
     display: flex;
