@@ -101,6 +101,27 @@
                     <label style="font-size:12px;color:var(--text-secondary);">по</label>
                     <input type="date" x-model="customTo">
                 </div>
+
+                <!-- Выбор конкретного месяца -->
+                <div class="board-period-divider"></div>
+                <div class="board-period-month">
+                    <select class="board-period-select"
+                            :class="period === 'month' ? 'active' : ''"
+                            x-model.number="selectedYear"
+                            @change="setMonth(selectedYear, selectedMonth)">
+                        <template x-for="y in availableYears" :key="y">
+                            <option :value="y" x-text="y"></option>
+                        </template>
+                    </select>
+                    <select class="board-period-select"
+                            :class="period === 'month' ? 'active' : ''"
+                            x-model.number="selectedMonth"
+                            @change="setMonth(selectedYear, selectedMonth)">
+                        <template x-for="(m, idx) in monthNames" :key="idx">
+                            <option :value="idx + 1" x-text="m"></option>
+                        </template>
+                    </select>
+                </div>
             </div>
 
             <!-- Панель поиска -->
@@ -565,9 +586,17 @@
                 searchQuery: '',
 
                 // Период
-                period: 'current',      // current | prev | all | custom
+                period: 'current',      // current | prev | all | custom | month
                 customFrom: '',
                 customTo: '',
+
+                // Выбор конкретного месяца
+                selectedYear: new Date().getFullYear(),
+                selectedMonth: new Date().getMonth() + 1,   // 1–12
+                monthNames: [
+                    'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+                    'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+                ],
 
                 // Фильтр по срочности
                 filterMode: null,       // null | 'overdue' | 'today' | 'empty'
@@ -652,6 +681,15 @@
 
                 // ============ ПЕРИОД ============
 
+                get availableYears() {
+                    const currentYear = new Date().getFullYear();
+                    const years = [];
+                    for (let y = currentYear - 2; y <= currentYear + 1; y++) {
+                        years.push(y);
+                    }
+                    return years;
+                },
+
                 get periodRange() {
                     const now = new Date();
                     if (this.period === 'current') {
@@ -676,6 +714,14 @@
                             to: new Date(this.customTo + 'T23:59:59')
                         };
                     }
+                    if (this.period === 'month') {
+                        const y = Number(this.selectedYear);
+                        const m = Number(this.selectedMonth);
+                        return {
+                            from: new Date(y, m - 1, 1, 0, 0, 0),
+                            to: new Date(y, m, 0, 23, 59, 59)
+                        };
+                    }
                     return null;
                 },
 
@@ -694,6 +740,12 @@
                         const fd = f.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
                         const td = t.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
                         return 'с ' + fd + ' по ' + td;
+                    }
+                    if (this.period === 'month') {
+                        const y = Number(this.selectedYear);
+                        const m = Number(this.selectedMonth);
+                        const d = new Date(y, m - 1, 1);
+                        return d.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
                     }
                     return 'всё время';
                 },
@@ -749,6 +801,13 @@
                 setPeriod(p) {
                     this.period = p;
                     // При "всё время" или смене периода — счётчик вне периода неактуален, пересчитываем на сервере
+                    this.loadData();
+                },
+
+                setMonth(year, month) {
+                    this.selectedYear = Number(year);
+                    this.selectedMonth = Number(month);
+                    this.period = 'month';
                     this.loadData();
                 },
 
